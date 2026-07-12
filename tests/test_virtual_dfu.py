@@ -32,6 +32,31 @@ def test_read_identity_graphique_n0110():
     assert 0x90000000 <= start < end <= 0x90400000
 
 
+def test_read_identity_reads_serial_number():
+    """My Devices pairing key: iSerialNumber = Base64(MCU UID) -> 16 ASCII chars."""
+    dev = virtual_calculator("n0110")
+    ident = read_identity(_client(dev), dev.bcdDevice)
+    assert ident.serial_number == dev.serial_number
+    assert len(ident.serial_number) == 16  # Base64 of 12 bytes, no padding
+    assert "SN " + ident.serial_number in str(ident)
+
+
+def test_serial_number_is_overridable_and_deterministic():
+    assert virtual_calculator("n0110").serial_number == virtual_calculator("n0110").serial_number
+    # distinct models get distinct synthetic serials
+    assert virtual_calculator("n0110").serial_number != virtual_calculator("n0120").serial_number
+    dev = virtual_calculator("n0110", serial="CUSTOMSERIAL0001")
+    assert read_identity(_client(dev), dev.bcdDevice).serial_number == "CUSTOMSERIAL0001"
+
+
+def test_get_string_descriptor_paths():
+    client = _client(virtual_calculator("n0110"))
+    assert client.get_string_descriptor(C.SERIAL_STRING_INDEX)  # serial
+    assert client.get_string_descriptor(1) == "NumWorks"  # manufacturer
+    assert client.get_string_descriptor(0) is None  # index 0 is the langid table, not a string
+    assert client.get_string_descriptor(99) is None  # unknown index -> device stalls -> None
+
+
 def test_read_identity_scientifique_n0200():
     dev = virtual_calculator("n0200", os_version="1.0.0", commit="deadbee")
     ident = read_identity(_client(dev), dev.bcdDevice)

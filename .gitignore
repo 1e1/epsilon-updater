@@ -16,3 +16,11 @@ packaging/icon/icon_64.png
 packaging/icon/icon_128.png
 packaging/icon/icon_512.png
 *.spec.bak
+
+# dumps générés par diagnose/capture (à ne pas versionner — contiennent des données réelles :
+# n° de série, versions, contenus… ne JAMAIS pousser sur un dépôt public)
+nwupdater-capture-*.json
+nwupdater-diagnostic-*.json
+capture.json
+dump_capture/
+dumps/

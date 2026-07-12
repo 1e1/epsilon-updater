@@ -134,6 +134,30 @@ class DfuClient:
         self._out(C.DFU_DNLOAD, 0, bytes([C.DFUSE_ERASE]))
         self._wait_idle_after_command("mass_erase")
 
+    # -- standard descriptors (serial number) --------------------------------------
+    def get_string_descriptor(self, index: int, langid: int = C.USB_LANGID_EN_US) -> str | None:
+        """Read USB string descriptor ``index`` (standard GET_DESCRIPTOR), or None.
+
+        Transport-agnostic: works against both the virtual device and real hardware
+        (this is exactly what pyusb's ``util.get_string`` does under the hood). Returns
+        None for index 0 or on any failure/empty descriptor. Does not disturb the DFU
+        state machine — it is a standard device request, valid in any state.
+        """
+        if not index:
+            return None
+        wValue = (C.DESC_TYPE_STRING << 8) | index
+        try:
+            raw = bytes(self.dev.ctrl_transfer(
+                C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, self.timeout_ms))
+        except Exception:
+            return None
+        if len(raw) < 2 or raw[1] != C.DESC_TYPE_STRING:
+            return None
+        # raw[0] is bLength; trust it but never read past what we got.
+        end = min(raw[0], len(raw))
+        text = raw[2:end].decode("utf-16-le", "replace").strip("\x00").strip()
+        return text or None
+
     # -- memory read/write ---------------------------------------------------------
     def read(self, address: int, length: int) -> bytes:
         """UPLOAD ``length`` bytes starting at ``address`` (Flash backend memcpy)."""

@@ -5,8 +5,11 @@ code source fait foi : ce projet est ouvert (MIT) et intégralement auditable. /
 [DISCLAIMER](DISCLAIMER.md). In case of doubt, the source code prevails: this project is open
 (MIT) and fully auditable.*
 
-**Version :** 1.0 — 2026-07-12
-**Portée / Scope :** l'outil `nwupdater` (cœur headless + page web locale), tous lots confondus.
+**Version :** 1.0.0-rc.2 — 2026-07-15
+**Portée / Scope :** l'outil `nwupdater` (cœur headless + page web locale), tous lots confondus —
+y compris la gestion des applications tierces et des scripts Python (lecture/écriture **gatée** du
+storage de l'appareil) et l'agrégation de sources **locales et distantes fournies par
+l'utilisateur** (rien n'est hébergé ni redistribué).
 
 🇫🇷 [Français](#français) · 🇬🇧 [English](#english)
 
@@ -93,6 +96,11 @@ ce qui garantit qu'il s'exécute dans un cadre légitime :
   calculatrice** (scripts, notes). C'est inhérent à toute mise à jour de firmware, indépendant
   de cet outil, et **clairement signalé dans le [DISCLAIMER](DISCLAIMER.md)**. L'utilisateur est
   invité à sauvegarder au préalable.
+- **Applications & scripts** : la lecture du storage est **non destructive** (UPLOAD seul) ;
+  l'écriture n'intervient qu'après **confirmation explicite** et ne réécrit que la portion qui
+  change (planificateur à préfixe identique préservé). Les `.nwa`/scripts proviennent de sources
+  **fournies par l'utilisateur** (fichiers locaux ou URLs qu'il liste) : l'outil n'en héberge, n'en
+  redistribue et n'en modifie aucun.
 
 ### 4. Sécurisation des données
 
@@ -262,6 +270,10 @@ guarantees it runs within a legitimate frame:
 - **Acknowledged caveat**: flashing a firmware **may erase the data present on the calculator**
   (scripts, notes). This is inherent to any firmware update, independent of this tool, and
   **clearly stated in the [DISCLAIMER](DISCLAIMER.md)**. Users are advised to back up first.
+- **Apps & scripts**: reading the storage is **non-destructive** (UPLOAD only); writing happens
+  only after **explicit confirmation** and rewrites only the part that changes (a planner that
+  keeps the identical prefix untouched). The `.nwa`/scripts come from **user-supplied** sources
+  (local files or URLs the user lists): the tool hosts, redistributes and modifies none of them.
 
 ### 4. Data security
 

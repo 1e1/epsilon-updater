@@ -35,6 +35,10 @@ class Model:
     # N02xx (Scientifique) ships an ENCRYPTED, opaque firmware blob: no plaintext
     # SlotInfo/Kernel/Userland headers, no readable version — see docs/01-specs/n02xx-firmware-format.md.
     opaque_firmware: bool = False
+    # Per-page DfuSe ERASE before writing. The official N0200 flasher issues NO erase (verified
+    # in a real update capture — the bootloader accepts DNLOAD writes directly); graphique models
+    # keep erase. See docs/01-specs/n02xx-firmware-format.md.
+    flash_erase: bool = True
 
     @property
     def marketing_family(self) -> str:
@@ -83,7 +87,7 @@ MODELS: dict[int, Model] = {
     0x0115: Model(0x0115, "n0115", "graphique", "STM32F730(var)", _MAP_N0110),
     0x0120: Model(0x0120, "n0120", "graphique", "STM32H725", _MAP_N0120),
     0x0200: Model(0x0200, "n0200", "scientifique", "STM32U073KC", _MAP_N0200,
-                  confirmed=False, opaque_firmware=True),
+                  confirmed=False, opaque_firmware=True, flash_erase=False),
 }
 
 

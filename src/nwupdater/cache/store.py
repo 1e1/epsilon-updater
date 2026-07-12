@@ -1,9 +1,10 @@
 """Firmware cache — pre-download an OS once, flash a whole classroom offline.
 
 Policy (per the classroom use case):
-  * **One version at a time.** Caching a firmware for a *different* version evicts everything
-    first, so the cache always holds a single OS version (its binaries may cover several
-    models present in the class, e.g. n0110 + n0120).
+  * **One entry per model (its latest).** Caching a firmware for a model that is already
+    present replaces just that model's entry; other models are kept. A fleet can therefore
+    hold the latest of *every* hardware at once — including different families/version lines
+    (e.g. n0110 @ 25.2.0 **and** n0200 @ 3.0.0).
   * **Auto-expire after 30 days.** Entries older than the TTL are pruned on every access.
 
 Stores raw bytes the caller already downloaded; this module never touches the network.
@@ -35,6 +36,7 @@ class CacheEntry:
     size: int
     sha256: str
     downloaded_at: float  # epoch seconds
+    real: bool = False  # True = official .dfu downloaded; False = synthetic demo image
 
     def key(self) -> str:
         return f"{self.model}/{self.version}"
@@ -86,19 +88,16 @@ class FirmwareCache:
         return removed
 
     # -- writes --------------------------------------------------------------------
-    def put(self, model: str, version: str, data: bytes) -> CacheEntry:
+    def put(self, model: str, version: str, data: bytes, *, real: bool = False) -> CacheEntry:
         entries = self._load()
         self._prune(entries)
-        held = self.cached_version(entries)
-        if held is not None and held != version:
-            # keep only one version: evict everything from the previous version
-            for e in entries.values():
-                self._unlink(e)
-            entries = {}
+        # One entry per model: drop any previous version of THIS model, keep the other models.
+        for k in [k for k, e in entries.items() if e.model == model]:
+            self._unlink(entries.pop(k))
         filename = f"{model}-{version}.bin".replace("/", "_").replace(" ", "_")
         (self.root / filename).write_bytes(data)
         entry = CacheEntry(model, version, filename, len(data),
-                           hashlib.sha256(data).hexdigest(), self._now())
+                           hashlib.sha256(data).hexdigest(), self._now(), real)
         entries[entry.key()] = entry
         self._save(entries)
         return entry
@@ -145,6 +144,8 @@ class FirmwareCache:
         return {
             "version": self.cached_version(dict((e.key(), e) for e in entries)),
             "models": sorted(e.model for e in entries),
+            "entries": [{"model": e.model, "version": e.version, "size": e.size, "real": e.real}
+                        for e in sorted(entries, key=lambda e: e.model)],
             "total_size": sum(e.size for e in entries),
             "expires_at": oldest + self.ttl,
             "ttl_days": self.ttl // 86400,

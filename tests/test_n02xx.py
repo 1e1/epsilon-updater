@@ -45,6 +45,36 @@ def test_opaque_install_verifies_and_version_readback_is_none():
     assert inst.read_installed_version(plan) is None    # no readable version in an opaque blob
 
 
+class _RecClient:
+    """Minimal DfuClient stand-in recording the erase flag of each write."""
+    def __init__(self):
+        self.writes = []
+
+    def write(self, address, data, *, erase=False):
+        self.writes.append(erase)
+
+    def read(self, address, length):
+        return b""
+
+    def leave(self, jump_address):
+        pass
+
+
+def test_n0200_flash_issues_no_erase():
+    # matches the official flasher: N0200 writes with NO DfuSe erase
+    inst = Installer(_RecClient(), N0200)
+    img = FirmwareImage([FirmwareSegment(DFU_BASE, _opaque_bytes(6144))], bcd_device=0x0000)
+    inst.install(img, verify=False)
+    assert inst.client.writes and all(e is False for e in inst.client.writes)
+
+
+def test_n0110_flash_still_erases():
+    inst = Installer(_RecClient(), MODELS[0x0110])
+    img = FirmwareImage.synthetic(MODELS[0x0110], version="1.0.0")
+    inst.install(img, verify=False)
+    assert inst.client.writes and all(e is True for e in inst.client.writes)
+
+
 def test_opaque_dfuse_roundtrip_is_compatible_with_n0200():
     # DfuSe like the official one: PID 0xA51A, generic bcdDevice 0x0000, element @0x98000000
     blob = FirmwareImage([FirmwareSegment(DFU_BASE, _opaque_bytes(4096))]).to_dfuse(

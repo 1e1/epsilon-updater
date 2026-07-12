@@ -57,12 +57,17 @@ class FirmwareCatalog:
         return cls.from_json(Path(path).read_text())
 
     @classmethod
-    def bundled(cls) -> "FirmwareCatalog":
-        """The snapshot shipped with the package (offline default)."""
+    def bundled(cls, name: str = "firmwares") -> "FirmwareCatalog":
+        """A snapshot shipped with the package (offline default).
+
+        ``name`` selects the track: ``firmwares`` = the public Graphing catalog (N01xx),
+        ``firmwares-n0200`` = the Scientific (N0200) 3.x line — they use unrelated version
+        numbers, so the session picks the right one per detected family."""
+        rel = f"data/{name}.json"
         try:
-            raw = resources.files("nwupdater.catalog").joinpath("data/firmwares.json").read_text()
+            raw = resources.files("nwupdater.catalog").joinpath(rel).read_text()
         except (ModuleNotFoundError, FileNotFoundError, AttributeError):
-            raw = (Path(__file__).parent / "data" / "firmwares.json").read_text()
+            raw = (Path(__file__).parent / "data" / f"{name}.json").read_text()
         return cls.from_json(raw)
 
     @classmethod

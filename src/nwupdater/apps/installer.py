@@ -9,8 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..dfu.protocol import DfuClient
-from ..formats.nwa import AppInfo
+from ..formats.nwa import AppInfo, InstalledApp, iter_apps
 from ..install.installer import VerificationError
+
+
+def list_installed(client: DfuClient, region: tuple[int, int] | None) -> list[InstalledApp]:
+    """Enumerate the apps currently installed in the external-apps zone (read-only UPLOAD)."""
+    if not region:
+        return []
+    start, end = region
+    if not start or end <= start:
+        return []
+    return iter_apps(client.read(start, end - start))
 
 
 class AppCompatibilityError(RuntimeError):
@@ -45,16 +55,16 @@ class AppInstaller:
     def check(self, blob: bytes, *, at_offset: int = 0) -> AppInfo:
         info = AppInfo.parse(blob)
         if not info.valid:
-            raise AppCompatibilityError("magic AppInfo invalide (pas un .nwa)")
+            raise AppCompatibilityError("invalid AppInfo magic (not a .nwa)")
         if self.region_size == 0:
-            raise AppCompatibilityError("ce modèle n'a pas de zone apps externes")
+            raise AppCompatibilityError("this model has no external-apps region")
         if info.api_level != self.device_api_level:
             raise AppCompatibilityError(
                 f"API level {info.api_level} != device {self.device_api_level}")
         if at_offset + len(blob) > self.region_size:
             raise AppCompatibilityError(
-                f"pas assez d'espace ({len(blob)} o à l'offset {at_offset}, "
-                f"zone {self.region_size} o)")
+                f"not enough space ({len(blob)} B at offset {at_offset}, "
+                f"region {self.region_size} B)")
         return info
 
     def install(self, blob: bytes, *, at_offset: int = 0, verify: bool = True) -> AppInstallResult:

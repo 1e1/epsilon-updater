@@ -1,6 +1,6 @@
 [project]
 name = "nwupdater"
-version = "0.0.1"
+version = "0.0.2rc1"
 description = "Unofficial, hobby headless updater for NumWorks calculators (Graphique N01xx / Scientifique N02xx) without Chrome/WebUSB — no warranty, use at your own risk"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,7 +20,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-usb = ["pyusb>=1.3"]                  # talk to REAL hardware (production only)
+usb = ["pyusb>=1.3", "libusb-package>=1.0"]  # talk to REAL hardware (bundled libusb backend)
 auth = ["certifi>=2024.0"]            # CA bundle for TLS on Python builds without system CAs
 dev = ["pytest>=8", "ruff>=0.11", "bandit>=1.8"]
 
@@ -29,6 +29,7 @@ Repository = "https://github.com/1e1/epsilon-updater"
 
 [project.scripts]
 nwupdater = "nwupdater.cli:main"
+nwupdater-capture = "nwupdater.tools.capture_cli:main"
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -41,6 +42,7 @@ where = ["src"]
 "nwupdater.catalog" = ["data/*.json"]
 "nwupdater.apps" = ["data/*.json"]
 "nwupdater.server" = ["web/*"]
+"nwupdater.tools" = ["web/*.js"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

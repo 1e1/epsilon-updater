@@ -198,6 +198,60 @@ def test_record_download_appends_jsonl(tmp_path):
                      "size": 3191133, "sha256": "abc123"}
 
 
+def test_register_device_posts_expected_body():
+    from nwupdater.catalog import device as DV
+    routes = {("POST", DV.device_url("SER123")):
+              Response(200, [], b'{"id":"SER123","serial_number":"SER123","software_version":"3.0.0"}')}
+    tr = FakeTransport(routes)
+    out = DV.register_device(Auth(make_token()), "SER123", device_model="N0200",
+                             software_version="3.0.0", software_patch_level="8059a46", transport=tr)
+    assert out["status"] == 200 and "3.0.0" in out["body"]
+    sent = json.loads(tr.calls[0][3].decode())          # the POST body
+    assert sent["device"]["device_model"] == "N0200"
+    assert sent["firmware"]["software_version"] == "3.0.0"
+    assert sent["firmware"]["software_patch_level"] == "8059a46"
+
+
+class _FakeClient:
+    """DfuClient stand-in for pairing: serves a serial descriptor + a memory read."""
+    def __init__(self, serial, header_at):
+        self._serial = serial
+        self._mem = header_at  # {addr: bytes}
+
+    def get_string_descriptor(self, index, langid=0x0409):
+        return self._serial
+
+    def read(self, address, length):
+        return (self._mem.get(address) or b"\x00" * length)[:length]
+
+
+def test_pair_device_reads_n0200_identity_and_posts():
+    from nwupdater.catalog import device as DV
+    from nwupdater.formats import platform_info as PI
+    from nwupdater.models import MODELS
+
+    header = PI.pack("3.0.0", "8059a46")                 # @0x080040C0 FirmwareHeader block
+    client = _FakeClient("SER-XYZ-123", {PI.N0200_FIRMWARE_HEADER_ADDR: header})
+    routes = {("POST", DV.device_url("SER-XYZ-123")): Response(200, [], b'{"id":"SER-XYZ-123"}')}
+    tr = FakeTransport(routes)
+
+    res = DV.pair_device(client, MODELS[0x0200], Auth(make_token()), transport=tr)
+    assert res["serial"] == "SER-XYZ-123"
+    assert res["software_version"] == "3.0.0" and res["software_patch_level"] == "8059a46"
+    assert res["register"]["status"] == 200
+    sent = json.loads(tr.calls[0][3].decode())
+    assert sent["device"]["device_model"] == "N0200"
+    assert sent["firmware"]["software_version"] == "3.0.0"
+
+
+def test_pair_device_requires_serial():
+    from nwupdater.catalog import device as DV
+    from nwupdater.models import MODELS
+    client = _FakeClient(None, {})                        # no iSerialNumber
+    with pytest.raises(ValueError):
+        DV.pair_device(client, MODELS[0x0200], Auth(make_token()), transport=FakeTransport({}))
+
+
 def test_official_dfuse_generic_bcd_is_compatible():
     """Les .dfu officiels portent bcdDevice=0x0000 : l'installer ne doit PAS rejeter."""
     from nwupdater.dfu.protocol import DfuClient

@@ -89,6 +89,33 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             self.end_headers()
             self.wfile.write(data)
 
+        def _stream_app(self, session):
+            """Proxy-stream a catalogue app's .nwa so the browser can show a byte-accurate
+            progress bar (Content-Length forwarded from upstream). Validation happens BEFORE any
+            header is sent so failures still return clean JSON."""
+            from urllib.parse import parse_qs, urlparse
+            url = (parse_qs(urlparse(self.path).query).get("url") or [""])[0]
+            try:
+                length, up = session.open_app_stream(url)
+            except Exception as exc:
+                self._json({"error": str(exc)}, 400)
+                return
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                if length is not None:
+                    self.send_header("Content-Length", str(length))
+                self.end_headers()
+                while True:
+                    chunk = up.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # client navigated away mid-download
+            finally:
+                up.close()
+
         # -- routing ---------------------------------------------------------------
         def do_GET(self):
             path = self.path.split("?", 1)[0]
@@ -102,14 +129,22 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     return
                 if path == "/api/identity":
                     self._json(session.identity())
+                elif path == "/api/device/demo-models":
+                    self._json(session.demo_models())
                 elif path == "/api/catalog":
                     self._json(session.catalog_updates())
                 elif path == "/api/apps":
                     self._json(session.apps())
+                elif path == "/api/apps/installed":
+                    self._json(session.installed_apps_on_device())
+                elif path == "/api/scripts":
+                    self._json(session.scripts())
                 elif path == "/api/cache":
                     self._json(session.cache_status())
                 elif path == "/api/auth":
                     self._json(session.auth_status())
+                elif path == "/api/apps/download":
+                    self._stream_app(session)
                 elif path.startswith("/api/"):
                     self._json({"error": "unknown endpoint"}, 404)
                 else:
@@ -129,7 +164,19 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.install_firmware(body.get("version", ""),
                                                         from_cache=bool(body.get("from_cache")),
                                                         download=bool(body.get("download")),
-                                                        channel=body.get("channel", "stable")))
+                                                        channel=body.get("channel") or session.channel))
+                elif path == "/api/device/rescan":
+                    # Try to attach a real calculator; a clean "not connected" is not an error.
+                    try:
+                        self._json(session.attach_real())
+                    except Exception as exc:
+                        self._json({"connected": False, "error": str(exc)})
+                elif path == "/api/device/demo":
+                    self._json(session.attach_demo(body.get("model") or None))
+                elif path == "/api/device/detach":
+                    self._json(session.detach())
+                elif path == "/api/channel":
+                    self._json(session.set_channel(body.get("channel", "stable")))
                 elif path == "/api/auth/login":
                     if body.get("email"):
                         self._json(session.login_password(body.get("email", ""), body.get("password", "")))
@@ -137,6 +184,10 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                         self._json(session.login_token(body.get("token", "")))
                 elif path == "/api/boot":
                     self._json(session.boot())
+                elif path == "/api/capture":
+                    import datetime
+                    ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+                    self._json(session.capture_sequence(timestamp=ts))
                 elif path == "/api/auth/logout":
                     self._json(session.logout())
                 elif path == "/api/install/app":
@@ -147,8 +198,32 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.install_local_app(body.get("filename", "app.nwa"), data))
                 elif path == "/api/cache/preload":
                     self._json(session.preload(body.get("version", "")))
+                elif path == "/api/cache/preload-all":
+                    self._json(session.preload_all())
                 elif path == "/api/cache/clear":
                     self._json(session.cache_clear())
+                elif path == "/api/apps/push":
+                    import base64
+                    self._json(session.push_app(body.get("filename", "app.nwa"),
+                                                base64.b64decode(body.get("data_b64", ""))))
+                elif path == "/api/apps/add":
+                    self._json(session.add_store_app(body.get("name", "")))
+                elif path == "/api/apps/inspect":
+                    import base64
+                    self._json(session.inspect_app(base64.b64decode(body.get("data_b64", ""))))
+                elif path == "/api/apps/fetch":
+                    self._json(session.fetch_app(body.get("url", "")))
+                elif path == "/api/apps/uninstall":
+                    self._json(session.uninstall_app(body.get("name", "")))
+                elif path == "/api/apps/reorder":
+                    self._json(session.reorder_apps(body.get("order", [])))
+                elif path == "/api/scripts/push":
+                    self._json(session.push_script(body.get("name", ""), body.get("code", ""),
+                                                   bool(body.get("auto_import", True))))
+                elif path == "/api/scripts/delete":
+                    self._json(session.delete_script(body.get("name", "")))
+                elif path == "/api/scripts/set":
+                    self._json(session.set_scripts(body.get("scripts", [])))
                 elif path == "/api/quit":
                     self._json({"ok": True})
                     if control.get("shutdown"):
@@ -203,8 +278,10 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
     if single_instance:
         instance.write(url, actual_port)
 
-    print(f"nwupdater UI : {url}  (device: {session.identity()['model']}"
-          f"{' virtuel' if session.virtual else ''})")
+    ident = session.identity()
+    where = "no calculator — connect one or explore a demo from the page" if not ident.get("connected") \
+        else f"{ident['model']}{' (demo)' if session.virtual else ''}"
+    print(f"nwupdater UI : {url}  (device: {where})")
     print("Fermez l'onglet et cliquez « Quitter », ou Ctrl+C pour arrêter.")
     if idle_timeout and idle_timeout > 0:
         print(f"Arrêt auto après {int(idle_timeout)}s sans activité.")

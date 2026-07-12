@@ -17,8 +17,8 @@ from pathlib import Path
 # Third-party apps are NOT official: community-provided .nwa files, neither hosted nor modified
 # by this tool. Surfaced to the user before any install (CLI prompt + web UI banner).
 THIRD_PARTY_WARNING = (
-    "Apps tierces NON officielles : fichiers .nwa fournis par la communauté, ni hébergés ni "
-    "modifiés par cet outil — installées à vos risques."
+    "Unofficial third-party apps: community .nwa files, neither hosted nor modified by this "
+    "tool — install at your own risk."
 )
 
 
@@ -31,6 +31,7 @@ class AppEntry:
     description: str = ""
     source: str = ""
     url: str = ""
+    size: int = 0  # bytes; from the catalogue (a real .nwa carries app_size in its header)
 
     def compatible_with(self, *, family: str, device_api_level: int,
                         has_external_apps: bool) -> bool:
@@ -54,7 +55,7 @@ class AppStore:
             name=a["name"], version=str(a.get("version", "?")),
             api_level=int(a.get("api_level", 0)), family=a.get("family", "any"),
             description=a.get("description", ""), source=a.get("source", ""),
-            url=a.get("url", "")) for a in apps])
+            url=a.get("url", ""), size=int(a.get("size", 0))) for a in apps])
 
     @classmethod
     def bundled(cls) -> "AppStore":

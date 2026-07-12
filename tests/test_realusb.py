@@ -51,7 +51,7 @@ class FakeCore:
     def __init__(self, by_pid):
         self.by_pid = by_pid  # {pid: [FakeDevice, ...]}
 
-    def find(self, *, find_all=False, idVendor=None, idProduct=None):
+    def find(self, *, find_all=False, idVendor=None, idProduct=None, backend=None):
         devs = self.by_pid.get(idProduct, [])
         return iter(devs) if find_all else (devs[0] if devs else None)
 
@@ -209,10 +209,10 @@ def test_real_install_requires_confirmation(monkeypatch, capsys):
     from nwupdater.testing.virtual_dfu import virtual_calculator
 
     _install_fake_usb(monkeypatch, _VirtualUsbAdapter(virtual_calculator("n0110")))
-    monkeypatch.setattr("builtins.input", lambda *a: "non")  # user declines
+    monkeypatch.setattr("builtins.input", lambda *a: "no")   # user declines
     rc = cli.main(["install", "--to-version", "25.2.0"])     # real path, no --yes
     assert rc == 1
-    assert "annulé" in capsys.readouterr().err
+    assert "cancelled" in capsys.readouterr().err
 
 
 def test_real_install_with_yes_flashes_virtual_device(monkeypatch, capsys):

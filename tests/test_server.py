@@ -41,6 +41,7 @@ def test_identity_endpoint(server):
     assert i["family"] == "graphique"
     assert i["os_version"] == "16.4.4"
     assert i["has_external_apps"] is True
+    assert i["serial_number"] and len(i["serial_number"]) == 16
 
 
 def test_catalog_endpoint(server):
@@ -103,6 +104,15 @@ def test_boot_after_install(server):
 def test_boot_without_install_errors(server):
     with pytest.raises(urllib.error.HTTPError) as ei:
         _post(server, "/api/boot", {})
+    assert ei.value.code == 400
+
+
+def test_capture_requires_auth(server, monkeypatch):
+    # No token → the /api/capture endpoint must refuse (400), never hit the network.
+    from nwupdater.catalog import auth as A
+    monkeypatch.setattr(A, "load_auth", lambda **k: None)
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        _post(server, "/api/capture", {})
     assert ei.value.code == 400
 
 

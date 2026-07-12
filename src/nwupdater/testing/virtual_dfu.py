@@ -14,11 +14,23 @@ This module contains NO hardware access and is safe to import anywhere.
 
 from __future__ import annotations
 
+import base64
 import struct
 
 from ..dfu import constants as C
 from ..formats import headers
+from ..formats import storage as _storage
 from ..models import MODELS, Model
+
+
+def _synth_serial(bcd_device: int) -> str:
+    """A plausible, deterministic serial: Base64 of a 12-byte pseudo-UID -> 16 chars.
+
+    Matches the real device's scheme (Base64 of the MCU's 12-byte Unique Device ID;
+    see docs/01-specs/scripts-and-device-pairing.md §2.2) without any randomness, so
+    tests are stable."""
+    uid = bytes(((bcd_device * 7 + i * 31) & 0xFF) for i in range(12))
+    return base64.b64encode(uid).decode("ascii")  # 12 bytes -> 16 chars, no padding
 
 
 class UsbStall(Exception):
@@ -73,12 +85,18 @@ class _SparseMemory:
 class VirtualDfuDevice:
     """A software NumWorks calculator speaking DFU/DfuSe over a mocked control endpoint."""
 
-    def __init__(self, model: Model, *, os_version: str, commit: str, product_string: str = "NumWorks Calculator"):
+    def __init__(self, model: Model, *, os_version: str, commit: str,
+                 product_string: str = "NumWorks Calculator", serial: str | None = None):
         self.idVendor = C.USB_VID
         self.idProduct = C.PID_EPSILON
         self.bcdDevice = model.bcd_device
         self.model = model
         self.product_string = product_string
+        self.serial_number = serial if serial is not None else _synth_serial(model.bcd_device)
+        self.iSerialNumber = C.SERIAL_STRING_INDEX  # so usb.util.get_string-style code works
+        # USB string descriptor table (index -> value); see calculator.h. Only #3 is
+        # asserted from source; #1/#2 are faithful conveniences for the mock.
+        self._strings = {1: "NumWorks", 2: product_string, C.SERIAL_STRING_INDEX: self.serial_number}
 
         self.state = C.STATE_DFU_IDLE
         self.status = C.STATUS_OK
@@ -114,12 +132,20 @@ class VirtualDfuDevice:
 
         self.memory.write(mem.sram_origin, headers.pack_slot_info(kernel_hdr_addr, userland_hdr_addr))
         self.memory.write(kernel_hdr_addr, headers.pack_kernel_header(os_version, commit))
+        graphing = self.model.family == "graphique"  # scientific N02xx has no Python -> no storage
         self.memory.write(userland_hdr_addr, headers.pack_userland_header(
             os_version,
-            storage_addr_ram=mem.sram_origin + 0x1000, storage_size_ram=0x10000,
+            storage_addr_ram=(mem.sram_origin + 0x1000) if graphing else 0,
+            storage_size_ram=0x10000 if graphing else 0,
             external_apps_flash=(apps_start, apps_end),
             external_apps_ram=(mem.sram_origin + 0x2000, mem.sram_origin + 0x3000),
             device_name_flash=(slot_origin + 0x100, slot_origin + 0x500)))
+        # Graphing models embed a Python scripts store; preload a small sample so reads/CLI
+        # demo have content (scientific N02xx has no Python -> left zeroed).
+        if self.model.family == "graphique":
+            self.memory.write(mem.sram_origin + 0x1000, _storage.encode_storage([
+                _storage.make_python("mandelbrot", "from math import *\n", True),
+                _storage.make_python("suites", "def u(n):\n  return 2 * n\n", False)]))
 
     # -- pyusb-compatible control endpoint ----------------------------------------
     def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0,
@@ -127,11 +153,32 @@ class VirtualDfuDevice:
         if bmRequestType == C.REQ_IN:
             length = data_or_wLength if isinstance(data_or_wLength, int) else 0
             return self._handle_in(bRequest, wValue, length)
+        elif bmRequestType == C.REQ_STD_DEVICE_IN:
+            length = data_or_wLength if isinstance(data_or_wLength, int) else 0
+            return self._handle_standard_in(bRequest, wValue, length)
         elif bmRequestType == C.REQ_OUT:
             data = bytes(data_or_wLength) if data_or_wLength else b""
             self._handle_out(bRequest, wValue, data)
             return len(data)
         raise UsbStall(f"unsupported bmRequestType 0x{bmRequestType:02x}")
+
+    # -- standard requests (GET_DESCRIPTOR string) --------------------------------
+    def _handle_standard_in(self, request, wValue, length):
+        if request != C.STD_GET_DESCRIPTOR:
+            raise UsbStall(f"unsupported standard IN request {request}")
+        desc_type, index = wValue >> 8, wValue & 0xFF
+        if desc_type != C.DESC_TYPE_STRING:
+            raise UsbStall(f"unsupported descriptor type 0x{desc_type:02x}")
+        if index == 0:  # LANGID table (English/US)
+            desc = bytes([4, C.DESC_TYPE_STRING,
+                          C.USB_LANGID_EN_US & 0xFF, C.USB_LANGID_EN_US >> 8])
+        else:
+            value = self._strings.get(index)
+            if value is None:
+                raise UsbStall(f"unknown string index {index}")
+            body = value.encode("utf-16-le")
+            desc = bytes([len(body) + 2, C.DESC_TYPE_STRING]) + body
+        return desc[:length] if length else desc
 
     # -- OUT (host -> device) ------------------------------------------------------
     def _handle_out(self, request, wValue, data):
@@ -233,9 +280,9 @@ class VirtualDfuDevice:
 
 
 def virtual_calculator(model_name: str = "n0110", *, os_version: str = "23.2.4",
-                       commit: str = "abc1234") -> VirtualDfuDevice:
+                       commit: str = "abc1234", serial: str | None = None) -> VirtualDfuDevice:
     """Convenience factory. ``model_name`` is e.g. 'n0110', 'n0120', 'n0200'."""
     bcd = next((b for b, m in MODELS.items() if m.name == model_name), None)
     if bcd is None:
         raise ValueError(f"unknown model {model_name!r}; known: {[m.name for m in MODELS.values()]}")
-    return VirtualDfuDevice(MODELS[bcd], os_version=os_version, commit=commit)
+    return VirtualDfuDevice(MODELS[bcd], os_version=os_version, commit=commit, serial=serial)

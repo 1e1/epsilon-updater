@@ -145,7 +145,7 @@ class Installer:
         done = 0
         total = plan.total_bytes
         for seg in plan.segments:
-            self.client.write(seg.address, seg.data, erase=True)
+            self.client.write(seg.address, seg.data, erase=self.model.flash_erase)
             done += len(seg.data)
             self._progress("write", done, total)
             if verify:

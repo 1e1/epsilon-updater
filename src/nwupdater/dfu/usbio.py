@@ -51,34 +51,47 @@ class OpenDevice:
     id_product: int
 
 
-def _iter_interfaces(cfg):
-    """Yield interface descriptors from an active configuration (pyusb is iterable)."""
-    for intf in cfg:
-        yield intf
-
-
 def _find_dfu_interface(cfg):
     """Return the DFU interface descriptor (class 0xFE / subclass 0x01), or None.
 
-    Matches by class like webdfu_numworks (robust to interface renumbering)."""
-    for intf in _iter_interfaces(cfg):
+    Matches by class like webdfu_numworks (robust to interface renumbering). An active pyusb
+    configuration is directly iterable over its interface descriptors."""
+    for intf in cfg:
         if (getattr(intf, "bInterfaceClass", None) == C.DFU_INTERFACE_CLASS
                 and getattr(intf, "bInterfaceSubClass", None) == C.DFU_INTERFACE_SUBCLASS):
             return intf
     return None
 
 
-def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS) -> OpenDevice:
+def _resolve_backend(backend):
+    """A libusb backend. Prefer the bundled one (``libusb-package``) so a packaged app is
+    self-contained; fall back to pyusb's system-libusb discovery."""
+    if backend is not None:
+        return backend
+    try:
+        import libusb_package
+        return libusb_package.get_libusb1_backend()
+    except Exception:
+        return None
+
+
+def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
+                    backend=None) -> OpenDevice:
     """Find, configure and claim a NumWorks calculator's DFU interface.
 
     ``core``/``util`` are the ``usb.core``/``usb.util`` modules (injected for testability).
+    ``backend`` is an optional libusb backend (defaults to the bundled ``libusb-package``).
     Raises a :class:`UsbError` subclass with a helpful message on any failure.
     """
+    backend = _resolve_backend(backend)
+    # Only pass backend when we actually resolved one — keeps compatibility with a system
+    # libusb (backend=None) and with test doubles whose find() doesn't take the kwarg.
+    kw = {"backend": backend} if backend is not None else {}
     # 1. enumerate, PID priority order (bootloader modes first — that's where flashing lives)
     dev = None
     matched_pid = None
     for pid in pids:
-        found = list(core.find(find_all=True, idVendor=vid, idProduct=pid) or [])
+        found = list(core.find(find_all=True, idVendor=vid, idProduct=pid, **kw) or [])
         if found:
             dev, matched_pid = found[0], pid
             break

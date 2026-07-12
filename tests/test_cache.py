@@ -1,4 +1,4 @@
-"""Firmware cache tests — one-version policy + 30-day auto-expiry, offline."""
+"""Firmware cache tests — one-entry-per-model policy + 30-day auto-expiry, offline."""
 
 from nwupdater.cache.store import FirmwareCache
 
@@ -17,18 +17,25 @@ def test_put_get_roundtrip(tmp_path):
     assert c.has("n0110", "25.2.0")
 
 
-def test_keeps_only_one_version(tmp_path):
+def test_keeps_one_entry_per_model(tmp_path):
     c = FirmwareCache(tmp_path)
     c.put("n0110", "24.3.0", b"OLD")
-    c.put("n0120", "24.3.0", b"OLD-120")   # same version, different model -> both kept
-    assert c.status()["version"] == "24.3.0"
+    c.put("n0120", "24.3.0", b"OLD-120")
     assert set(c.status()["models"]) == {"n0110", "n0120"}
-    # caching a new version evicts the previous version entirely
+    # re-caching a model replaces ONLY that model's entry (fleet keeps latest per model)
     c.put("n0110", "25.2.0", b"NEW")
-    assert c.get("n0110", "24.3.0") is None
-    assert c.get("n0120", "24.3.0") is None
+    assert c.get("n0110", "24.3.0") is None          # old n0110 version evicted
     assert c.get("n0110", "25.2.0") == b"NEW"
-    assert c.status()["version"] == "25.2.0"
+    assert c.get("n0120", "24.3.0") == b"OLD-120"    # other model untouched
+    assert set(c.status()["models"]) == {"n0110", "n0120"}
+
+
+def test_classroom_multi_family_multi_version(tmp_path):
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"G", real=True)
+    c.put("n0200", "3.0.0", b"S", real=True)   # different family + version -> both kept
+    assert c.has("n0110", "25.2.0") and c.has("n0200", "3.0.0")
+    assert {e["model"] for e in c.status()["entries"]} == {"n0110", "n0200"}
 
 
 def test_classroom_same_version_multiple_models(tmp_path):

@@ -15,6 +15,24 @@ locale** ouverte dans le navigateur système.
 > se teste contre un **device DFU virtuel** en mémoire. Voir
 > [`docs/01-specs/emulators-and-usb-analysis.md`](docs/01-specs/emulators-and-usb-analysis.md).
 
+## Aperçu
+
+> Aperçu de l'interface locale (page web servie en local) — données d'exemple. Interface FR/EN,
+> thèmes clair et sombre.
+
+**N0120 (Graphique) — mode individuel.** Les deux ateliers *apps* et *scripts* : contenu de la
+calculatrice (ordre mémoire) face aux éléments **disponibles**, agrégés depuis 3 sources — **cloud
+NumWorks / fichiers locaux / dépôts distants** (Nwagyu pour les `.nwa`, scripts Python publics
+`my.numworks.com/python/…`). Le **plan d'écriture** ne réécrit que la portion de mémoire qui change.
+
+![nwupdater — N0120, mode individuel](docs/screenshots/nwupdater-n0120-individual.png)
+
+**N0200 (Scientifique) — mode classe.** Pas de flash QSPI ni de Python : les ateliers *apps* et
+*scripts* sont **masqués automatiquement** selon le matériel détecté ; ne restent que la mise à jour
+système et la gestion de parc (pré-téléchargement des caches firmware, une version par modèle).
+
+![nwupdater — N0200, mode classe](docs/screenshots/nwupdater-n0200-classroom.png)
+
 ## État
 
 | Lot | Sujet | État |

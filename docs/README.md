@@ -28,8 +28,10 @@ contient les specs brutes réutilisables (protocole, API, captures).
 - [`01-specs/os-architecture.md`](01-specs/os-architecture.md) — architecture Epsilon (boot chain, slots A/B, carte mémoire)
 - [`01-specs/hardware-variants.md`](01-specs/hardware-variants.md) — modèles N0100/N0110/N0115/N0120, Graphique vs Scientifique
 - [`01-specs/usb-dfu-protocol.md`](01-specs/usb-dfu-protocol.md) — protocole DFU/DfuSe côté hôte (le cœur à réimplémenter)
+- [`01-specs/scripts-and-device-pairing.md`](01-specs/scripts-and-device-pairing.md) — fonctions atelier « My Devices » (appairage / n° de série) & « My Scripts » (format storage + scripts)
 - [`01-specs/emulators-and-usb-analysis.md`](01-specs/emulators-and-usb-analysis.md) — pourquoi l'émulateur officiel n'aide pas, et comment obtenir un appareil DFU virtuel
 - [`reference/sources.md`](reference/sources.md) — liens sources (repos, docs officielles, communauté)
+- [`reference/official-webusb-analysis.md`](reference/official-webusb-analysis.md) — analyse du stack WebUSB/WebDFU officiel (`numworks.js`/`Storage.js`) recoupée au firmware
 
 ## État d'avancement
 

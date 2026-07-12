@@ -7,6 +7,7 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
 - ✅ Variantes hardware — 2 familles confirmées : Graphique **N01xx** / Scientifique **N02xx** (N0200 = STM32U073) → [hardware-variants.md](../01-specs/hardware-variants.md)
 - ✅ Constat émulateur (pas d'USB) + stratégie appareil DFU virtuel → [emulators-and-usb-analysis.md](../01-specs/emulators-and-usb-analysis.md)
 - ✅ Protocole USB/DFU côté hôte (commandes, DfuSe, platforminfo) → [usb-dfu-protocol.md](../01-specs/usb-dfu-protocol.md)
+- ✅ Fonctions atelier « My Devices » (appairage / n° de série) & « My Scripts » (format storage + scripts) → [scripts-and-device-pairing.md](../01-specs/scripts-and-device-pairing.md)
 - ✅ Outillage code : registre modèles + client DFU hôte + **device virtuel Niveau 1** + lecture identité + CLI + 7 tests verts (`src/nwupdater/`, `tests/`)
 - ⬜ Niveau 2 : gadget USB Linux (dummy_hcd) en Docker pour énumération réelle + capture usbmon
 
@@ -42,16 +43,22 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
 - ✅ Acquisition matériel réel (`dfu/usbio.py`, pyusb injecté) + `install --download`.
 - Réf : [../01-specs/n02xx-firmware-format.md](../01-specs/n02xx-firmware-format.md) · code `catalog/`, `dfu/usbio.py`.
 
-## Reste optionnel (post-lots)
-- **Validation sur matériel réel** par des volontaires — le seul vrai trou. L'outil est prêt
-  (chemin `dfu/usbio.py`), mais il n'a jamais été testé sur USB réel ici : **la machine de
-  développement a les ports USB désactivés**. Tout test/capture USB doit donc être fait sur
-  une **autre machine (USB actif), via un harnais autonome exécutable par un humain sans
-  assistance** — à concevoir sur `develop`.
-- *Nice-to-have (faible priorité)* : gadget USB Linux (`dummy_hcd`, Linux uniquement) pour
-  produire un **pcap de référence** de l'énumération. N'apporte **aucune** portabilité (l'app
-  est déjà Mac/Windows/Linux) et ne remplace pas la validation sur vraie calculatrice → non
-  retenu pour l'instant.
+## Outillage matériel (branche `develop`)
+- 🟡 **Harnais diagnostic + capture USB (lecture seule)** — FAIT (1er livrable `develop`) :
+  `nwupdater diagnose` énumère, lit l'identité et capture les transferts USB **sans rien
+  écrire**, produit un rapport JSON à renvoyer. Cœur testé ici contre le device virtuel ;
+  l'énumération réelle tourne chez un volontaire (la machine de dev a **l'USB désactivé**).
+  Réf : [../reference/hardware-harness.md](../reference/hardware-harness.md).
+- ✅ **Capture de séquence USB+WEB (sans flash)** — bouton UI + CLI `capture` (scénario
+  « scientifique 1er allumage ») ; dump JSON, secrets caviardés, firmware non inclus.
+  Réf : [../reference/hardware-harness.md](../reference/hardware-harness.md).
+- ✅ **Analyseur de capture** + USB tracer + dfu-diff (`tools/`, agent parallèle).
+- ✅ **Dump ↔ analyseur alignés** : l'analyseur (`capture_analyze`) lit directement le dump
+  `run_capture` (`_from_run_capture`/`load_capture`).
+- ✅ **App capable d'USB réel** : `pyusb` + `libusb` bundlés (`libusb-package`) ; l'app détecte
+  la vraie calculatrice (repli démo sinon). Capture possible en double-clic *ou* via la CLI.
+- ⬜ Flash guidé sur matériel réel (séparé, avec confirmations).
+- ⬜ *(faible priorité)* gadget USB Linux `dummy_hcd` pour capturer sans matériel.
 
 ## Décisions tranchées
 1. **Langage du cœur headless** : ✅ **Python + pyusb** (client DFU transport-agnostique ;
