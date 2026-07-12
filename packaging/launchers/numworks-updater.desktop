@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=nwupdater
+Comment=Update NumWorks calculators without Chrome/WebUSB
+# Uses the installed `nwupdater` if present, else runs from the repo (folder above launchers/).
+Exec=sh -c 'command -v nwupdater >/dev/null 2>&1 && exec nwupdater ui; cd "$(dirname "%k")/../.." && PYTHONPATH=src exec python3 -m nwupdater.cli ui'
+Icon=numworks-updater
+Terminal=false
+Categories=Utility;Education;

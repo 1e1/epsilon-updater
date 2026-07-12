@@ -1,0 +1,79 @@
+name: build-apps
+
+# Builds the double-click apps for macOS, Windows and Linux.
+# - on every push/PR: build and upload artifacts (download from the run's "Artifacts").
+# - on a tag vX.Y.Z: a single release job then attaches all three to a GitHub Release.
+# No paid signing accounts: binaries are unsigned (see docs/05-packaging-ui/desktop-app.md
+# for the one-time "unidentified developer" bypass on each OS).
+
+on:
+  push:
+    branches: [ "**" ]
+    tags: [ "v*" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            asset: NumWorks-Updater-macos
+          - os: windows-latest
+            asset: NumWorks-Updater-windows
+          - os: ubuntu-latest
+            asset: NumWorks-Updater-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install build deps
+        run: python -m pip install --upgrade pip pyinstaller pillow .
+
+      - name: Generate icons
+        run: python packaging/icon/generate_icons.py --arrow up
+
+      - name: Build app
+        run: pyinstaller packaging/nwupdater.spec --noconfirm
+
+      - name: Package (zip)
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            zip -r -y "../${{ matrix.asset }}.zip" "NumWorks Updater.app"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "../${{ matrix.asset }}.zip" "NumWorks Updater.exe"
+          else
+            chmod +x "NumWorks Updater"
+            zip "../${{ matrix.asset }}.zip" "NumWorks Updater"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.zip
+
+  # Single job that owns the Release, so matrix jobs never race to create it.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built apps
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/**/*.zip

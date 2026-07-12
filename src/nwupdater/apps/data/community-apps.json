@@ -1,0 +1,15 @@
+{
+  "_note": "Métadonnées ILLUSTRATIVES d'apps tierces NumWorks. Il n'existe pas d'API JSON publique officielle (le flux officiel = upload d'un .nwa sur my.numworks.com/apps). Cette liste modélise l'agrégation de catalogues communautaires ; les URLs sont des exemples à remplacer par de vraies sources .nwa.",
+  "apps": [
+    {"name": "Nofrendo", "version": "1.0", "api_level": 0, "family": "graphique",
+     "description": "Émulateur NES", "source": "community", "url": "https://example.invalid/nofrendo.nwa"},
+    {"name": "Peanut-GB", "version": "0.3", "api_level": 0, "family": "graphique",
+     "description": "Émulateur Game Boy", "source": "community", "url": "https://example.invalid/peanutgb.nwa"},
+    {"name": "Tetris", "version": "2.1", "api_level": 0, "family": "graphique",
+     "description": "Jeu Tetris", "source": "community", "url": "https://example.invalid/tetris.nwa"},
+    {"name": "Chess", "version": "1.2", "api_level": 0, "family": "graphique",
+     "description": "Jeu d'échecs", "source": "community", "url": "https://example.invalid/chess.nwa"},
+    {"name": "Periodic", "version": "1.0", "api_level": 1, "family": "graphique",
+     "description": "Tableau périodique (API level 1)", "source": "community", "url": "https://example.invalid/periodic.nwa"}
+  ]
+}
