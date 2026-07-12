@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# packaging build artifacts
+packaging/icon/icon.iconset/
+packaging/icon/icon_16.png
+packaging/icon/icon_32.png
+packaging/icon/icon_48.png
+packaging/icon/icon_64.png
+packaging/icon/icon_128.png
+packaging/icon/icon_512.png
+*.spec.bak

@@ -1,0 +1,55 @@
+[project]
+name = "nwupdater"
+version = "0.0.1"
+description = "Unofficial, hobby headless updater for NumWorks calculators (Graphique N01xx / Scientifique N02xx) without Chrome/WebUSB — no warranty, use at your own risk"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["numworks", "calculator", "dfu", "firmware", "updater", "epsilon"]
+authors = [{ name = "nwupdater contributors" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Topic :: Utilities",
+    "Operating System :: OS Independent",
+]
+# Core has NO runtime dependency: dev/tests run against the in-process virtual DFU device
+# (nwupdater.testing.virtual_dfu) and the stdlib-only local server.
+dependencies = []
+
+[project.optional-dependencies]
+usb = ["pyusb>=1.3"]                  # talk to REAL hardware (production only)
+auth = ["certifi>=2024.0"]            # CA bundle for TLS on Python builds without system CAs
+dev = ["pytest>=8", "ruff>=0.11", "bandit>=1.8"]
+
+[project.urls]
+Repository = "https://github.com/1e1/epsilon-updater"
+
+[project.scripts]
+nwupdater = "nwupdater.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"nwupdater.catalog" = ["data/*.json"]
+"nwupdater.apps" = ["data/*.json"]
+"nwupdater.server" = ["web/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# default rules (pyflakes F + pycodestyle E4/E7/E9) plus import sorting (I) and pep8-naming.
+extend-select = ["I", "W"]

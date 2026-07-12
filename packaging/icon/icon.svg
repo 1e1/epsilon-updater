@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- NumWorks Updater icon (source of truth mirrors generate_icons.py) -->
+  <rect x="2" y="2" width="124" height="124" rx="29" fill="#f5a623"/>
+  <!-- letter N (three strokes) -->
+  <g fill="#ffffff">
+    <rect x="38.4" y="35.8" width="11.3" height="56.3"/>
+    <rect x="78.3" y="35.8" width="11.3" height="56.3"/>
+  </g>
+  <path d="M44 35.8 L84 92.1" stroke="#ffffff" stroke-width="11.3"/>
+  <!-- update badge: charcoal disc + amber up-arrow -->
+  <circle cx="96" cy="96" r="26" fill="#2b2d31"/>
+  <path d="M96 107 L96 85 M86 94 L96 84 L106 94"
+        stroke="#f5a623" stroke-width="5.8" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
