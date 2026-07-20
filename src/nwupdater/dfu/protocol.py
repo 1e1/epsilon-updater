@@ -37,6 +37,29 @@ class UsbDeviceLike(Protocol):
     ): ...
 
 
+def read_string_descriptor(dev, index: int, *, langid: int = C.USB_LANGID_EN_US,
+                           timeout_ms: int = 4000) -> str | None:
+    """Read USB string descriptor ``index`` from ``dev`` via standard GET_DESCRIPTOR.
+
+    A free function (not tied to a DfuClient) so hardware setup (usbio) can read the DFU
+    interface's memory-layout string before a client exists. Returns None for index 0 or on
+    any failure/empty descriptor; never raises."""
+    if not index:
+        return None
+    wValue = (C.DESC_TYPE_STRING << 8) | index
+    try:
+        raw = bytes(dev.ctrl_transfer(
+            C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, timeout_ms))
+    except Exception:
+        return None
+    if len(raw) < 2 or raw[1] != C.DESC_TYPE_STRING:
+        return None
+    # raw[0] is bLength; trust it but never read past what we got.
+    end = min(raw[0], len(raw))
+    text = raw[2:end].decode("utf-16-le", "replace").strip("\x00").strip()
+    return text or None
+
+
 class DfuError(RuntimeError):
     def __init__(self, status: int, state: int, context: str = ""):
         self.status = status
@@ -67,12 +90,17 @@ class DfuClient:
     """Stateless-ish wrapper implementing the NumWorks DFU/DfuSe host protocol."""
 
     def __init__(self, device: UsbDeviceLike, *, sleep=time.sleep, timeout_ms: int = 4000,
-                 interface: int = C.DFU_INTERFACE):
+                 interface: int = C.DFU_INTERFACE, layout=None):
         self.dev = device
         self._sleep = sleep
         self.timeout_ms = timeout_ms
         self.interface = interface  # DFU interface (wIndex); 0 on all known NumWorks devices
         self._address_pointer = 0
+        # Real flash sector geometry (a MemoryLayout) used to erase correctly. When not
+        # passed explicitly it is discovered lazily from the device's ``memory_layout``
+        # attribute (set by usbio for real hardware, by the virtual device for tests).
+        self._layout = layout
+        self._layout_resolved = layout is not None
 
     # -- low-level requests --------------------------------------------------------
     def _out(self, request: int, wValue: int = 0, data: bytes = b"") -> None:
@@ -143,20 +171,7 @@ class DfuClient:
         None for index 0 or on any failure/empty descriptor. Does not disturb the DFU
         state machine — it is a standard device request, valid in any state.
         """
-        if not index:
-            return None
-        wValue = (C.DESC_TYPE_STRING << 8) | index
-        try:
-            raw = bytes(self.dev.ctrl_transfer(
-                C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, self.timeout_ms))
-        except Exception:
-            return None
-        if len(raw) < 2 or raw[1] != C.DESC_TYPE_STRING:
-            return None
-        # raw[0] is bLength; trust it but never read past what we got.
-        end = min(raw[0], len(raw))
-        text = raw[2:end].decode("utf-16-le", "replace").strip("\x00").strip()
-        return text or None
+        return read_string_descriptor(self.dev, index, langid=langid, timeout_ms=self.timeout_ms)
 
     # -- memory read/write ---------------------------------------------------------
     def read(self, address: int, length: int) -> bytes:
@@ -174,15 +189,42 @@ class DfuClient:
         return bytes(out[:length])
 
     def write(self, address: int, data: bytes, *, erase: bool = False) -> None:
-        """DNLOAD ``data`` at ``address`` in <=2048-byte chunks (dfu.py strategy)."""
+        """DNLOAD ``data`` at ``address`` in <=2048-byte chunks (dfu.py strategy).
+
+        When ``erase`` is set, every flash sector overlapping the write range is erased
+        **once, aligned to its sector boundary**, before any data is written. A DfuSe erase
+        wipes the whole containing sector (4–128 KiB), so erasing per 2048-byte chunk would
+        re-wipe the sector and destroy the chunks already written into it — only the last
+        chunk of each sector would survive (docs §6.4, §8.2)."""
+        if erase:
+            for base in self._sectors_to_erase(address, len(data)):
+                self.erase_page(base)
         for off in range(0, len(data), C.TRANSFER_SIZE):
             chunk = data[off:off + C.TRANSFER_SIZE]
             addr = address + off
-            if erase:
-                self.erase_page(addr)
             self.set_address(addr)
             self._out(C.DFU_DNLOAD, C.DNLOAD_BLOCK_BASE, chunk)
             self._wait_idle_after_command(f"write 0x{addr:08x}")
+
+    def _memory_layout(self):
+        """The device's advertised flash layout (a MemoryLayout), or None. Resolved once."""
+        if not self._layout_resolved:
+            self._layout = getattr(self.dev, "memory_layout", None)
+            self._layout_resolved = True
+        return self._layout
+
+    def _sectors_to_erase(self, address: int, length: int) -> list[int]:
+        """Aligned sector base addresses to erase before writing ``[address, address+length)``.
+
+        Uses the device's real sector geometry when advertised. Without a layout it falls
+        back to one erase per transfer chunk — the historical behaviour, correct only when
+        the erase sector equals the transfer size; real hardware always advertises a layout."""
+        layout = self._memory_layout()
+        if layout is not None:
+            sectors = layout.sectors_covering(address, length)
+            if sectors:
+                return sectors
+        return [address + off for off in range(0, length, C.TRANSFER_SIZE)]
 
     # -- leave ---------------------------------------------------------------------
     def leave(self, jump_address: int) -> None:

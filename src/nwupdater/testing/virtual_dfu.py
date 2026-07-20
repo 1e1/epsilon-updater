@@ -18,9 +18,26 @@ import base64
 import struct
 
 from ..dfu import constants as C
+from ..dfu.layout import parse_memory_layout
 from ..formats import headers
 from ..formats import storage as _storage
 from ..models import MODELS, Model
+
+
+def _layout_descriptor(mem) -> str:
+    """A realistic DfuSe layout string for a model's writable flash.
+
+    So the virtual device advertises real sector sizes (16 KiB internal, 64 KiB external —
+    both far larger than a 2048-byte transfer chunk) and erases at that granularity, exactly
+    like the on-device bootloader (docs §6.4). Modelling this is what makes a per-chunk erase
+    observably destructive in tests."""
+    def run(sector: int, total: int) -> str:
+        return f"{max(1, total // sector)}*{sector // 1024:03d}Kg"
+
+    groups = [(mem.internal_flash_origin, run(0x4000, mem.internal_flash_size))]  # 16 KiB
+    if mem.external_flash_origin is not None:
+        groups.append((mem.external_flash_origin, run(0x10000, mem.external_flash_size)))  # 64 KiB
+    return "@Flash" + "".join(f"/0x{base:08X}/{seg}" for base, seg in groups)
 
 
 def _synth_serial(bcd_device: int) -> str:
@@ -38,13 +55,18 @@ class UsbStall(Exception):
 
 
 class _SparseMemory:
-    """Page-based zero-filled address space with a set of writable ranges."""
+    """Page-based zero-filled address space with a set of writable ranges.
+
+    Storage stays in 2048-byte backing pages, but *erase* granularity follows the real
+    flash sectors from ``layout`` (16–128 KiB): an erase drops every backing page in the
+    containing sector, so re-erasing a sector mid-write is seen to destroy prior writes."""
 
     PAGE = C.TRANSFER_SIZE
 
-    def __init__(self, writable_ranges: list[tuple[int, int]]):
+    def __init__(self, writable_ranges: list[tuple[int, int]], layout=None):
         self._pages: dict[int, bytearray] = {}
         self._writable = writable_ranges
+        self._layout = layout
 
     def _page(self, page_index: int) -> bytearray:
         p = self._pages.get(page_index)
@@ -78,8 +100,17 @@ class _SparseMemory:
             pos += take
 
     def erase_page(self, address: int) -> None:
-        page_index = address // self.PAGE
-        self._pages.pop(page_index, None)
+        # A DfuSe erase wipes the whole sector containing ``address``. Fall back to a single
+        # 2048-byte page only when no layout maps the address (e.g. SRAM).
+        base, size = address, self.PAGE
+        if self._layout is not None:
+            sec = self._layout.sector_of(address)
+            if sec is not None:
+                base, size = sec
+        first = base // self.PAGE
+        last = (base + size - 1) // self.PAGE
+        for page_index in range(first, last + 1):
+            self._pages.pop(page_index, None)
 
 
 class VirtualDfuDevice:
@@ -94,9 +125,15 @@ class VirtualDfuDevice:
         self.product_string = product_string
         self.serial_number = serial if serial is not None else _synth_serial(model.bcd_device)
         self.iSerialNumber = C.SERIAL_STRING_INDEX  # so usb.util.get_string-style code works
+        # DfuSe flash memory-layout descriptor (§6.4): drives both the advertised sector
+        # geometry (read by the host) and this device's own erase granularity.
+        self._layout_string = _layout_descriptor(model.memory)
+        self.memory_layout = parse_memory_layout(self._layout_string)
+        self.iInterface = C.LAYOUT_STRING_INDEX
         # USB string descriptor table (index -> value); see calculator.h. Only #3 is
         # asserted from source; #1/#2 are faithful conveniences for the mock.
-        self._strings = {1: "NumWorks", 2: product_string, C.SERIAL_STRING_INDEX: self.serial_number}
+        self._strings = {1: "NumWorks", 2: product_string, C.SERIAL_STRING_INDEX: self.serial_number,
+                         C.LAYOUT_STRING_INDEX: self._layout_string}
 
         self.state = C.STATE_DFU_IDLE
         self.status = C.STATUS_OK
@@ -112,7 +149,7 @@ class VirtualDfuDevice:
         ]
         if mem.external_flash_origin is not None:
             writable.append((mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size))
-        self.memory = _SparseMemory(writable)
+        self.memory = _SparseMemory(writable, self.memory_layout)
         self._install_platform_info(os_version, commit)
 
     # -- platforminfo preload ------------------------------------------------------
@@ -267,7 +304,7 @@ class VirtualDfuDevice:
             else:
                 self.status = C.STATUS_errTARGET
         elif kind == "mass_erase":
-            self.memory = _SparseMemory(self.memory._writable)
+            self.memory = _SparseMemory(self.memory._writable, self.memory_layout)
         elif kind == "write":
             _, addr, data = action
             if self.memory.is_writable(addr, len(data)):

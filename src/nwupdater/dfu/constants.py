@@ -39,6 +39,9 @@ STD_GET_DESCRIPTOR = 0x06
 DESC_TYPE_STRING = 0x03
 USB_LANGID_EN_US = 0x0409  # first langid; NumWorks strings are ASCII, langid is nominal
 SERIAL_STRING_INDEX = 3  # iSerialNumber index, fixed on NumWorks [calculator.h:54]
+# iInterface index the virtual device exposes its DfuSe flash-layout descriptor at (§6.4).
+# On real hardware the index is read from the DFU interface descriptor (intf.iInterface).
+LAYOUT_STRING_INDEX = 4
 
 # --- DFU bRequest codes ------------------------------------------------------------
 DFU_DETACH = 0

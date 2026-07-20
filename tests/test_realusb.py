@@ -14,11 +14,12 @@ from nwupdater.dfu.protocol import DfuClient
 
 # -- fake pyusb ------------------------------------------------------------------------
 class FakeInterface:
-    def __init__(self, cls, sub, number=0, alt=0):
+    def __init__(self, cls, sub, number=0, alt=0, iInterface=0):
         self.bInterfaceClass = cls
         self.bInterfaceSubClass = sub
         self.bInterfaceNumber = number
         self.bAlternateSetting = alt
+        self.iInterface = iInterface
 
 
 class FakeConfig:
@@ -67,8 +68,9 @@ class FakeUtil:
         self.claims.append((dev, number))
 
 
-def _dfu_intf(number=0):
-    return FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=number)
+def _dfu_intf(number=0, iInterface=0):
+    return FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS,
+                         number=number, iInterface=iInterface)
 
 
 # -- find_calculator -------------------------------------------------------------------
@@ -159,7 +161,9 @@ class _VirtualUsbAdapter:
         pass
 
     def get_active_configuration(self):
-        return FakeConfig([_dfu_intf(0)])
+        # advertise the layout string index like real hardware, so usbio reads the flash
+        # sector geometry through ctrl_transfer (forwarded to the virtual device).
+        return FakeConfig([_dfu_intf(0, iInterface=self._v.iInterface)])
 
     def set_interface_altsetting(self, *, interface, alternate_setting):
         pass

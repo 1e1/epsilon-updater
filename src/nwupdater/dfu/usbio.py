@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import constants as C
+from .layout import parse_memory_layout
+from .protocol import read_string_descriptor
 
 
 class UsbError(RuntimeError):
@@ -49,6 +51,22 @@ class OpenDevice:
     interface: int       # DFU interface number (wIndex for control transfers)
     alt_setting: int
     id_product: int
+    memory_layout: object | None = None  # parsed DfuSe flash layout (§6.4), if advertised
+
+
+def _read_memory_layout(dev, intf):
+    """Read + parse the DFU interface's DfuSe memory-layout string (``iInterface``).
+
+    Gives the real, possibly non-uniform flash sector geometry so writes erase each sector
+    once (see dfu/layout.py). Best-effort: any failure returns None (erase then falls back
+    to the historical per-chunk behaviour)."""
+    index = getattr(intf, "iInterface", 0) or 0
+    if not index:
+        return None
+    try:
+        return parse_memory_layout(read_string_descriptor(dev, index))
+    except Exception:
+        return None
 
 
 def _find_dfu_interface(cfg):
@@ -138,5 +156,14 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
     except Exception:
         pass
 
+    # 6. read the real flash sector geometry and attach it to the device so DfuClient erases
+    #    correctly (sector-aligned, once per sector). Optional — never blocks opening.
+    layout = _read_memory_layout(dev, intf)
+    if layout is not None:
+        try:
+            dev.memory_layout = layout
+        except Exception:
+            pass
+
     return OpenDevice(dev=dev, bcd_device=dev.bcdDevice, interface=interface,
-                      alt_setting=alt, id_product=matched_pid)
+                      alt_setting=alt, id_product=matched_pid, memory_layout=layout)
