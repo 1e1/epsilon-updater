@@ -97,6 +97,8 @@ def icon_data_uri(px565: bytes) -> str:
 def _elf_section(blob: bytes, want: str) -> bytes | None:
     """Bytes of an ELF32 section by name (e.g. ``.rodata.eadk_app_icon``), or None. Real
     NumWorks ``.nwa`` files are ELF binaries — the icon is a section, not a flat header."""
+    if len(blob) < 6:  # need e_ident[0:4] magic + EI_CLASS (4) + EI_DATA (5)
+        return None
     if blob[:4] != b"\x7fELF" or blob[4] != 1:  # ELF32 only (NumWorks is 32-bit ARM)
         return None
     end = "<" if blob[5] == 1 else ">"
