@@ -326,6 +326,7 @@ function renderCatalog() {
   $("chan-stable").setAttribute("aria-pressed", STATE.channel === "stable");
   $("chan-beta").setAttribute("aria-pressed", STATE.channel === "beta");
   $("c-img-hint").textContent = t("img_hint");
+  $("c-exam-warn").textContent = t("exam_warn");  // flashing here → device flagged unofficial / exam
   const up = c.up_to_date;
   $("c-badge").className = "badge " + (up ? "ok" : "up");
   $("c-badge").textContent = up ? t("uptodate") : t("update_avail");
