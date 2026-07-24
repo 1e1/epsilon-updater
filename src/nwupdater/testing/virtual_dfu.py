@@ -127,6 +127,7 @@ class VirtualDfuDevice:
         commit: str,
         product_string: str = "NumWorks Calculator",
         serial: str | None = None,
+        alt_settings: bool = False,
     ):
         self.idVendor = C.USB_VID
         self.idProduct = C.PID_EPSILON
@@ -155,6 +156,10 @@ class VirtualDfuDevice:
         self._pending: tuple | None = None  # deferred action performed on next GETSTATUS
         self.left = False  # set True after leave/manifest -> reset
         self.jump_address: int | None = None
+        # Alt-setting model (opt-in): one alt per memory backend; a DNLOAD only lands within the
+        # CURRENT alt's region, like real NumWorks hardware (see usb-dfu-protocol.md §6.4).
+        self._alt_gated = alt_settings
+        self.current_alt = C.ALT_FLASH
 
         mem = model.memory
         writable: list[tuple[int, int]] = [
@@ -166,6 +171,24 @@ class VirtualDfuDevice:
                 (mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size)
             )
         self.memory = _SparseMemory(writable, self.memory_layout)
+        if alt_settings:
+            flash_ranges = [
+                (mem.internal_flash_origin, mem.internal_flash_origin + mem.internal_flash_size)
+            ]
+            if mem.external_flash_origin is not None:
+                flash_ranges.append(
+                    (mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size)
+                )
+            self._alt_ranges = {
+                C.ALT_FLASH: flash_ranges,
+                C.ALT_SRAM: [(mem.sram_origin, mem.sram_origin + mem.sram_size)],
+            }
+            sram_layout = parse_memory_layout(
+                f"@SRAM/0x{mem.sram_origin:08X}/01*{max(1, mem.sram_size // 1024):03d}Ke"
+            )
+            # Advertised like real hardware: alt 0 @Flash, alt 1 @SRAM. DfuClient reads this to
+            # route each write to the alt whose region owns the address.
+            self.alt_regions = [(C.ALT_FLASH, self.memory_layout), (C.ALT_SRAM, sram_layout)]
         self._install_platform_info(os_version, commit)
 
     # -- platforminfo preload ------------------------------------------------------
@@ -227,6 +250,25 @@ class VirtualDfuDevice:
             self._handle_out(bRequest, wValue, data)
             return len(data)
         raise UsbStall(f"unsupported bmRequestType 0x{bmRequestType:02x}")
+
+    def set_interface_altsetting(self, *, interface, alternate_setting):
+        """Select a DFU alt-setting (pyusb API). Governs which backend a DNLOAD writes to, and
+        resets the state machine to idle — like the real device."""
+        self.current_alt = alternate_setting
+        self.state = C.STATE_DFU_IDLE
+        self.status = C.STATUS_OK
+        self._pending = None
+
+    def _write_allowed(self, addr: int, length: int) -> bool:
+        """Whether a DNLOAD at ``addr`` lands. Alt-gated: only the CURRENT alt's region accepts
+        it (a wrong-backend write is silently ignored on real hardware); otherwise the legacy
+        union of writable ranges."""
+        if not self._alt_gated:
+            return self.memory.is_writable(addr, length)
+        end = addr + length
+        return any(
+            lo <= addr and end <= hi for lo, hi in self._alt_ranges.get(self.current_alt, [])
+        )
 
     # -- standard requests (GET_DESCRIPTOR string) --------------------------------
     def _handle_standard_in(self, request, wValue, length):
@@ -339,10 +381,12 @@ class VirtualDfuDevice:
             self.memory = _SparseMemory(self.memory._writable, self.memory_layout)
         elif kind == "write":
             _, addr, data = action
-            if self.memory.is_writable(addr, len(data)):
+            if self._write_allowed(addr, len(data)):
                 self.memory.write(addr, data)
-            else:
+            elif not self._alt_gated:
                 self.status = C.STATUS_errTARGET
+            # alt-gated + wrong backend: silently ignored (status stays OK) — exactly what real
+            # hardware does with a DNLOAD outside the current alt's region.
         elif kind == "manifest":
             self.left = True
             self.jump_address = self.address_pointer + C.USERLAND_HEADER_SIZE
@@ -351,14 +395,24 @@ class VirtualDfuDevice:
 def virtual_calculator(
     model_name: str = "n0110",
     *,
-    os_version: str = "23.2.4",
-    commit: str = "abc1234",
+    os_version: str | None = None,
+    commit: str | None = None,
     serial: str | None = None,
+    alt_settings: bool = False,
 ) -> VirtualDfuDevice:
-    """Convenience factory. ``model_name`` is e.g. 'n0110', 'n0120', 'n0200'."""
+    """Convenience factory. ``model_name`` is e.g. 'n0110', 'n0120', 'n0200'. ``os_version`` /
+    ``commit`` default when None (so callers can forward an optional CLI arg directly).
+    ``alt_settings`` models the real per-backend DFU alt-settings (Flash / SRAM) so write-routing
+    is exercised."""
     bcd = next((b for b, m in MODELS.items() if m.name == model_name), None)
     if bcd is None:
         raise ValueError(
             f"unknown model {model_name!r}; known: {[m.name for m in MODELS.values()]}"
         )
-    return VirtualDfuDevice(MODELS[bcd], os_version=os_version, commit=commit, serial=serial)
+    return VirtualDfuDevice(
+        MODELS[bcd],
+        os_version=os_version or "23.2.4",
+        commit=commit or "abc1234",
+        serial=serial,
+        alt_settings=alt_settings,
+    )

@@ -74,6 +74,16 @@ sans trous internes** (une seule zone libre = la queue jusqu'à `k_totalSize = 4
    écrire les scripts (SRAM) **n'efface rien** ; en flash il efface les secteurs couverts, avec
    `SET_ADDRESS` à **chaque** chunk (`:244`, style `dfu.py`).
 
+> **Précision [CONFIRMÉ matériel — N0120]** : là où `numworks.js` doit *ajouter à la main* le
+> segment SRAM (point 1), le **N0120 (H725) l'expose lui-même** comme une **alt-setting DFU
+> distincte** : alt 0 `@Flash/0x90000000`, alt 1 **`@SRAM/0x24000000` (writable)**. Un `DNLOAD`
+> ne s'applique qu'à la mémoire de l'**alt courante** : écrire les scripts alors que l'alt
+> `@Flash` est sélectionnée est accepté mais **silencieusement ignoré**. `nwupdater` **découvre**
+> les régions par alt (chaînes de layout, `usbio`) et **route** chaque écriture vers l'alt
+> propriétaire de l'adresse (`DfuClient`), avec vérification par relecture (`scripts.write_storage`).
+> C'est plus robuste que l'ajout en dur d'un segment : aucune adresse par modèle, donc
+> N0100 … futur N0130 fonctionnent automatiquement.
+
 ## Divergences à connaître
 
 - **Apps `.nwa` : rien** dans ces libs (grep vide sur `installApp|.nwa|external_app|0xDEC0BEBA`).

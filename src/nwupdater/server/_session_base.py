@@ -7,6 +7,8 @@ public method surface identical while grouping the code by responsibility.
 
 from __future__ import annotations
 
+import threading
+
 from ..apps.store import AppStore
 from ..cache.store import FirmwareCache
 from ..capabilities import Capabilities, Policy, resolve
@@ -37,6 +39,14 @@ class SessionBase:
         self.catalog = FirmwareCatalog.bundled()  # Graphing N01xx (2x.x)
         self.sci_catalog = FirmwareCatalog.bundled("firmwares-n0200")  # Scientific N0200 (3.x)
         self.store = AppStore.bundled()
+        # Generic, self-hosted user sources: local .nwa files + a _urls.txt list under the user
+        # apps dir, merged into the catalogue so "Available" shows real apps the user provides.
+        try:
+            from ..apps.sources import app_entries, user_apps_dir
+
+            self.store.entries.extend(app_entries(user_apps_dir()))
+        except OSError:
+            pass
         # Live per-model catalogue: when signed in, the official manifest gives the *real*
         # latest for {model}/{channel}. OFF by default so tests never touch the network — the
         # `ui` server turns it on. Bundled snapshots stay the offline/anonymous fallback.
@@ -54,6 +64,9 @@ class SessionBase:
         self.bcd: int | None = None
         self.virtual = False
         self.connected = False
+        # Serializes all device I/O so the background liveness poll (device_health) can never
+        # race an in-flight operation (install/read) on the same USB handle.
+        self._io_lock = threading.Lock()
         self.policy = Policy()  # UX overlay (e.g. classroom mode); feeds the capability resolver
         if connect:
             self.attach_real() if real else self.attach_demo(
@@ -107,6 +120,39 @@ class SessionBase:
         self.device = self.client = self.model = self.bcd = None
         self.connected = self.virtual = False
         return self.identity()
+
+    def device_alive(self) -> bool:
+        """Cheap liveness check for the connected device. A virtual device is always alive; a
+        real one is pinged with a benign DFU GETSTATE (read-only, valid in any state). Any USB
+        error means the cable was pulled → ``False``. Callers hold ``_io_lock``."""
+        if not self.connected:
+            return False
+        if self.virtual:
+            return True
+        try:
+            self._conn()[0].get_state()
+            return True
+        except Exception:
+            return False
+
+    def device_health(self) -> dict:
+        """Poll device liveness for the UI's hotplug watch, without ever racing an operation.
+
+        If ``_io_lock`` is held (an install/read is running) the device is by definition present,
+        so report it connected and skip the probe. Otherwise probe: a real device that has gone
+        away is auto-detached so the UI can drop back to scanning for a re-plug."""
+        if not self.connected:
+            return {"connected": False, "virtual": False}
+        if not self._io_lock.acquire(blocking=False):
+            return {"connected": True, "virtual": self.virtual, "busy": True}
+        try:
+            alive = self.device_alive()
+        finally:
+            self._io_lock.release()
+        if not alive:
+            self.detach()
+            return {"connected": False, "virtual": False, "lost": True}
+        return {"connected": True, "virtual": self.virtual}
 
     @staticmethod
     def demo_models() -> list[dict]:

@@ -1,8 +1,10 @@
 """Desktop entry point (packaged double-click app).
 
-Starts the local server on a free port and opens the browser. Tries the REAL calculator
-first (pyusb + bundled libusb); if none is plugged in (or NWUPDATER_DEMO=1), falls back to
-the virtual demo so the app always opens.
+Starts the local server on a free port and opens the browser. Real-first, exactly like the
+``ui`` command: the app opens DISCONNECTED and attaches a real calculator only if one is
+actually plugged in. A calculator connected AFTER launch is picked up automatically (the page
+rescans). The demo device is NEVER started silently — it is opt-in via ``NWUPDATER_DEMO`` /
+``--demo`` or the "explore a demo" button on the page.
 """
 
 from __future__ import annotations
@@ -23,19 +25,24 @@ def main() -> int:
     except ValueError:
         idle = 900.0
 
-    session = None
-    if not force_demo:
+    session = Session(model_name=model, connect=False, live_catalog=True)
+    if force_demo:
+        session.attach_demo(model)
+    else:
         try:
-            session = Session(model_name=model, real=True)  # real calculator if one is plugged
-        except (SystemExit, Exception):
-            session = None  # no device / pyusb / libusb -> fall back to the demo below
-    if session is None:
-        session = Session(model_name=model, real=False)
+            session.attach_real()  # real calculator if one is already plugged in
+        except Exception:
+            pass  # none yet — the page waits and auto-detects one when it is plugged in
 
     # port 0 -> OS picks a free port; single_instance reuses a running app instead of
     # starting a second server on repeated double-clicks.
-    serve(session, port=0, open_browser=True, single_instance=True,
-          idle_timeout=idle if idle > 0 else None)
+    serve(
+        session,
+        port=0,
+        open_browser=True,
+        single_instance=True,
+        idle_timeout=idle if idle > 0 else None,
+    )
     return 0
 
 

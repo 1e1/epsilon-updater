@@ -6,6 +6,55 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [1.0.0-rc.4] - 2026-07-24
+
+### Ajouté
+
+- **Branchement à chaud** : une calculatrice branchée *après* le lancement est détectée
+  automatiquement (la page scanne toutes les 4 s) ; pendant qu'une vraie calculatrice est
+  connectée, un test de vivacité (`GET /api/device/health`, DFU GETSTATE bénin, sérialisé avec
+  les opérations via un verrou d'E/S) **détecte le débranchement** et repasse en mode scan.
+  L'app packagée **ne bascule plus jamais en démo silencieusement** : la démo est explicite
+  (`NWUPDATER_DEMO`/`--demo` ou le bouton « Explorer une démo »).
+- **Mode classe — flash à la volée sans connexion élève** : une calculatrice dont le modèle est
+  en cache se flashe **en un clic depuis le cache**, sans compte NumWorks ni re-téléchargement
+  (l'enseignant se connecte une fois pour pré-télécharger). La version en cache est
+  pré-sélectionnée ; `install_firmware(from_cache=True)` sans version résout l'entrée du modèle.
+- **Canal du firmware en cache** : chaque entrée de cache mémorise son canal (`stable`/`beta`) ;
+  l'interface et la CLI affichent un badge pour distinguer une image beta d'une stable en un
+  coup d'œil.
+- **Source d'apps utilisateur générique** : dépôt de `.nwa` locaux + liste d'URLs (`_urls.txt`)
+  sous `NWUPDATER_APPS_DIR` (sinon `<config>/nwupdater/apps`), agrégés dans « Disponibles ». Les
+  apps locales sont installées **telles quelles** (vrais octets, pas une image de démo).
+- **Routage d'alt-setting DFU par découverte** : le `DfuClient` lit les régions annoncées par
+  **chaque** alt-setting du device (`usbio`) et route chaque écriture vers l'alt propriétaire de
+  l'adresse (Flash / SRAM / …). Aucune adresse ni alt codée en dur → N0100 … futur N0130 pris en
+  charge automatiquement.
+- **Export apps/scripts vers l'ordinateur** : les apps `.nwa` et scripts `.py` installés sur la
+  calculatrice peuvent être **exportés vers l'ordinateur** (bibliothèque locale sous le dossier
+  apps/scripts utilisateur), avec un indicateur « déjà sur l'ordinateur » quand un fichier de même
+  nom et taille y est déjà présent.
+
+### Corrigé
+
+- **Réactivité des boutons d'installation** (apps + scripts) : « Écrire » se verrouille et
+  affiche « Écriture… » immédiatement (état occupé partagé), fermant aussi la fenêtre de
+  double-soumission — plus d'impression d'absence de réaction pendant l'écriture DFU bloquante.
+- **Écriture des scripts Python sur matériel réel** : l'écriture du storage (SRAM) était un
+  *no-op silencieux* car émise sur l'alt-setting `@Flash`. Elle est désormais routée vers l'alt
+  `@SRAM` (découverte du device) et **vérifiée par relecture** (`write_storage` lève si l'écriture
+  n'atterrit pas). Confirmé write→verify→rollback sur une N0120 réelle.
+
+### Outillage
+
+- **Harnais de test JS (Playwright)** : `tests/test_ui_logic.py` teste la logique de `app.js` en
+  navigateur réel — logique pure (planificateur d'écriture, résolveur de cache par modèle,
+  échappement `jsStr`) via `page.evaluate`, et interaction (staging → « Écrire » → mise à jour de
+  la liste device). Un filet de sécurité pour refactorer l'interface.
+- **Couverture durcie** à l'aide de calculatrices réelles : tests précis du routage d'alt-setting,
+  de la découverte multi-alt (`usbio`), de la reprise de la machine à états DFU (`make_idle`), de
+  la vérification d'écriture du storage et de la branche de téléchargement firmware.
+
 ## [1.0.0-rc.3] - 2026-07-24
 
 ### Ajouté

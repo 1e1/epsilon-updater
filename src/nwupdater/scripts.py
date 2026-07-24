@@ -12,6 +12,10 @@ from .formats import storage as S
 from .formats.storage import Record
 
 
+class StorageWriteError(RuntimeError):
+    """The storage write did not land (read-back mismatch)."""
+
+
 def read_storage(client, addr: int, size: int) -> list[Record]:
     """UPLOAD the storage zone and parse it. ``+8`` covers the magic + terminator margin.
 
@@ -22,7 +26,17 @@ def read_storage(client, addr: int, size: int) -> list[Record]:
 
 
 def write_storage(client, addr: int, records: list[Record], *, capacity: int) -> int:
-    """Re-encode the whole store and DNLOAD it (SRAM → no erase). Returns bytes written."""
+    """Re-encode the whole store and DNLOAD it (SRAM → no erase). Returns bytes written.
+
+    The storage lives in SRAM, exposed as its own DFU alt-setting; ``client.write`` routes to it
+    by address. A DNLOAD aimed at the wrong backend (no SRAM alt selected) is silently ignored on
+    real hardware, so we **verify by read-back** and raise rather than pretend success.
+    """
     blob = S.encode_storage(records, capacity=capacity)
     client.write(addr, blob, erase=False)
+    if client.read(addr, len(blob)) != blob:
+        raise StorageWriteError(
+            "storage read-back mismatch — the calculator did not accept the write "
+            "(is the SRAM alt-setting reachable?)"
+        )
     return len(blob)

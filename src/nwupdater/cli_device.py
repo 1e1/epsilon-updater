@@ -52,12 +52,11 @@ def _open_device(args) -> _Opened:
     if args.virtual:
         from .testing.virtual_dfu import virtual_calculator
 
-        kw: dict[str, str] = {}
-        if getattr(args, "os_version", None) is not None:
-            kw["os_version"] = args.os_version
-        if getattr(args, "commit", None) is not None:
-            kw["commit"] = args.commit
-        dev = virtual_calculator(args.virtual, **kw)
+        dev = virtual_calculator(
+            args.virtual,
+            os_version=getattr(args, "os_version", None),
+            commit=getattr(args, "commit", None),
+        )
         return _Opened(dev, dev.bcdDevice, DfuClient(dev, sleep=_nosleep), 0, _nosleep)
     dev, bcd, iface = _open_real_device()
     return _Opened(dev, bcd, DfuClient(dev, interface=iface), iface, time.sleep)

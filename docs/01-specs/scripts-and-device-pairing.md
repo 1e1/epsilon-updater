@@ -187,9 +187,20 @@ Nom : `([a-z_][a-z0-9_]*)\.py`, le nom vide `.py` étant toléré [script.cpp:21
 
 C'est **non destructif** : on ne fait que des UPLOAD (lecture mémoire).
 
-### 3.5 Écrire les scripts (**mutant — hors périmètre par défaut**)
+### 3.5 Écrire les scripts (**mutant — implémenté, derrière confirmation**)
 Reconstruire le buffer complet du store (magic + records + `0x0000`) et le DNLOAD à
 `m_storageAddressRAM` (alt setting **1 = SRAM**, cf. usb-dfu-protocol §6.4). Contraintes :
+
+> **[CONFIRMÉ matériel — N0120]** Le choix de l'**alt-setting** est décisif : un `DNLOAD` en SRAM
+> alors que l'alt `@Flash` est sélectionnée est **accepté (status OK) mais silencieusement
+> ignoré** — l'écriture n'atterrit pas. La N0120 expose deux alt-settings — `@Flash/0x90000000`
+> (alt 0) et **`@SRAM/0x24000000` (alt 1, writable)** — et un `DNLOAD` ne s'applique qu'à la
+> mémoire de l'alt **courante** (les `UPLOAD`/lectures marchent partout). L'app **découvre** ces
+> régions dans les chaînes de layout de chaque alt (`usbio`) et **route** chaque écriture vers
+> l'alt dont la région contient l'adresse (`DfuClient`) — donc rien codé en dur par modèle, et
+> N0100…futur N0130 marchent automatiquement. `write_storage` **vérifie par relecture** et lève
+> si l'écriture n'a pas atterri (plus de faux succès silencieux). Validé write→verify→rollback
+> sur une vraie N0120.
 
 - Respecter `k_totalSize = 42 KiB` : refuser si le total dépasse.
 - Le storage est en **SRAM** → **volatile**. ⚠️ Correction : il n'existe **aucun backup flash** du
@@ -209,8 +220,8 @@ Reconstruire le buffer complet du store (magic + records + `0x0000`) et le DNLOA
 - **Lecture** : ajout naturel et sûr. Un module `storage.py` : parse le format §3.2/§3.3,
   s'appuie sur `dfu/identity.py` (pour `m_storageAddressRAM`) + `dfu/protocol.py` (UPLOAD).
   Testable contre le **device virtuel** en injectant un buffer storage synthétique.
-- **Écriture** : possible avec le même moteur mais **mutant** → derrière confirmation, après
-  validation matériel réel.
+- **Écriture** : **implémentée** (`scripts.write_storage` + routage d'alt-setting du `DfuClient`,
+  §3.5), derrière confirmation. Validée sur N0120 réelle (write→verify→rollback).
 
 ---
 
@@ -225,6 +236,8 @@ Reconstruire le buffer complet du store (magic + records + `0x0000`) et le DNLOA
   source (code serveur non public).
 - **UID address n0100 / n02xx** : registre absent de ce fork → à confirmer sur matériel.
 - **Cohérence d'écriture du storage en RAM** pendant qu'Epsilon tourne (fenêtre vis-à-vis de l'app
-  Code) : à valider en réel. La persistance « à l'extinction » = **rétention SRAM en veille**, pas un
+  Code) : **partiellement levé** — l'écriture atterrit et se relit correctement sur N0120 réelle
+  **à condition de sélectionner l'alt `@SRAM`** (§3.5) ; le comportement au réveil de l'app Code
+  reste à observer. La persistance « à l'extinction » = **rétention SRAM en veille**, pas un
   backup flash (cf. §3.5) — le mode `standby()` (perte SRAM) et le point exact de rétention restent à
   confirmer sur matériel (driver power côté kernel, absent de ce fork).

@@ -183,7 +183,7 @@ def _install_fake_usb(monkeypatch, adapter):
     core = types.ModuleType("usb.core")
     util = types.ModuleType("usb.util")
 
-    def find(*, find_all=False, idVendor=None, idProduct=None):
+    def find(*, find_all=False, idVendor=None, idProduct=None, backend=None):
         hit = idProduct == C.PID_EPSILON and idVendor == C.USB_VID
         if find_all:
             return iter([adapter] if hit else [])
@@ -221,6 +221,70 @@ def test_real_install_requires_confirmation(monkeypatch, capsys):
     rc = cli.main(["install", "--to-version", "25.2.0"])  # real path, no --yes
     assert rc == 1
     assert "cancelled" in capsys.readouterr().err
+
+
+def _string_desc(s: str) -> bytes:
+    body = s.encode("utf-16-le")
+    return bytes([len(body) + 2, C.DESC_TYPE_STRING]) + body
+
+
+class _AltDevice:
+    """Fake device advertising multiple DFU alt-settings, each with its own layout string —
+    to drive usbio's discovery of the per-backend memory map (Flash + SRAM)."""
+
+    def __init__(self, bcd, interfaces, strings, id_product):
+        self.bcdDevice = bcd
+        self.idProduct = id_product
+        self._cfg = FakeConfig(interfaces)
+        self._strings = strings
+        self.configured = False
+        self.alt_set = None
+
+    def set_configuration(self):
+        self.configured = True
+
+    def get_active_configuration(self):
+        return self._cfg
+
+    def set_interface_altsetting(self, *, interface, alternate_setting):
+        self.alt_set = (interface, alternate_setting)
+
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
+        return _string_desc(self._strings.get(wValue & 0xFF, ""))
+
+
+def test_discovers_all_alt_settings_with_parsed_layouts():
+    flash = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16
+    )
+    sram = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=1, iInterface=17
+    )
+    strings = {16: "@Flash/0x90000000/01*064Kg", 17: "@SRAM/0x24000000/01*252Ke"}
+    dev = _AltDevice(0x0120, [flash, sram], strings, C.PID_EPSILON)
+    od = usbio.find_calculator(FakeCore({C.PID_EPSILON: [dev]}), FakeUtil())
+    regions = dict(od.alt_regions)
+    assert set(regions) == {0, 1}
+    assert regions[0].sector_of(0x90000000) is not None  # @Flash owns the QSPI base
+    assert regions[1].sector_of(0x24000000) is not None  # @SRAM owns the storage base
+    # primary = the Flash alt; selected on the device and the map attached for the client to route
+    assert od.interface == 0 and od.alt_setting == 0
+    assert dev.alt_set == (0, 0)
+    assert dev.alt_regions == od.alt_regions
+    assert od.memory_layout.sector_of(0x90000000) is not None
+
+
+def test_discovery_when_only_flash_alt_is_advertised():
+    # a single-backend device (older model / no SRAM alt) yields one region and still opens.
+    flash = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16
+    )
+    dev = _AltDevice(0x0100, [flash], {16: "@Flash/0x08000000/01*016Kg"}, C.PID_EPSILON)
+    od = usbio.find_calculator(FakeCore({C.PID_EPSILON: [dev]}), FakeUtil())
+    assert [a for a, _ in od.alt_regions] == [0]
+    assert od.memory_layout.sector_of(0x08000000) is not None
 
 
 def test_real_install_with_yes_flashes_virtual_device(monkeypatch, capsys):

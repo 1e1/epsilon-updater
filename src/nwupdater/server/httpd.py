@@ -53,6 +53,13 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             self.end_headers()
             self.wfile.write(body)
 
+        def _locked_json(self, fn):
+            """Run a device-touching read under the session I/O lock, then emit JSON — so the
+            background liveness probe never issues USB transfers concurrently with it."""
+            with session._io_lock:
+                obj = fn()
+            self._json(obj)
+
         def _guard(self, *, require_origin: bool = False) -> bool:
             """True if the request may touch the API. Blocks CSRF & DNS-rebinding.
 
@@ -168,17 +175,21 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     )
                     return
                 if path == "/api/identity":
-                    self._json(session.identity())
+                    self._locked_json(session.identity)
                 elif path == "/api/device/demo-models":
                     self._json(session.demo_models())
+                elif path == "/api/device/health":
+                    # Hotplug watch: cheap, self-locking (non-blocking) — never queues behind
+                    # an in-flight operation.
+                    self._json(session.device_health())
                 elif path == "/api/catalog":
-                    self._json(session.catalog_updates())
+                    self._locked_json(session.catalog_updates)
                 elif path == "/api/apps":
-                    self._json(session.apps())
+                    self._locked_json(session.apps)
                 elif path == "/api/apps/installed":
-                    self._json(session.installed_apps_on_device())
+                    self._locked_json(session.installed_apps_on_device)
                 elif path == "/api/scripts":
-                    self._json(session.scripts())
+                    self._locked_json(session.scripts)
                 elif path == "/api/cache":
                     self._json(session.cache_status())
                 elif path == "/api/auth":
@@ -202,6 +213,12 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 body = self._read_json()
             except _BodyTooLarge:
                 return  # 413 already sent
+            # Serialize device access: a mutation holds the I/O lock so the background liveness
+            # poll (a non-blocking acquirer) never issues USB transfers alongside it. The timeout
+            # is a safety net against a wedged operation, not expected under the single-client UI.
+            if not session._io_lock.acquire(timeout=120):
+                self._json({"ok": False, "error": "device busy"}, 503)
+                return
             try:
                 if path == "/api/install/firmware":
                     self._json(
@@ -274,6 +291,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.uninstall_app(body.get("name", "")))
                 elif path == "/api/apps/reorder":
                     self._json(session.reorder_apps(body.get("order", [])))
+                elif path == "/api/apps/export":
+                    self._json(session.export_app(body.get("name", "")))
                 elif path == "/api/scripts/push":
                     self._json(
                         session.push_script(
@@ -282,6 +301,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                             bool(body.get("auto_import", True)),
                         )
                     )
+                elif path == "/api/scripts/export":
+                    self._json(session.export_script(body.get("name", "")))
                 elif path == "/api/scripts/delete":
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
@@ -294,6 +315,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json({"error": "unknown endpoint"}, 404)
             except Exception as exc:
                 self._json({"ok": False, "error": str(exc)}, 400)
+            finally:
+                session._io_lock.release()
 
     return Handler
 
@@ -341,6 +364,16 @@ def serve(
                 except Exception:
                     pass
             return
+
+    # Local libraries where exported apps/scripts land (and are matched against for the
+    # "already on the computer" state). Created empty on launch so both exist and can be browsed.
+    try:
+        from ..apps.sources import user_apps_dir, user_scripts_dir
+
+        user_apps_dir().mkdir(parents=True, exist_ok=True)
+        user_scripts_dir().mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
 
     control: dict = {"last": time.time()}
     httpd = make_server(session, host=host, port=port, control=control)

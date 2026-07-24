@@ -17,6 +17,113 @@ def test_install_and_preload_when_disconnected_raise_valueerror():
         s.preload("25.2.0")
 
 
+def test_device_health_not_connected():
+    s = Session(connect=False)
+    assert s.device_health() == {"connected": False, "virtual": False}
+
+
+def test_device_health_virtual_is_alive():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    assert s.device_health() == {"connected": True, "virtual": True}
+
+
+def test_device_alive_probes_a_responding_device():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    s.virtual = False  # force the real-hardware probe path against the responding virtual DFU
+    assert s.device_alive() is True
+
+
+def test_device_health_lost_auto_detaches():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    s.virtual = False  # pretend a real device...
+
+    def boom():
+        raise OSError("device gone")  # ...that has just been unplugged
+
+    s.client.get_state = boom  # type: ignore[union-attr]
+    assert s.device_health() == {"connected": False, "virtual": False, "lost": True}
+    assert s.connected is False
+
+
+def test_device_health_busy_skips_probe():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    assert s._io_lock.acquire(blocking=False)  # simulate an operation holding the device
+    try:
+        assert s.device_health() == {"connected": True, "virtual": True, "busy": True}
+    finally:
+        s._io_lock.release()
+
+
+def test_user_local_app_listed_and_installed_verbatim(tmp_path, monkeypatch):
+    # #6: a .nwa dropped in the user apps dir shows up in "Available" AND installs its REAL bytes
+    # (not a synthesized demo image) — the generic self-hosted source behind the UI.
+    from nwupdater.formats.nwa import build_nwa
+
+    d = tmp_path / "apps"
+    d.mkdir()
+    blob = build_nwa("LocalGame", api_level=0, code=b"\x07" * 512)
+    (d / "LocalGame.nwa").write_bytes(blob)
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(d))
+    s = Session(connect=False, cache_dir=tmp_path / "cache")
+    s.attach_demo("n0110")
+    assert "LocalGame" in [a["name"] for a in s.apps()["apps"]]
+    r = s.add_store_app("LocalGame")
+    assert r["ok"] and r["name"] == "LocalGame"
+    got = next(m for m in s._appmgr().installed() if m.name == "LocalGame")
+    assert got.blob == blob  # the exact local file bytes were flashed, not a synthesized image
+
+
+def test_user_url_entry_is_proxy_allowlisted(tmp_path, monkeypatch):
+    from nwupdater.apps import proxy
+
+    d = tmp_path / "apps"
+    d.mkdir()
+    (d / "_urls.txt").write_text("https://host.example/cool.nwa\n")
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(d))
+    s = Session(connect=False, cache_dir=tmp_path / "cache")
+    proxy._require_allowed(s.store, "https://host.example/cool.nwa")  # in the store now → allowed
+    with pytest.raises(ValueError):
+        proxy._require_allowed(s.store, "https://evil.example/x.nwa")  # not listed → refused
+
+
+def test_install_firmware_download_branch(tmp_path, monkeypatch):
+    # Cover the signed-in "download the official .dfu" path without touching the network.
+    from types import SimpleNamespace
+
+    from nwupdater.catalog import auth as A
+    from nwupdater.catalog import download as D
+    from nwupdater.install.image import FirmwareImage
+    from nwupdater.models import MODELS
+
+    s = Session(connect=False, cache_dir=tmp_path)
+    s.attach_demo("n0110")
+    blob = FirmwareImage.synthetic(MODELS[0x0110], version="25.2.0").to_dfuse()
+    monkeypatch.setattr(A, "load_auth", lambda **k: SimpleNamespace(is_expired=lambda: False))
+    monkeypatch.setattr(
+        D,
+        "fetch_firmware",
+        lambda *a, **k: (SimpleNamespace(version="25.2.0", patch_level="c0ffee"), blob),
+    )
+    monkeypatch.setattr(D, "record_download", lambda *a, **k: "/tmp/nwupdater-provenance.log")
+    r = s.install_firmware("", download=True, channel="stable")
+    assert r["downloaded"] is True and r["from_cache"] is False
+    assert r["to_version"] == "25.2.0" and r["sha256"]
+
+
+def test_install_firmware_download_requires_auth(tmp_path, monkeypatch):
+    from nwupdater.catalog import auth as A
+
+    s = Session(connect=False, cache_dir=tmp_path)
+    s.attach_demo("n0110")
+    monkeypatch.setattr(A, "load_auth", lambda **k: None)  # not signed in
+    with pytest.raises(ValueError, match="authentication required"):
+        s.install_firmware("25.2.0", download=True)
+
+
 def test_ui_parser_rejects_removed_real_flag():
     from nwupdater import cli
 
@@ -54,6 +161,43 @@ def test_apps_device_truth_push_uninstall_reorder():
     s.push_app("c.nwa", build_nwa("Gamma", api_level=0, code=b"\x03" * 100))
     s.reorder_apps(["Gamma", "Beta"])
     assert [x["name"] for x in s.installed_apps_on_device()["installed"]] == ["Gamma", "Beta"]
+
+
+def test_export_app_saves_to_local_library_and_flags_it(tmp_path, monkeypatch):
+    import base64
+
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    s.push_app("a.nwa", build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
+    # Nothing in the local library yet → not flagged.
+    assert s.installed_apps_on_device()["installed"][0]["local"] is False
+
+    r = s.export_app("Alpha")
+    assert r["ok"] and r["filename"] == "Alpha.nwa"
+    saved = tmp_path / "Alpha.nwa"
+    assert saved.is_file()
+    assert base64.b64decode(r["data_b64"]) == saved.read_bytes()
+    # Same name + same byte size now present locally → flagged so the UI shows "already there".
+    assert s.installed_apps_on_device()["installed"][0]["local"] is True
+
+
+def test_export_app_unknown_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    with pytest.raises(ValueError, match="not installed"):
+        s.export_app("Nope")
+
+
+def test_export_script_saves_to_local_library_and_flags_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")  # the demo device seeds mandelbrot.py
+    assert any(x["name"] == "mandelbrot.py" and x["local"] is False for x in s.scripts()["scripts"])
+
+    r = s.export_script("mandelbrot")
+    assert r["ok"] and r["filename"] == "mandelbrot.py"
+    saved = tmp_path / "mandelbrot.py"
+    assert saved.is_file() and saved.read_text(encoding="utf-8") == r["code"]
+    assert any(x["name"] == "mandelbrot.py" and x["local"] is True for x in s.scripts()["scripts"])
 
 
 def test_scientific_bundled_snapshot():
@@ -167,6 +311,7 @@ def test_preload_caches_real_firmware_when_signed_in(tmp_path, monkeypatch):
         "version": "25.2.0",
         "size": len(dfu),
         "real": True,
+        "channel": "stable",
     }
 
 
