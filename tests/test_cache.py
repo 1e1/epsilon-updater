@@ -91,3 +91,49 @@ def test_sha_recorded(tmp_path):
     c = FirmwareCache(tmp_path)
     e = c.put("n0110", "25.2.0", b"DATA")
     assert e.sha256 == hashlib.sha256(b"DATA").hexdigest()
+
+
+def test_reads_do_not_rewrite_index_when_nothing_expired(tmp_path):
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"DATA")
+    saves = 0
+    orig = c._save
+
+    def counting(entries):
+        nonlocal saves
+        saves += 1
+        orig(entries)
+
+    c._save = counting
+    assert c.get("n0110", "25.2.0") == b"DATA"
+    c.has("n0110", "25.2.0")
+    c.entries()
+    assert saves == 0  # pure reads never rewrite index.json
+
+
+def test_expiry_is_persisted_to_the_index(tmp_path):
+    import json
+    clock = Clock()
+    c = FirmwareCache(tmp_path, ttl_days=30, now=clock)
+    c.put("n0110", "25.2.0", b"DATA")
+    clock.t += 31 * 86400
+    c.get("n0110", "25.2.0")  # expired -> pruned AND written back
+    assert json.loads((tmp_path / "index.json").read_text()) == {}
+
+
+def test_corrupt_index_is_treated_as_empty_and_self_heals(tmp_path):
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"DATA")
+    (tmp_path / "index.json").write_text("{ not valid json")
+    assert c.get("n0110", "25.2.0") is None  # no crash
+    assert c.entries() == []
+    c.put("n0120", "1.0.0", b"E")  # cache still usable afterwards
+    assert c.get("n0120", "1.0.0") == b"E"
+
+
+def test_no_temp_files_left_after_writes(tmp_path):
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"DATA")
+    c.clear()
+    c.put("n0120", "1.0.0", b"E")
+    assert not list(tmp_path.glob(".*.tmp"))
