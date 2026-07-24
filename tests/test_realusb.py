@@ -249,13 +249,19 @@ class _AltDevice:
     def set_interface_altsetting(self, *, interface, alternate_setting):
         self.alt_set = (interface, alternate_setting)
 
-    def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None):
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
         return _string_desc(self._strings.get(wValue & 0xFF, ""))
 
 
 def test_discovers_all_alt_settings_with_parsed_layouts():
-    flash = FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16)
-    sram = FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=1, iInterface=17)
+    flash = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16
+    )
+    sram = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=1, iInterface=17
+    )
     strings = {16: "@Flash/0x90000000/01*064Kg", 17: "@SRAM/0x24000000/01*252Ke"}
     dev = _AltDevice(0x0120, [flash, sram], strings, C.PID_EPSILON)
     od = usbio.find_calculator(FakeCore({C.PID_EPSILON: [dev]}), FakeUtil())
@@ -272,7 +278,9 @@ def test_discovers_all_alt_settings_with_parsed_layouts():
 
 def test_discovery_when_only_flash_alt_is_advertised():
     # a single-backend device (older model / no SRAM alt) yields one region and still opens.
-    flash = FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16)
+    flash = FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=0, alt=0, iInterface=16
+    )
     dev = _AltDevice(0x0100, [flash], {16: "@Flash/0x08000000/01*016Kg"}, C.PID_EPSILON)
     od = usbio.find_calculator(FakeCore({C.PID_EPSILON: [dev]}), FakeUtil())
     assert [a for a, _ in od.alt_regions] == [0]

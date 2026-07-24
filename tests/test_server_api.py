@@ -104,7 +104,9 @@ def test_install_firmware_download_branch(tmp_path, monkeypatch):
     blob = FirmwareImage.synthetic(MODELS[0x0110], version="25.2.0").to_dfuse()
     monkeypatch.setattr(A, "load_auth", lambda **k: SimpleNamespace(is_expired=lambda: False))
     monkeypatch.setattr(
-        D, "fetch_firmware", lambda *a, **k: (SimpleNamespace(version="25.2.0", patch_level="c0ffee"), blob)
+        D,
+        "fetch_firmware",
+        lambda *a, **k: (SimpleNamespace(version="25.2.0", patch_level="c0ffee"), blob),
     )
     monkeypatch.setattr(D, "record_download", lambda *a, **k: "/tmp/nwupdater-provenance.log")
     r = s.install_firmware("", download=True, channel="stable")

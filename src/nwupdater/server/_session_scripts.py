@@ -69,7 +69,11 @@ class ScriptsMixin(SessionBase):
         addr, size = i.storage_ram
         full = name if name.endswith(".py") else name + ".py"
         rec = next(
-            (r for r in python_scripts(read_storage(self.client, addr, size)) if r.fullname == full),
+            (
+                r
+                for r in python_scripts(read_storage(self.client, addr, size))
+                if r.fullname == full
+            ),
             None,
         )
         if rec is None:

@@ -12,7 +12,7 @@ import pytest
 
 from nwupdater.dfu import constants as C
 from nwupdater.dfu.identity import read_identity
-from nwupdater.dfu.protocol import DfuClient
+from nwupdater.dfu.protocol import DfuClient, DfuError
 from nwupdater.formats.storage import make_python, python_scripts
 from nwupdater.scripts import StorageWriteError, read_storage, write_storage
 from nwupdater.testing.virtual_dfu import virtual_calculator
@@ -91,7 +91,7 @@ def test_select_alt_without_setter_is_a_noop():
 
 
 def test_alt_for_address_outside_all_regions_is_none():
-    dev, client = _client()
+    _dev, client = _client()
     assert client._alt_for(0x00000000) is None  # owned by neither Flash nor SRAM
 
 
@@ -104,7 +104,7 @@ def test_make_idle_recovers_from_busy_and_error_states():
     assert dev.state == C.STATE_DNLOAD_IDLE
     cli.make_idle()
     assert dev.state == C.STATE_DFU_IDLE
-    with pytest.raises(Exception):
+    with pytest.raises(DfuError):
         cli.write(0x00000000, b"\x01" * 16)  # out-of-range → errTARGET → dfuERROR
     assert dev.state == C.STATE_ERROR
     cli.make_idle()

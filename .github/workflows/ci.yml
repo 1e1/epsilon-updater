@@ -61,5 +61,5 @@ jobs:
         run: python -m pip install --upgrade pip ".[dev,test-ui]"
       - name: Install Chromium
         run: python -m playwright install --with-deps chromium
-      - name: UI smoke test (pytest)
-        run: python -m pytest tests/test_ui_smoke.py -q
+      - name: UI smoke + logic tests (pytest)
+        run: python -m pytest tests/test_ui_smoke.py tests/test_ui_logic.py -q
