@@ -23,6 +23,7 @@ import json
 import os
 import re
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,20 +77,43 @@ def _ssl_context():
         return ssl.create_default_context()
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):  # ne pas suivre : on veut lire les Set-Cookie
+        return None
+
+
+class _StripCrossHostAuth(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that DROPS the ``Cookie``/``Authorization`` headers when a redirect
+    crosses to a different host.
+
+    urllib forwards request headers verbatim to the redirect target, so the default behaviour
+    would hand our bring-your-own-token secret to whatever host ``Location`` points at. We keep
+    the headers on a same-host redirect (e.g. my.numworks.com -> my.numworks.com) but strip them
+    the moment the hostname changes (e.g. a CDN or an attacker-controlled ``Location``)."""
+
+    _SENSITIVE = ("cookie", "authorization")
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and _hostname(req.full_url) != _hostname(newurl):
+            for key in [k for k in new.headers if k.lower() in self._SENSITIVE]:
+                del new.headers[key]
+        return new
+
+
+def _hostname(url: str) -> str | None:
+    return urllib.parse.urlsplit(url).hostname
+
+
 class UrllibTransport:
     """Transport réseau réel. N'est jamais utilisé dans les tests."""
 
     def open(self, method: str, url: str, *, headers=None, data=None,
              timeout: float = 20.0, allow_redirects: bool = False) -> Response:
         import urllib.error
-        import urllib.request
-
-        class _NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *a, **k):  # ne pas suivre : on veut lire les Set-Cookie
-                return None
 
         https = urllib.request.HTTPSHandler(context=_ssl_context())
-        handlers = [https] if allow_redirects else [https, _NoRedirect()]
+        handlers = [https, _StripCrossHostAuth()] if allow_redirects else [https, _NoRedirect()]
         opener = urllib.request.build_opener(*handlers)
         req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
         try:

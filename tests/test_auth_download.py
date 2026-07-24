@@ -59,6 +59,31 @@ def test_decode_bad_token_raises():
         A.decode_remember_token("not-base64--sig")
 
 
+# -- redirect handler: cross-host secret stripping -------------------------------------
+def _redirect(from_url, to_url, cookie="remember_user_token=SECRET"):
+    import urllib.request
+    h = A._StripCrossHostAuth()
+    req = urllib.request.Request(from_url, headers={"Cookie": cookie,
+                                                    "Authorization": "Bearer SECRET",
+                                                    "User-Agent": "x"})
+    new = h.redirect_request(req, None, 302, "Found", {}, to_url)
+    return {k.lower(): v for k, v in new.headers.items()}
+
+
+def test_redirect_strips_cookie_and_auth_cross_host():
+    hdrs = _redirect("https://my.numworks.com/firmwares/n0110/stable.dfu",
+                     "https://cdn.evil.example.com/leak")
+    assert "cookie" not in hdrs         # the token must NOT follow to a foreign host
+    assert "authorization" not in hdrs
+    assert hdrs.get("user-agent") == "x"  # non-sensitive headers are preserved
+
+
+def test_redirect_keeps_cookie_same_host():
+    hdrs = _redirect("https://my.numworks.com/firmwares/n0110/stable.dfu",
+                     "https://my.numworks.com/firmwares/n0110/blob")
+    assert hdrs.get("cookie") == "remember_user_token=SECRET"  # same host -> token kept
+
+
 # -- csrf extraction --------------------------------------------------------------------
 def test_extract_csrf_from_form_and_meta():
     html = '<form><input type="hidden" name="authenticity_token" value="TOK123" autocomplete="off"></form>'
