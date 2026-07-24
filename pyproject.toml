@@ -54,6 +54,7 @@ testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.10"
+mypy_path = "src"
 # Pragmatic, not strict: the goal is to catch real type errors without drowning a hobby
 # project in churn. Third-party stubs (pyusb/libusb/certifi) are absent by design.
 ignore_missing_imports = true
