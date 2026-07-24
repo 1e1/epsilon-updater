@@ -9,6 +9,7 @@ from __future__ import annotations
 from ..apps.installer import AppInstaller
 from ..apps.store import AppStore
 from ..cache.store import FirmwareCache
+from ..capabilities import Capabilities, Policy, resolve
 from ..catalog.firmware import FirmwareCatalog
 from ..dfu.identity import CalculatorIdentity, read_identity
 from ..dfu.protocol import DfuClient
@@ -45,6 +46,7 @@ class Session:
         self.device = self.client = self.model = self.bcd = None
         self.virtual = False
         self.connected = False
+        self.policy = Policy()  # UX overlay (e.g. classroom mode); feeds the capability resolver
         if connect:
             self.attach_real() if real else self.attach_demo(model_name,
                                                               os_version=os_version, commit=commit)
@@ -149,10 +151,15 @@ class Session:
             raise ValueError("no calculator connected")
         return read_identity(self.client, self.bcd)
 
+    def _capabilities(self, identity: CalculatorIdentity) -> Capabilities:
+        """Effective capabilities for the connected device (structural ∧ observed ∧ policy)."""
+        return resolve(self.model, identity, self.policy)
+
     def identity(self) -> dict:
         if not self.connected:
             return {"connected": False, "virtual": False}
         i = self._identity()
+        caps = self._capabilities(i)
         region = i.external_apps_flash if (i.external_apps_flash and i.external_apps_flash != (0, 0)) else None
         return {
             "connected": True,
@@ -166,9 +173,10 @@ class Session:
             "os_version": i.os_version,
             "kernel_version": i.kernel_version,
             "commit": i.commit,
-            "has_external_apps": region is not None,
+            "has_external_apps": caps.external_apps,
             "external_apps_flash": ([f"0x{region[0]:08x}", f"0x{region[1]:08x}"] if region else None),
             "slot_info_valid": i.slot_info_valid,
+            "capabilities": caps.to_dict(),
         }
 
     def catalog_updates(self) -> dict:
@@ -198,11 +206,11 @@ class Session:
 
     def apps(self) -> dict:
         i = self._identity()
-        has_region = bool(i.external_apps_flash and i.external_apps_flash != (0, 0))
+        caps = self._capabilities(i)
         compat = self.store.compatible(family=i.family, device_api_level=self.api_level,
-                                       has_external_apps=has_region)
+                                       has_external_apps=caps.external_apps)
         return {
-            "has_external_apps": has_region,
+            "has_external_apps": caps.external_apps,
             "api_level": self.api_level,
             "apps": [{"name": e.name, "version": e.version, "api_level": e.api_level,
                       "description": e.description, "source": e.source, "size": e.size}
@@ -504,7 +512,7 @@ class Session:
         from ..formats.storage import python_scripts
         from ..scripts import read_storage
         i = self._identity()
-        if not i.storage_ram:
+        if not self._capabilities(i).scripts:
             return {"has_scripts": False, "capacity": 0, "scripts": []}
         addr, size = i.storage_ram
         pys = python_scripts(read_storage(self.client, addr, size))
