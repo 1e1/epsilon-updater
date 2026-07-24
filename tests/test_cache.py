@@ -46,6 +46,15 @@ def test_classroom_same_version_multiple_models(tmp_path):
     assert c.status()["version"] == "25.2.0"
 
 
+def test_mixed_fleet_versions_report_no_single_version(tmp_path):
+    # Two models cached at DIFFERENT versions -> no single common version.
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"G")
+    c.put("n0200", "3.0.0", b"S")
+    assert c.cached_version() is None
+    assert c.status()["version"] is None
+
+
 def test_auto_expiry_after_ttl(tmp_path):
     clock = Clock()
     c = FirmwareCache(tmp_path, ttl_days=30, now=clock)

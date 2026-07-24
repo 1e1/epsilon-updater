@@ -126,9 +126,11 @@ class FirmwareCache:
         return f"{model}/{version}" in entries
 
     def cached_version(self, entries: dict[str, CacheEntry] | None = None) -> str | None:
+        """The single common version across the fleet, or None. Empty cache -> None; one shared
+        version -> that version; a mixed fleet (models at different versions) -> None."""
         entries = entries if entries is not None else self._load()
         versions = {e.version for e in entries.values()}
-        return next(iter(versions)) if len(versions) == 1 else (None if not versions else next(iter(versions)))
+        return next(iter(versions)) if len(versions) == 1 else None
 
     def entries(self) -> list[CacheEntry]:
         entries = self._load()
