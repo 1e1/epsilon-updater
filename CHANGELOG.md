@@ -6,6 +6,8 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [1.0.0-rc.3] - 2026-07-24
+
 ### Ajouté
 
 - **Capacités par device** (`nwupdater.capabilities`) : un resolver unique
@@ -60,7 +62,7 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 ### Outillage
 
 - Version en **source unique** (`nwupdater.__version__`, relue par `pyproject` via
-  `dynamic`) ; fichier `VERSION` orphelin supprimé ; version alignée sur `1.0.0rc2`.
+  `dynamic`) ; fichier `VERSION` orphelin supprimé ; version alignée sur `1.0.0rc3`.
 - Vérification de types **mypy** (gating) + marqueur `py.typed` : **100 % de `src`** typé et
   vérifié, plus aucun module différé.
 - **Couverture** : `pytest-cov` avec un seuil (`fail_under = 80 %`, branche) sur le job Linux ;
