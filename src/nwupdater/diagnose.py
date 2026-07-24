@@ -31,13 +31,22 @@ def _fmt_region(region):
 def _version() -> str:
     try:
         from importlib.metadata import version
+
         return version("nwupdater")
     except Exception:
-        return "0.0.1"
+        from . import __version__
+
+        return __version__
 
 
-def diagnose(device, *, interface: int = 0, bcd_device: int | None = None,
-             sleep=time.sleep, timestamp: str | None = None) -> dict:
+def diagnose(
+    device,
+    *,
+    interface: int = 0,
+    bcd_device: int | None = None,
+    sleep=time.sleep,
+    timestamp: str | None = None,
+) -> dict:
     """Run the read-only identity read against ``device`` and return a report dict.
 
     ``device`` is any pyusb-like device (real or virtual). Never writes to the device.

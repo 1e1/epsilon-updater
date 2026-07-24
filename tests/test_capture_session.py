@@ -32,14 +32,21 @@ def _dfu_blob():
 
 def _routes_ok():
     blob = _dfu_blob()
-    manifest = json.dumps({"version": "3.0.0", "patch_level": "8059a46",
-                           "device_model": {"id": 9, "device_type_id": 6},
-                           "size": len(blob)}).encode()
+    manifest = json.dumps(
+        {
+            "version": "3.0.0",
+            "patch_level": "8059a46",
+            "device_model": {"id": 9, "device_type_id": 6},
+            "size": len(blob),
+        }
+    ).encode()
     return {
-        ("GET", D.manifest_url("n0200", "stable")):
-            Response(200, [("Content-Type", "application/json")], manifest),
-        ("GET", D.dfu_url("n0200", "stable")):
-            Response(200, [("Content-Type", "application/octet-stream")], blob),
+        ("GET", D.manifest_url("n0200", "stable")): Response(
+            200, [("Content-Type", "application/json")], manifest
+        ),
+        ("GET", D.dfu_url("n0200", "stable")): Response(
+            200, [("Content-Type", "application/octet-stream")], blob
+        ),
     }, blob
 
 
@@ -49,12 +56,20 @@ def _dev():
 
 # -- net capture redaction --------------------------------------------------------------
 def test_recording_transport_redacts_secrets():
-    inner = FakeTransport({("POST", A.SIGNIN_URL): Response(302, [
-        ("Set-Cookie", "remember_user_token=SECRET; HttpOnly")], b"")})
+    inner = FakeTransport(
+        {
+            ("POST", A.SIGNIN_URL): Response(
+                302, [("Set-Cookie", "remember_user_token=SECRET; HttpOnly")], b""
+            )
+        }
+    )
     rt = RecordingTransport(inner)
-    rt.open("POST", A.SIGNIN_URL,
-            headers={"Cookie": "remember_user_token=SECRET"},
-            data=b"user%5Bemail%5D=a%40b.c&user%5Bpassword%5D=hunter2&authenticity_token=CSRF")
+    rt.open(
+        "POST",
+        A.SIGNIN_URL,
+        headers={"Cookie": "remember_user_token=SECRET"},
+        data=b"user%5Bemail%5D=a%40b.c&user%5Bpassword%5D=hunter2&authenticity_token=CSRF",
+    )
     rec = rt.transfers[0]
     assert rec["request"]["headers"]["Cookie"] == "[REDACTED]"
     assert rec["request"]["body"]["form"]["user[password]"] == "[REDACTED]"
@@ -66,8 +81,15 @@ def test_recording_transport_redacts_secrets():
 
 def test_firmware_binary_never_stored():
     routes, blob = _routes_ok()
-    dump = run_capture(_dev(), auth=_auth(), transport=FakeTransport(routes),
-                       model="n0200", channel="stable", sleep=lambda *_: None, timestamp="t")
+    dump = run_capture(
+        _dev(),
+        auth=_auth(),
+        transport=FakeTransport(routes),
+        model="n0200",
+        channel="stable",
+        sleep=lambda *_: None,
+        timestamp="t",
+    )
     dfu_tr = [x for x in dump["web"]["transfers"] if x["request"]["url"].endswith(".dfu")][0]
     body = dfu_tr["response"]["body"]
     assert body.get("binary") is True and "text" not in body
@@ -78,9 +100,16 @@ def test_firmware_binary_never_stored():
 def test_capture_download_ok_no_flash():
     routes, blob = _routes_ok()
     dev = _dev()
-    dump = run_capture(dev, auth=_auth(), transport=FakeTransport(routes),
-                       model="n0200", channel="stable", sleep=lambda *_: None,
-                       timestamp="2026-07-12T00:00:00+00:00", serial="SN-TEST-0001")
+    dump = run_capture(
+        dev,
+        auth=_auth(),
+        transport=FakeTransport(routes),
+        model="n0200",
+        channel="stable",
+        sleep=lambda *_: None,
+        timestamp="2026-07-12T00:00:00+00:00",
+        serial="SN-TEST-0001",
+    )
     assert dump["flashed"] is False
     assert dump["scenario"].startswith("scientific")
     assert dump["calculator_serial"] == "SN-TEST-0001"
@@ -99,8 +128,15 @@ def test_capture_download_ok_no_flash():
 def test_capture_server_refuses_unregistered_calculator():
     """First boot: server may refuse (e.g. 403). It's a captured outcome, not a crash."""
     routes = {("GET", D.manifest_url("n0200", "stable")): Response(403, [], b"Forbidden")}
-    dump = run_capture(_dev(), auth=_auth(), transport=FakeTransport(routes),
-                       model="n0200", channel="stable", sleep=lambda *_: None, timestamp="t")
+    dump = run_capture(
+        _dev(),
+        auth=_auth(),
+        transport=FakeTransport(routes),
+        model="n0200",
+        channel="stable",
+        sleep=lambda *_: None,
+        timestamp="t",
+    )
     assert dump["web"]["outcome"] == "refused_or_error"
     assert dump["web"]["transfers"][0]["response"]["status"] == 403
     assert dump["flashed"] is False
@@ -108,8 +144,15 @@ def test_capture_server_refuses_unregistered_calculator():
 
 def test_capture_auth_required():
     routes = {("GET", D.manifest_url("n0200", "stable")): Response(401, [], b"Unauthorized")}
-    dump = run_capture(_dev(), auth=_auth(), transport=FakeTransport(routes),
-                       model="n0200", channel="stable", sleep=lambda *_: None, timestamp="t")
+    dump = run_capture(
+        _dev(),
+        auth=_auth(),
+        transport=FakeTransport(routes),
+        model="n0200",
+        channel="stable",
+        sleep=lambda *_: None,
+        timestamp="t",
+    )
     assert dump["web"]["outcome"] == "auth_required"
 
 
@@ -145,10 +188,18 @@ def test_inspect_forms_flags_captcha():
 def test_capture_inspects_enrollment_portal_read_only():
     routes, _ = _routes_ok()
     routes[("GET", ENROLL_PORTAL_URL)] = Response(
-        200, [("Content-Type", "text/html")], _ENROLL_HTML.encode())
-    dump = run_capture(_dev(), auth=_auth(), transport=FakeTransport(routes),
-                       model="n0200", channel="stable", sleep=lambda *_: None,
-                       timestamp="t", serial="SN-TEST-0001")
+        200, [("Content-Type", "text/html")], _ENROLL_HTML.encode()
+    )
+    dump = run_capture(
+        _dev(),
+        auth=_auth(),
+        transport=FakeTransport(routes),
+        model="n0200",
+        channel="stable",
+        sleep=lambda *_: None,
+        timestamp="t",
+        serial="SN-TEST-0001",
+    )
     enr = dump["enrollment"]
     assert dump["enrolled"] is False and enr["read_only"] is True
     assert enr["status"] == 200 and enr["serial_available"] is True
@@ -165,5 +216,6 @@ def test_inspect_enrollment_never_crashes_on_transport_error():
     class Boom:
         def open(self, *a, **k):
             raise RuntimeError("network down")
+
     enr = inspect_enrollment(_auth(), Boom())
     assert "error" in enr and enr["read_only"] is True

@@ -37,8 +37,9 @@ class UsbDeviceLike(Protocol):
     ): ...
 
 
-def read_string_descriptor(dev, index: int, *, langid: int = C.USB_LANGID_EN_US,
-                           timeout_ms: int = 4000) -> str | None:
+def read_string_descriptor(
+    dev, index: int, *, langid: int = C.USB_LANGID_EN_US, timeout_ms: int = 4000
+) -> str | None:
     """Read USB string descriptor ``index`` from ``dev`` via standard GET_DESCRIPTOR.
 
     A free function (not tied to a DfuClient) so hardware setup (usbio) can read the DFU
@@ -48,8 +49,11 @@ def read_string_descriptor(dev, index: int, *, langid: int = C.USB_LANGID_EN_US,
         return None
     wValue = (C.DESC_TYPE_STRING << 8) | index
     try:
-        raw = bytes(dev.ctrl_transfer(
-            C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, timeout_ms))
+        raw = bytes(
+            dev.ctrl_transfer(
+                C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, timeout_ms
+            )
+        )
     except Exception:
         return None
     if len(raw) < 2 or raw[1] != C.DESC_TYPE_STRING:
@@ -66,7 +70,9 @@ class DfuError(RuntimeError):
         self.state = state
         name = C.STATUS_NAMES.get(status, hex(status))
         sname = C.STATE_NAMES.get(state, hex(state))
-        super().__init__(f"DFU error {name} in state {sname}" + (f" ({context})" if context else ""))
+        super().__init__(
+            f"DFU error {name} in state {sname}" + (f" ({context})" if context else "")
+        )
 
 
 class DfuStatus:
@@ -81,16 +87,25 @@ class DfuStatus:
         self.istring = raw[5]
 
     def __repr__(self) -> str:
-        return (f"DfuStatus(status={C.STATUS_NAMES.get(self.status, self.status)}, "
-                f"state={C.STATE_NAMES.get(self.state, self.state)}, "
-                f"poll={self.poll_timeout_ms}ms)")
+        return (
+            f"DfuStatus(status={C.STATUS_NAMES.get(self.status, self.status)}, "
+            f"state={C.STATE_NAMES.get(self.state, self.state)}, "
+            f"poll={self.poll_timeout_ms}ms)"
+        )
 
 
 class DfuClient:
     """Stateless-ish wrapper implementing the NumWorks DFU/DfuSe host protocol."""
 
-    def __init__(self, device: UsbDeviceLike, *, sleep=time.sleep, timeout_ms: int = 4000,
-                 interface: int = C.DFU_INTERFACE, layout=None):
+    def __init__(
+        self,
+        device: UsbDeviceLike,
+        *,
+        sleep=time.sleep,
+        timeout_ms: int = 4000,
+        interface: int = C.DFU_INTERFACE,
+        layout=None,
+    ):
         self.dev = device
         self._sleep = sleep
         self.timeout_ms = timeout_ms
@@ -107,7 +122,11 @@ class DfuClient:
         self.dev.ctrl_transfer(C.REQ_OUT, request, wValue, self.interface, data, self.timeout_ms)
 
     def _in(self, request: int, length: int, wValue: int = 0) -> bytes:
-        return bytes(self.dev.ctrl_transfer(C.REQ_IN, request, wValue, self.interface, length, self.timeout_ms))
+        return bytes(
+            self.dev.ctrl_transfer(
+                C.REQ_IN, request, wValue, self.interface, length, self.timeout_ms
+            )
+        )
 
     # -- DFU primitives ------------------------------------------------------------
     def get_status(self) -> DfuStatus:
@@ -200,7 +219,7 @@ class DfuClient:
             for base in self._sectors_to_erase(address, len(data)):
                 self.erase_page(base)
         for off in range(0, len(data), C.TRANSFER_SIZE):
-            chunk = data[off:off + C.TRANSFER_SIZE]
+            chunk = data[off : off + C.TRANSFER_SIZE]
             addr = address + off
             self.set_address(addr)
             self._out(C.DFU_DNLOAD, C.DNLOAD_BLOCK_BASE, chunk)

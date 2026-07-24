@@ -1,6 +1,5 @@
 """Lot 3 — install engine tests, all against the virtual device (no real USB)."""
 
-
 import pytest
 
 from nwupdater.dfu import constants as C
@@ -43,6 +42,7 @@ def test_install_synthetic_to_inactive_slot_and_verify():
     # ...and slot A (the still-active OS) is untouched
     a_userland = cli.read(0x90010000, C.USERLAND_HEADER_SIZE)
     from nwupdater.formats.headers import UserlandHeader
+
     assert UserlandHeader.unpack(a_userland).expected_software_version == "23.2.4"
 
 
@@ -77,8 +77,11 @@ def test_compatibility_rejects_wrong_model():
 def test_progress_callback_invoked():
     model = _model("n0110")
     events = []
-    inst = Installer(_client(virtual_calculator("n0110")), model,
-                     progress=lambda phase, d, t: events.append((phase, d, t)))
+    inst = Installer(
+        _client(virtual_calculator("n0110")),
+        model,
+        progress=lambda phase, d, t: events.append((phase, d, t)),
+    )
     inst.install(FirmwareImage.synthetic(model, version="99.9.9"))
     assert any(e[0] == "write" for e in events)
     assert any(e[0] == "verify" for e in events)
@@ -92,5 +95,24 @@ def test_dfuse_roundtrip():
     assert blob[:5] == b"DfuSe"
     parsed = FirmwareImage.from_dfuse(blob)
     assert parsed.bcd_device == 0x0110
-    assert [(s.address, s.data) for s in parsed.segments] == \
-           [(s.address, s.data) for s in img.segments]
+    assert [(s.address, s.data) for s in parsed.segments] == [
+        (s.address, s.data) for s in img.segments
+    ]
+
+
+def test_from_dfuse_truncated_raises_valueerror_not_structerror():
+    # A truncated container must raise the module's own ValueError, never a bare struct.error.
+    with pytest.raises(ValueError):
+        FirmwareImage.from_dfuse(b"DfuSe\x01")  # prefix present, body missing
+    good = FirmwareImage.synthetic(_model("n0110"), version="1.0.0").to_dfuse()
+    with pytest.raises(ValueError):
+        FirmwareImage.from_dfuse(good[:200])  # cut inside the target/element headers
+
+
+def test_headers_unpack_short_buffer_is_invalid():
+    # Malformed (too short) header buffers return valid=False instead of raising struct.error.
+    from nwupdater.formats.headers import KernelHeader, SlotInfo, UserlandHeader
+
+    assert SlotInfo.unpack(b"\x00\x00").valid is False
+    assert KernelHeader.unpack(b"\xf0\x0d").valid is False
+    assert UserlandHeader.unpack(b"\xfe\xed").valid is False

@@ -30,7 +30,9 @@ def main() -> int:
         return 2
 
     tr = A.UrllibTransport()
-    html = tr.open("GET", A.SIGNIN_URL, headers={"User-Agent": A.UA}).body.decode("utf-8", "replace")
+    html = tr.open("GET", A.SIGNIN_URL, headers={"User-Agent": A.UA}).body.decode(
+        "utf-8", "replace"
+    )
     m = re.search(r'<input[^>]*name="authenticity_token"[^>]*>', html)
     snippet = re.sub(r'value="[^"]+"', 'value="REDACTED_CSRF_TOKEN"', m.group(0) if m else "")
     (HERE / "signin_form.html").write_text(snippet + "\n", encoding="utf-8")

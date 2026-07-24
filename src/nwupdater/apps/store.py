@@ -33,8 +33,9 @@ class AppEntry:
     url: str = ""
     size: int = 0  # bytes; from the catalogue (a real .nwa carries app_size in its header)
 
-    def compatible_with(self, *, family: str, device_api_level: int,
-                        has_external_apps: bool) -> bool:
+    def compatible_with(
+        self, *, family: str, device_api_level: int, has_external_apps: bool
+    ) -> bool:
         if not has_external_apps:
             return False
         if self.family not in (family, "any"):
@@ -51,11 +52,21 @@ class AppStore:
         if isinstance(data, (str, bytes)):
             data = json.loads(data)
         apps = data["apps"] if isinstance(data, dict) else data
-        return cls([AppEntry(
-            name=a["name"], version=str(a.get("version", "?")),
-            api_level=int(a.get("api_level", 0)), family=a.get("family", "any"),
-            description=a.get("description", ""), source=a.get("source", ""),
-            url=a.get("url", ""), size=int(a.get("size", 0))) for a in apps])
+        return cls(
+            [
+                AppEntry(
+                    name=a["name"],
+                    version=str(a.get("version", "?")),
+                    api_level=int(a.get("api_level", 0)),
+                    family=a.get("family", "any"),
+                    description=a.get("description", ""),
+                    source=a.get("source", ""),
+                    url=a.get("url", ""),
+                    size=int(a.get("size", 0)),
+                )
+                for a in apps
+            ]
+        )
 
     @classmethod
     def bundled(cls) -> "AppStore":
@@ -69,11 +80,18 @@ class AppStore:
     def load(cls, path: str | Path) -> "AppStore":
         return cls.from_json(Path(path).read_text())
 
-    def compatible(self, *, family: str, device_api_level: int,
-                   has_external_apps: bool) -> list[AppEntry]:
-        return [e for e in self.entries
-                if e.compatible_with(family=family, device_api_level=device_api_level,
-                                     has_external_apps=has_external_apps)]
+    def compatible(
+        self, *, family: str, device_api_level: int, has_external_apps: bool
+    ) -> list[AppEntry]:
+        return [
+            e
+            for e in self.entries
+            if e.compatible_with(
+                family=family,
+                device_api_level=device_api_level,
+                has_external_apps=has_external_apps,
+            )
+        ]
 
     def get(self, name: str) -> AppEntry | None:
         return next((e for e in self.entries if e.name.lower() == name.lower()), None)

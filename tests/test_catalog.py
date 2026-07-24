@@ -1,6 +1,5 @@
 """Lot 2 — firmware catalog tests. Fully offline (bundled snapshot + inline fixtures)."""
 
-
 from nwupdater.catalog.firmware import FirmwareCatalog, FirmwareRelease
 from nwupdater.catalog.version import compare, is_newer, parse_version
 

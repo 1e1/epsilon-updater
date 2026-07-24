@@ -31,8 +31,8 @@ def _verdict(a, b):
 # -- entropy sanity --------------------------------------------------------------------
 def test_entropy_bounds():
     assert DD.entropy(b"") == 0.0
-    assert DD.entropy(bytes(range(256)) * 4) > 7.9      # uniform → ~8
-    assert DD.entropy(b"\x00" * 4096) < 0.01            # constant → ~0
+    assert DD.entropy(bytes(range(256)) * 4) > 7.9  # uniform → ~8
+    assert DD.entropy(b"\x00" * 4096) < 0.01  # constant → ~0
 
 
 # -- the four modes --------------------------------------------------------------------
@@ -46,35 +46,54 @@ def test_plaintext_diff_is_not_a_cipher_claim():
 
 def test_identical_files_are_reported_as_identical():
     blob = rb(1, 8192)
-    assert _verdict(blob, blob).startswith("IDENTIQUE")
+    assert _verdict(blob, blob).startswith("IDENTICAL")
 
 
 def test_independent_encryption_yields_nothing():
-    verdict = _verdict(rb(7, 8192), rb(8, 8192))        # two unrelated high-entropy blobs
-    assert verdict.startswith("INDÉPENDANT")
+    verdict = _verdict(rb(7, 8192), rb(8, 8192))  # two unrelated high-entropy blobs
+    assert verdict.startswith("INDEPENDENT")
 
 
 def test_keystream_reuse_detected():
     P = rb(1, 8192)
     K = rb(2, 8192)
     P2 = bytearray(P)
-    P2[4000:4200] = rb(3, 200)       # small change, same keystream K
+    P2[4000:4200] = rb(3, 200)  # small change, same keystream K
     verdict = _verdict(xor(P, K), xor(bytes(P2), K))
     assert "KEYSTREAM" in verdict
 
 
 def test_cbc_same_key_common_prefix_detected():
-    prefix = rb(4, 4096)                                 # identical leading plaintext/blocks
+    prefix = rb(4, 4096)  # identical leading plaintext/blocks
     c1 = prefix + rb(5, 4096)
-    c2 = prefix + rb(6, 4096)                            # diverges after the prefix
+    c2 = prefix + rb(6, 4096)  # diverges after the prefix
     verdict = _verdict(c1, c2)
-    assert verdict.startswith("PRÉFIXE COMMUN")
+    assert verdict.startswith("COMMON PREFIX")
+
+
+def test_diff_images_report_and_cli(tmp_path, capsys):
+    from nwupdater.install.image import FirmwareImage
+    from nwupdater.models import MODELS
+    from nwupdater.tools import dfudiff
+
+    m = MODELS[0x0110]
+    a = FirmwareImage.synthetic(m, version="24.3.0")
+    b = FirmwareImage.synthetic(m, version="25.2.0")
+    report = dfudiff.format_report(dfudiff.diff_images(a, b), "A.dfu", "B.dfu")
+    assert "dfu-diff" in report and "@0x" in report
+    pa, pb = tmp_path / "a.dfu", tmp_path / "b.dfu"
+    pa.write_bytes(a.to_dfuse())
+    pb.write_bytes(b.to_dfuse())
+    assert dfudiff.main([str(pa), str(pb)]) == 0
+    assert dfudiff.main([str(pa), str(pb), "--json"]) == 0
+    assert '"segments"' in capsys.readouterr().out  # the --json branch emitted the machine report
 
 
 # -- image-level + file round-trip -----------------------------------------------------
 def test_diff_reports_size_delta_and_unique_segments():
-    a = FirmwareImage([FirmwareSegment(ADDR, rb(1, 2048)),
-                       FirmwareSegment(0x08000000, rb(9, 512))], bcd_device=0)
+    a = FirmwareImage(
+        [FirmwareSegment(ADDR, rb(1, 2048)), FirmwareSegment(0x08000000, rb(9, 512))], bcd_device=0
+    )
     b = FirmwareImage([FirmwareSegment(ADDR, rb(2, 2048))], bcd_device=0)
     d = DD.diff_images(a, b)
     assert d.size_a == 2560 and d.size_b == 2048

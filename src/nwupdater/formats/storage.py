@@ -76,8 +76,8 @@ def parse_storage(blob: bytes) -> list[Record]:
             name_end = blob.index(b"\x00", off + 2, off + size)
         except ValueError:
             raise StorageError(f"unterminated name in record at offset {off}") from None
-        fullname = blob[off + 2:name_end].decode("ascii", "replace")
-        records.append(Record(fullname, blob[name_end + 1:off + size]))
+        fullname = blob[off + 2 : name_end].decode("ascii", "replace")
+        records.append(Record(fullname, blob[name_end + 1 : off + size]))
         off += size
     return records
 

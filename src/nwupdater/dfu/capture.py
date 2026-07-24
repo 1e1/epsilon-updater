@@ -20,11 +20,13 @@ class CapturingDevice:
         self.idProduct = inner.idProduct
         self.bcdDevice = inner.bcdDevice
 
-    def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0,
-                      data_or_wLength=None, timeout=None):
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
         is_in = bool(bmRequestType & 0x80)
         result = self._inner.ctrl_transfer(
-            bmRequestType, bRequest, wValue, wIndex, data_or_wLength, timeout)
+            bmRequestType, bRequest, wValue, wIndex, data_or_wLength, timeout
+        )
         entry = {
             "seq": len(self.transfers),
             "dir": "IN" if is_in else "OUT",

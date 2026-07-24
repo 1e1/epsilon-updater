@@ -42,7 +42,7 @@ class DownloadError(Exception):
 
 def _check_model(model: str) -> str:
     if not _MODEL_RE.match(model or ""):
-        raise ValueError(f"modèle invalide : {model!r} (attendu : n + 4 chiffres hexa)")
+        raise ValueError(f"invalid model: {model!r} (expected: n + 4 hex digits)")
     return model
 
 
@@ -70,7 +70,8 @@ class FirmwareManifest:
             data = json.loads(data)
         dm = data.get("device_model") or {}
         return cls(
-            model=model, channel=channel,
+            model=model,
+            channel=channel,
             version=str(data.get("version", "?")),
             patch_level=str(data.get("patch_level", "")),
             size=int(data.get("size", 0)),
@@ -87,13 +88,16 @@ def _check_channel(channel: str) -> None:
 def _get(url: str, auth: Auth, *, transport=None):
     tr = transport or UrllibTransport()
     try:
-        resp = tr.open("GET", url, headers={"User-Agent": UA, "Accept": "*/*",
-                                            "Cookie": auth.cookie_header()}, allow_redirects=True)
+        resp = tr.open(
+            "GET",
+            url,
+            headers={"User-Agent": UA, "Accept": "*/*", "Cookie": auth.cookie_header()},
+            allow_redirects=True,
+        )
     except TransportError as exc:
         raise DownloadError(str(exc)) from exc
     if resp.status == 401:
-        raise AuthRequired("401 — authentification requise ou expirée. "
-                           "Relancez `nwupdater login`.")
+        raise AuthRequired("401 — authentication required or expired. Re-run `nwupdater login`.")
     if resp.status != 200:
         raise DownloadError(f"HTTP {resp.status} sur {url}")
     return resp
@@ -108,8 +112,9 @@ def fetch_manifest(model: str, channel: str, auth: Auth, *, transport=None) -> F
         raise DownloadError(f"manifeste illisible pour {model}/{channel} : {exc}") from exc
 
 
-def download_dfu(model: str, channel: str, auth: Auth, *, expected_size: int | None = None,
-                 transport=None) -> bytes:
+def download_dfu(
+    model: str, channel: str, auth: Auth, *, expected_size: int | None = None, transport=None
+) -> bytes:
     """Télécharge le ``.dfu`` et le valide (signature DfuSe + taille si connue)."""
     _check_channel(channel)
     resp = _get(dfu_url(model, channel), auth, transport=transport)
@@ -117,16 +122,18 @@ def download_dfu(model: str, channel: str, auth: Auth, *, expected_size: int | N
     if blob[:5] != b"DfuSe":
         raise DownloadError(f"contenu inattendu pour {model}/{channel} : pas un fichier DfuSe")
     if expected_size is not None and len(blob) != expected_size:
-        raise DownloadError(f"taille incohérente : reçu {len(blob)} o, attendu {expected_size} o")
+        raise DownloadError(f"inconsistent size: got {len(blob)} B, expected {expected_size} B")
     return blob
 
 
-def fetch_firmware(model: str, channel: str, auth: Auth, *,
-                   transport=None) -> tuple[FirmwareManifest, bytes]:
+def fetch_firmware(
+    model: str, channel: str, auth: Auth, *, transport=None
+) -> tuple[FirmwareManifest, bytes]:
     """Manifeste puis ``.dfu``, avec contrôle d'intégrité par la taille du manifeste."""
     manifest = fetch_manifest(model, channel, auth, transport=transport)
-    blob = download_dfu(model, channel, auth,
-                        expected_size=manifest.size or None, transport=transport)
+    blob = download_dfu(
+        model, channel, auth, expected_size=manifest.size or None, transport=transport
+    )
     return manifest, blob
 
 
@@ -142,8 +149,9 @@ def provenance_log_path() -> Path:
     return config_path().parent / "downloads.log"
 
 
-def record_download(manifest: FirmwareManifest, sha256: str, *, when: str,
-                    path: Path | None = None) -> Path:
+def record_download(
+    manifest: FirmwareManifest, sha256: str, *, when: str, path: Path | None = None
+) -> Path:
     """Ajoute une ligne JSON traçant un téléchargement (version, taille, empreinte).
 
     Purement local : aucune donnée n'est transmise. ``when`` est un horodatage ISO fourni par

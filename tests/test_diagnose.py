@@ -8,8 +8,13 @@ from nwupdater.testing.virtual_dfu import virtual_calculator
 
 def _report(model="n0110", **kw):
     dev = virtual_calculator(model, **kw)
-    return diagnose(dev, interface=0, bcd_device=dev.bcdDevice, sleep=lambda *_: None,
-                    timestamp="2026-07-12T00:00:00+00:00")
+    return diagnose(
+        dev,
+        interface=0,
+        bcd_device=dev.bcdDevice,
+        sleep=lambda *_: None,
+        timestamp="2026-07-12T00:00:00+00:00",
+    )
 
 
 def test_capturing_device_records_transfers():
@@ -53,7 +58,7 @@ def test_diagnose_is_strictly_read_only():
 def test_diagnose_transfers_have_expected_shape():
     r = _report("n0110")
     kinds = {tr["bRequest"] for tr in r["transfers"]}
-    assert 2 in kinds   # DFU_UPLOAD (reads headers)
+    assert 2 in kinds  # DFU_UPLOAD (reads headers)
     assert 3 in kinds or 5 in kinds  # GETSTATUS / GETSTATE
     for tr in r["transfers"]:
         assert set(tr) >= {"seq", "dir", "bmRequestType", "bRequest", "wValue", "wIndex", "data"}

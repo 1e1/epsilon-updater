@@ -43,7 +43,9 @@ class CacheEntry:
 
 
 class FirmwareCache:
-    def __init__(self, root: Path | None = None, *, ttl_days: int = DEFAULT_TTL_DAYS, now=time.time):
+    def __init__(
+        self, root: Path | None = None, *, ttl_days: int = DEFAULT_TTL_DAYS, now=time.time
+    ):
         self.root = Path(root) if root else default_cache_dir()
         self.ttl = ttl_days * 86400
         self._now = now
@@ -56,12 +58,24 @@ class FirmwareCache:
             return {}
         try:
             raw = json.loads(self._index_path.read_text())
-        except (json.JSONDecodeError, OSError):
+            return {k: CacheEntry(**v) for k, v in raw.items()}
+        except (json.JSONDecodeError, OSError, TypeError, AttributeError):
+            # Corrupt or schema-incompatible index → treat as empty; the next write rebuilds it.
             return {}
-        return {k: CacheEntry(**v) for k, v in raw.items()}
+
+    def _atomic_write(self, path: Path, data: bytes) -> None:
+        """Write ``data`` to ``path`` atomically (temp file in the same dir + ``os.replace``), so
+        a crash or a concurrent classroom launch can never leave a half-written file behind."""
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def _save(self, entries: dict[str, CacheEntry]) -> None:
-        self._index_path.write_text(json.dumps({k: asdict(v) for k, v in entries.items()}, indent=2))
+        payload = json.dumps({k: asdict(v) for k, v in entries.items()}, indent=2)
+        self._atomic_write(self._index_path, payload.encode("utf-8"))
 
     # -- expiry --------------------------------------------------------------------
     def _prune(self, entries: dict[str, CacheEntry]) -> list[CacheEntry]:
@@ -95,9 +109,10 @@ class FirmwareCache:
         for k in [k for k, e in entries.items() if e.model == model]:
             self._unlink(entries.pop(k))
         filename = f"{model}-{version}.bin".replace("/", "_").replace(" ", "_")
-        (self.root / filename).write_bytes(data)
-        entry = CacheEntry(model, version, filename, len(data),
-                           hashlib.sha256(data).hexdigest(), self._now(), real)
+        self._atomic_write(self.root / filename, data)
+        entry = CacheEntry(
+            model, version, filename, len(data), hashlib.sha256(data).hexdigest(), self._now(), real
+        )
         entries[entry.key()] = entry
         self._save(entries)
         return entry
@@ -111,8 +126,8 @@ class FirmwareCache:
     # -- reads ---------------------------------------------------------------------
     def get(self, model: str, version: str) -> bytes | None:
         entries = self._load()
-        self._prune(entries)
-        self._save(entries)
+        if self._prune(entries):  # only rewrite the index when expiry actually changed it
+            self._save(entries)
         e = entries.get(f"{model}/{version}")
         if e is None:
             return None
@@ -121,19 +136,21 @@ class FirmwareCache:
 
     def has(self, model: str, version: str) -> bool:
         entries = self._load()
-        self._prune(entries)
-        self._save(entries)
+        if self._prune(entries):
+            self._save(entries)
         return f"{model}/{version}" in entries
 
     def cached_version(self, entries: dict[str, CacheEntry] | None = None) -> str | None:
+        """The single common version across the fleet, or None. Empty cache -> None; one shared
+        version -> that version; a mixed fleet (models at different versions) -> None."""
         entries = entries if entries is not None else self._load()
         versions = {e.version for e in entries.values()}
-        return next(iter(versions)) if len(versions) == 1 else (None if not versions else next(iter(versions)))
+        return next(iter(versions)) if len(versions) == 1 else None
 
     def entries(self) -> list[CacheEntry]:
         entries = self._load()
-        self._prune(entries)
-        self._save(entries)
+        if self._prune(entries):
+            self._save(entries)
         return list(entries.values())
 
     def status(self) -> dict:
@@ -144,8 +161,10 @@ class FirmwareCache:
         return {
             "version": self.cached_version(dict((e.key(), e) for e in entries)),
             "models": sorted(e.model for e in entries),
-            "entries": [{"model": e.model, "version": e.version, "size": e.size, "real": e.real}
-                        for e in sorted(entries, key=lambda e: e.model)],
+            "entries": [
+                {"model": e.model, "version": e.version, "size": e.size, "real": e.real}
+                for e in sorted(entries, key=lambda e: e.model)
+            ],
             "total_size": sum(e.size for e in entries),
             "expires_at": oldest + self.ttl,
             "ttl_days": self.ttl // 86400,

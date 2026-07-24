@@ -23,14 +23,17 @@ import json
 import os
 import re
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 BASE = "https://my.numworks.com"
 SIGNIN_URL = f"{BASE}/users/sign_in"
-UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+)
 REMEMBER_COOKIE = "remember_user_token"
 REMEMBER_PURPOSE = "cookie.remember_user_token"
 
@@ -69,27 +72,60 @@ def _ssl_context():
     """Contexte TLS avec vérification. Utilise le bundle ``certifi`` s'il est présent
     (utile sur les builds Python sans CA système, ex. python.org sur macOS)."""
     import ssl
+
     try:
         import certifi
+
         return ssl.create_default_context(cafile=certifi.where())
     except Exception:
         return ssl.create_default_context()
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):  # ne pas suivre : on veut lire les Set-Cookie
+        return None
+
+
+class _StripCrossHostAuth(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that DROPS the ``Cookie``/``Authorization`` headers when a redirect
+    crosses to a different host.
+
+    urllib forwards request headers verbatim to the redirect target, so the default behaviour
+    would hand our bring-your-own-token secret to whatever host ``Location`` points at. We keep
+    the headers on a same-host redirect (e.g. my.numworks.com -> my.numworks.com) but strip them
+    the moment the hostname changes (e.g. a CDN or an attacker-controlled ``Location``)."""
+
+    _SENSITIVE = ("cookie", "authorization")
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and _hostname(req.full_url) != _hostname(newurl):
+            for key in [k for k in new.headers if k.lower() in self._SENSITIVE]:
+                del new.headers[key]
+        return new
+
+
+def _hostname(url: str) -> str | None:
+    return urllib.parse.urlsplit(url).hostname
+
+
 class UrllibTransport:
     """Transport réseau réel. N'est jamais utilisé dans les tests."""
 
-    def open(self, method: str, url: str, *, headers=None, data=None,
-             timeout: float = 20.0, allow_redirects: bool = False) -> Response:
+    def open(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers=None,
+        data=None,
+        timeout: float = 20.0,
+        allow_redirects: bool = False,
+    ) -> Response:
         import urllib.error
-        import urllib.request
-
-        class _NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *a, **k):  # ne pas suivre : on veut lire les Set-Cookie
-                return None
 
         https = urllib.request.HTTPSHandler(context=_ssl_context())
-        handlers = [https] if allow_redirects else [https, _NoRedirect()]
+        handlers = [https, _StripCrossHostAuth()] if allow_redirects else [https, _NoRedirect()]
         opener = urllib.request.build_opener(*handlers)
         req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
         try:
@@ -98,7 +134,7 @@ class UrllibTransport:
             r = e
         except urllib.error.URLError as e:  # DNS, connexion, TLS…
             reason = getattr(e, "reason", e)
-            raise TransportError(f"connexion à {url} impossible : {reason}") from e
+            raise TransportError(f"cannot connect to {url}: {reason}") from e
         status = getattr(r, "status", None) or r.getcode()
         return Response(status, list(r.headers.items()), r.read())
 
@@ -110,9 +146,11 @@ def _cookie_header(cookies: dict[str, str]) -> str:
 # -- extraction / décodage (pur, testable) ---------------------------------------------
 def extract_csrf(html: str) -> str | None:
     """Le jeton anti-CSRF Rails, depuis le champ caché du formulaire (ou le <meta>)."""
-    for pat in (r'name="authenticity_token"[^>]*\svalue="([^"]+)"',
-                r'value="([^"]+)"[^>]*\sname="authenticity_token"',
-                r'name="csrf-token"[^>]*\scontent="([^"]+)"'):
+    for pat in (
+        r'name="authenticity_token"[^>]*\svalue="([^"]+)"',
+        r'value="([^"]+)"[^>]*\sname="authenticity_token"',
+        r'name="csrf-token"[^>]*\scontent="([^"]+)"',
+    ):
         m = re.search(pat, html)
         if m:
             return m.group(1)
@@ -136,8 +174,11 @@ def decode_remember_token(token: str) -> dict:
             expires_at = datetime.fromisoformat(exp.replace("Z", "+00:00"))
         except ValueError:
             expires_at = None
-    return {"purpose": rails.get("pur"), "expires_at": expires_at,
-            "looks_valid": rails.get("pur") == REMEMBER_PURPOSE}
+    return {
+        "purpose": rails.get("pur"),
+        "expires_at": expires_at,
+        "looks_valid": rails.get("pur") == REMEMBER_PURPOSE,
+    }
 
 
 # -- l'objet d'auth --------------------------------------------------------------------
@@ -165,8 +206,8 @@ class Auth:
     def summary(self) -> str:
         exp = self.expires_at
         when = exp.date().isoformat() if exp else "?"
-        state = "EXPIRÉ" if self.is_expired() else f"expire le {when}"
-        return f"jeton remember_user_token ({state})"
+        state = "EXPIRED" if self.is_expired() else f"expires on {when}"
+        return f"remember_user_token ({state})"
 
 
 # -- login Devise ----------------------------------------------------------------------
@@ -180,31 +221,40 @@ def login_with_password(email: str, password: str, *, transport=None) -> Auth:
         raise AuthError("jeton CSRF introuvable sur la page de connexion")
     cookies = get.set_cookies()
     # 2. POST des identifiants (avec « se souvenir de moi » pour obtenir le jeton longue durée).
-    form = urllib.parse.urlencode({
-        "utf8": "✓",
-        "authenticity_token": csrf,
-        "user[email]": email,
-        "user[password]": password,
-        "user[remember_me]": "1",
-        "commit": "Log in",
-    }).encode("utf-8")
-    post = tr.open("POST", SIGNIN_URL, data=form, headers={
-        "User-Agent": UA,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": _cookie_header(cookies),
-    })
+    form = urllib.parse.urlencode(
+        {
+            "utf8": "✓",
+            "authenticity_token": csrf,
+            "user[email]": email,
+            "user[password]": password,
+            "user[remember_me]": "1",
+            "commit": "Log in",
+        }
+    ).encode("utf-8")
+    post = tr.open(
+        "POST",
+        SIGNIN_URL,
+        data=form,
+        headers={
+            "User-Agent": UA,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": _cookie_header(cookies),
+        },
+    )
     token = post.set_cookies().get(REMEMBER_COOKIE)
     if not token:
         # Devise ré-affiche la page (200/422) sans jeton quand les identifiants sont mauvais.
-        raise AuthError("identifiants refusés (aucun jeton renvoyé) — vérifiez email/mot de passe")
+        raise AuthError("credentials rejected (no token returned) — check email/password")
     return Auth(token)
 
 
 # -- stockage local du jeton (traité comme un secret) ----------------------------------
 def config_path() -> Path:
-    base = (os.environ.get("NWUPDATER_CONFIG_DIR")
-            or os.environ.get("XDG_CONFIG_HOME")
-            or os.path.join(os.path.expanduser("~"), ".config"))
+    base = (
+        os.environ.get("NWUPDATER_CONFIG_DIR")
+        or os.environ.get("XDG_CONFIG_HOME")
+        or os.path.join(os.path.expanduser("~"), ".config")
+    )
     return Path(base) / "nwupdater" / "credentials.json"
 
 

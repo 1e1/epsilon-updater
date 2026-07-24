@@ -14,11 +14,11 @@ from dataclasses import dataclass
 
 from ..dfu import constants as C
 from ..dfu.protocol import DfuClient
-from ..formats.nwa import AppInfo, iter_apps
-from ..install.installer import VerificationError
+from ..formats.nwa import iter_apps
 from ..regions import PlanItem, plan
+from .installer import validate_nwa, write_verified
 
-SECTOR = 0x10000  # external-apps sector unit (Board::Config::ExternalAppsSectorUnit)
+SECTOR = C.EXTERNAL_APP_SECTOR  # external-apps sector unit (Board::Config::ExternalAppsSectorUnit)
 
 
 class AppError(RuntimeError):
@@ -47,8 +47,9 @@ def _digest(b: bytes) -> str:
 class AppManager:
     """Read/modify/write the external-apps region with minimal rewrites."""
 
-    def __init__(self, client: DfuClient, region: tuple[int, int] | None,
-                 *, device_api_level: int = 0):
+    def __init__(
+        self, client: DfuClient, region: tuple[int, int] | None, *, device_api_level: int = 0
+    ):
         self.client = client
         self.start, self.end = region or (0, 0)
         self.capacity = max(0, self.end - self.start)
@@ -61,16 +62,13 @@ class AppManager:
         apps = []
         for a in iter_apps(blob):
             size = a.info.app_size or 0
-            apps.append(ManagedApp(a.info.name or "?", a.info.api_level,
-                                   blob[a.offset:a.offset + size]))
+            apps.append(
+                ManagedApp(a.info.name or "?", a.info.api_level, blob[a.offset : a.offset + size])
+            )
         return apps
 
     def push(self, blob: bytes) -> ManagedApp:
-        info = AppInfo.parse(blob)
-        if not info.valid:
-            raise AppError("not a valid .nwa (bad AppInfo magic)")
-        if info.api_level != self.device_api_level:
-            raise AppError(f"API level {info.api_level} != device {self.device_api_level}")
+        info = validate_nwa(blob, self.device_api_level, error=AppError)
         target = [m.blob for m in self.installed()] + [blob]
         self._apply(target)
         return ManagedApp(info.name or "?", info.api_level, blob)
@@ -106,16 +104,17 @@ class AppManager:
         new_end = off
         old_end = sum(m.sectors * SECTOR for m in current)
 
-        # erase the changed span (sector by sector) so writes land clean and stale magics die
+        # erase the changed span (sector by sector) so writes land clean and stale magics die.
+        # The erase unit is the 64 KiB app sector, not the 2048-byte transfer chunk: a DfuSe
+        # erase wipes the whole containing sector, so stepping by the chunk size would re-issue
+        # 32 redundant ERASE commands per sector (extra flash wear, slow).
         erase_from = offsets[p.first_changed] if p.first_changed < len(offsets) else new_end
         addr = self.start + erase_from
         end = self.start + max(old_end, new_end)
         while addr < end:
             self.client.erase_page(addr)
-            addr += C.TRANSFER_SIZE
+            addr += SECTOR
 
         for i in range(p.first_changed, len(target)):
             at = self.start + offsets[i]
-            self.client.write(at, target[i], erase=False)
-            if self.client.read(at, len(target[i])) != target[i]:
-                raise VerificationError(f"read-back mismatch @0x{at:08x}")
+            write_verified(self.client, at, target[i], erase=False)

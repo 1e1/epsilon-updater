@@ -74,9 +74,17 @@ STATE_UPLOAD_IDLE = 9
 STATE_ERROR = 10
 
 STATE_NAMES = {
-    0: "appIDLE", 1: "appDETACH", 2: "dfuIDLE", 3: "dfuDNLOAD_SYNC", 4: "dfuDNBUSY",
-    5: "dfuDNLOAD_IDLE", 6: "dfuMANIFEST_SYNC", 7: "dfuMANIFEST",
-    8: "dfuMANIFEST_WAIT_RESET", 9: "dfuUPLOAD_IDLE", 10: "dfuERROR",
+    0: "appIDLE",
+    1: "appDETACH",
+    2: "dfuIDLE",
+    3: "dfuDNLOAD_SYNC",
+    4: "dfuDNBUSY",
+    5: "dfuDNLOAD_IDLE",
+    6: "dfuMANIFEST_SYNC",
+    7: "dfuMANIFEST",
+    8: "dfuMANIFEST_WAIT_RESET",
+    9: "dfuUPLOAD_IDLE",
+    10: "dfuERROR",
 }
 
 # --- DFU status codes (bStatus, byte 0 of GETSTATUS) ------------------------------
@@ -89,10 +97,22 @@ STATUS_errADDRESS = 0x08
 STATUS_errUNKNOWN = 0x0E
 
 STATUS_NAMES = {
-    0x00: "OK", 0x01: "errTARGET", 0x02: "errFILE", 0x03: "errWRITE", 0x04: "errERASE",
-    0x05: "errCHECK_ERASED", 0x06: "errPROG", 0x07: "errVERIFY", 0x08: "errADDRESS",
-    0x09: "errNOTDONE", 0x0A: "errFIRMWARE", 0x0B: "errVENDOR", 0x0C: "errUSBR",
-    0x0D: "errPOR", 0x0E: "errUNKNOWN", 0x0F: "errSTALLEDPKT",
+    0x00: "OK",
+    0x01: "errTARGET",
+    0x02: "errFILE",
+    0x03: "errWRITE",
+    0x04: "errERASE",
+    0x05: "errCHECK_ERASED",
+    0x06: "errPROG",
+    0x07: "errVERIFY",
+    0x08: "errADDRESS",
+    0x09: "errNOTDONE",
+    0x0A: "errFIRMWARE",
+    0x0B: "errVENDOR",
+    0x0C: "errUSBR",
+    0x0D: "errPOR",
+    0x0E: "errUNKNOWN",
+    0x0F: "errSTALLEDPKT",
 }
 
 # --- platforminfo magics ----------------------------------------------------------
@@ -104,6 +124,18 @@ MAGIC_EXTERNAL_APP = 0xDEC0BEBA  # .nwa AppInfo magic (start & end)
 MAGIC_STORAGE = 0xEE0BDDBA  # scripts file-system magic (bytes BA DD 0B EE), header only
 STORAGE_TOTAL_SIZE = 42 * 1024  # Ion::Storage::FileSystem::k_totalSize
 
+# N0200 "FirmwareHeader" platform-info block (docs/01-specs/n02xx-firmware-format.md §7).
+MAGIC_PLATFORM_INFO = 0xFACECAFE  # bookend magic of the FirmwareHeader block
+PLATFORM_INFO_SIZE = 32  # 32-byte block
+# DfuSe target the N0200 bootloader declares for this block (@FirmwareHeader/0x080040C0/01*64B).
+N0200_FIRMWARE_HEADER_ADDR = 0x080040C0
+
+# External-apps flash sector unit (Board::Config::ExternalAppsSectorUnit): apps are laid out
+# sector-aligned and each DfuSe erase wipes a whole sector.
+EXTERNAL_APP_SECTOR = 0x10000  # 64 KiB
+
 SOFTWARE_VERSION_SIZE = 8
 COMMIT_HASH_SIZE = 8
-USERLAND_HEADER_SIZE = 0x30  # 48 bytes; jump target = pointer + this
+SLOT_INFO_SIZE = 16  # struct "<IIII" (see formats/headers.py)
+KERNEL_HEADER_SIZE = 24  # struct "<I8s8sI"
+USERLAND_HEADER_SIZE = 0x30  # 48 bytes; struct "<I8sIIIIIIIII"; jump target = pointer + this

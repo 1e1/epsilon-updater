@@ -39,8 +39,9 @@ class AppInfo:
     def parse(cls, blob: bytes) -> "AppInfo":
         if len(blob) < APPINFO_SIZE:
             return cls(0, "", 0, len(blob), valid=False)
-        (magic0, api, name_addr, icon_size, icon_addr,
-         entry, app_size, magic1) = struct.unpack("<IIIIIIII", blob[:APPINFO_SIZE])
+        (magic0, api, name_addr, icon_size, icon_addr, entry, app_size, magic1) = struct.unpack(
+            "<IIIIIIII", blob[:APPINFO_SIZE]
+        )
         valid = magic0 == C.MAGIC_EXTERNAL_APP and magic1 == C.MAGIC_EXTERNAL_APP
         name = ""
         if valid and 0 < name_addr < len(blob):
@@ -57,8 +58,16 @@ def build_nwa(name: str, *, api_level: int, code: bytes = b"", icon: bytes = b""
     body = name_bytes + icon + code
     app_size = APPINFO_SIZE + len(body)
     header = struct.pack(
-        "<IIIIIIII", C.MAGIC_EXTERNAL_APP, api_level, name_addr, len(icon),
-        icon_addr if icon else 0, code_addr, app_size, C.MAGIC_EXTERNAL_APP)
+        "<IIIIIIII",
+        C.MAGIC_EXTERNAL_APP,
+        api_level,
+        name_addr,
+        len(icon),
+        icon_addr if icon else 0,
+        code_addr,
+        app_size,
+        C.MAGIC_EXTERNAL_APP,
+    )
     return header + body
 
 
@@ -68,7 +77,7 @@ class InstalledApp:
     info: AppInfo
 
 
-def iter_apps(blob: bytes, *, sector_size: int = 0x10000) -> list[InstalledApp]:
+def iter_apps(blob: bytes, *, sector_size: int = C.EXTERNAL_APP_SECTOR) -> list[InstalledApp]:
     """Enumerate apps in an external-apps region blob.
 
     Apps are laid out from the start, each **sector-aligned** (64 KiB), and the run ends at

@@ -20,15 +20,23 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
+from urllib.parse import urlsplit
 
+from ..apps.proxy import MAX_APP_BYTES
 from . import instance
 from .session import Session
 
 WEB_DIR = Path(__file__).parent / "web"
+MAX_BODY = 16 * 1024 * 1024  # reject request bodies larger than 16 MiB with HTTP 413
+
+
+class _BodyTooLarge(Exception):
+    """Signals a request whose Content-Length exceeds MAX_BODY (413 already sent)."""
 
 
 def _handler(session: Session, web_dir: Path, control: dict | None = None):
-    control = control if control is not None else {}
+    ctrl: dict = control if control is not None else {}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "nwupdater/0.1"
@@ -45,31 +53,46 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             self.end_headers()
             self.wfile.write(body)
 
-        def _guard(self) -> bool:
+        def _guard(self, *, require_origin: bool = False) -> bool:
             """True if the request may touch the API. Blocks CSRF & DNS-rebinding.
 
-            Rejects when the ``Host`` header is not a loopback name (rebinding), or when an
-            ``Origin`` is present that is not our own (cross-origin POST). Same-origin requests
-            from our own page send a matching Origin (or none, for top-level GET) and pass.
+            Always rejects when the ``Host`` header is not a loopback name (rebinding), or when a
+            present ``Origin`` is not our own. With ``require_origin`` (mutating requests) it also
+            rejects when NO ``Origin`` is sent: a same-origin fetch/XHR POST from our own page
+            always carries one, so its absence means a cross-context or non-browser client. Reads
+            (GET) stay lenient — top-level navigation legitimately omits Origin.
             """
-            port = self.server.server_address[1]
-            loopback = {"127.0.0.1", "localhost", "[::1]", "::1"}
-            host = (self.headers.get("Host") or "").strip().lower()
-            hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+            port = cast(tuple, self.server.server_address)[1]
+            loopback = {"127.0.0.1", "localhost", "::1"}
+            host = (self.headers.get("Host") or "").strip()
+            # urlsplit unwraps a bracketed IPv6 literal and strips the :port uniformly. A naive
+            # rsplit/count(":") mishandles "[::1]:8765" (multiple colons) -> false 403.
+            try:
+                hostname = (urlsplit("//" + host).hostname or "").lower()
+            except ValueError:
+                return False
             if hostname not in loopback:
                 return False
             origin = self.headers.get("Origin")
             if origin:
-                allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}",
-                           f"http://[::1]:{port}"}
-                if origin.strip().lower() not in allowed:
-                    return False
-            return True
+                allowed = {
+                    f"http://127.0.0.1:{port}",
+                    f"http://localhost:{port}",
+                    f"http://[::1]:{port}",
+                }
+                return origin.strip().lower() in allowed
+            return not require_origin
 
         def _read_json(self) -> dict:
-            n = int(self.headers.get("Content-Length", 0) or 0)
-            if not n:
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except (TypeError, ValueError):  # absent or non-numeric -> treat as empty, no 500
                 return {}
+            if n <= 0:
+                return {}
+            if n > MAX_BODY:
+                self._json({"ok": False, "error": "request body too large"}, 413)
+                raise _BodyTooLarge()
             try:
                 return json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
@@ -78,7 +101,9 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
         def _static(self, path: str):
             rel = path.lstrip("/") or "index.html"
             target = (web_dir / rel).resolve()
-            if not str(target).startswith(str(web_dir.resolve())) or not target.is_file():
+            # is_relative_to() is a true containment check: a plain startswith() prefix test lets
+            # a sibling dir sharing the name prefix (…/web-secret) bypass a …/web root.
+            if not target.is_relative_to(web_dir.resolve()) or not target.is_file():
                 self._json({"error": "not found"}, 404)
                 return
             ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
@@ -94,6 +119,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             progress bar (Content-Length forwarded from upstream). Validation happens BEFORE any
             header is sent so failures still return clean JSON."""
             from urllib.parse import parse_qs, urlparse
+
             url = (parse_qs(urlparse(self.path).query).get("url") or [""])[0]
             try:
                 length, up = session.open_app_stream(url)
@@ -101,14 +127,23 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 self._json({"error": str(exc)}, 400)
                 return
             try:
+                # Cap the proxied size even though the URL is catalogue-allowlisted: a rogue CDN
+                # behind a listed URL must not be able to stream unbounded data through us.
+                if length is not None and length > MAX_APP_BYTES:
+                    self._json({"error": "file too large"}, 400)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 if length is not None:
                     self.send_header("Content-Length", str(length))
                 self.end_headers()
+                sent = 0
                 while True:
                     chunk = up.read(65536)
                     if not chunk:
+                        break
+                    sent += len(chunk)
+                    if sent > MAX_APP_BYTES:  # absent or lying Content-Length — stop, don't OOM
                         break
                     self.wfile.write(chunk)
             except (BrokenPipeError, ConnectionResetError):
@@ -119,13 +154,18 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
         # -- routing ---------------------------------------------------------------
         def do_GET(self):
             path = self.path.split("?", 1)[0]
-            control["last"] = time.time()
+            ctrl["last"] = time.time()
             if path.startswith("/api/") and not self._guard():
                 self._json({"error": "forbidden origin"}, 403)
                 return
             try:
                 if path == "/api/ping":
-                    self._json({"app": instance.APP_MARKER, "model": session.model.name if session.model else None})
+                    self._json(
+                        {
+                            "app": instance.APP_MARKER,
+                            "model": session.model.name if session.model else None,
+                        }
+                    )
                     return
                 if path == "/api/identity":
                     self._json(session.identity())
@@ -154,17 +194,24 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
 
         def do_POST(self):
             path = self.path.split("?", 1)[0]
-            control["last"] = time.time()
-            if not self._guard():
+            ctrl["last"] = time.time()
+            if not self._guard(require_origin=True):  # mutations require a same-origin Origin
                 self._json({"ok": False, "error": "forbidden origin"}, 403)
                 return
-            body = self._read_json()
+            try:
+                body = self._read_json()
+            except _BodyTooLarge:
+                return  # 413 already sent
             try:
                 if path == "/api/install/firmware":
-                    self._json(session.install_firmware(body.get("version", ""),
-                                                        from_cache=bool(body.get("from_cache")),
-                                                        download=bool(body.get("download")),
-                                                        channel=body.get("channel") or session.channel))
+                    self._json(
+                        session.install_firmware(
+                            body.get("version", ""),
+                            from_cache=bool(body.get("from_cache")),
+                            download=bool(body.get("download")),
+                            channel=body.get("channel") or session.channel,
+                        )
+                    )
                 elif path == "/api/device/rescan":
                     # Try to attach a real calculator; a clean "not connected" is not an error.
                     try:
@@ -179,13 +226,16 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.set_channel(body.get("channel", "stable")))
                 elif path == "/api/auth/login":
                     if body.get("email"):
-                        self._json(session.login_password(body.get("email", ""), body.get("password", "")))
+                        self._json(
+                            session.login_password(body.get("email", ""), body.get("password", ""))
+                        )
                     else:
                         self._json(session.login_token(body.get("token", "")))
                 elif path == "/api/boot":
                     self._json(session.boot())
                 elif path == "/api/capture":
                     import datetime
+
                     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
                     self._json(session.capture_sequence(timestamp=ts))
                 elif path == "/api/auth/logout":
@@ -194,6 +244,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.install_app(body.get("name", "")))
                 elif path == "/api/install/app-local":
                     import base64
+
                     data = base64.b64decode(body.get("data_b64", ""))
                     self._json(session.install_local_app(body.get("filename", "app.nwa"), data))
                 elif path == "/api/cache/preload":
@@ -204,12 +255,18 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.cache_clear())
                 elif path == "/api/apps/push":
                     import base64
-                    self._json(session.push_app(body.get("filename", "app.nwa"),
-                                                base64.b64decode(body.get("data_b64", ""))))
+
+                    self._json(
+                        session.push_app(
+                            body.get("filename", "app.nwa"),
+                            base64.b64decode(body.get("data_b64", "")),
+                        )
+                    )
                 elif path == "/api/apps/add":
                     self._json(session.add_store_app(body.get("name", "")))
                 elif path == "/api/apps/inspect":
                     import base64
+
                     self._json(session.inspect_app(base64.b64decode(body.get("data_b64", ""))))
                 elif path == "/api/apps/fetch":
                     self._json(session.fetch_app(body.get("url", "")))
@@ -218,16 +275,21 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 elif path == "/api/apps/reorder":
                     self._json(session.reorder_apps(body.get("order", [])))
                 elif path == "/api/scripts/push":
-                    self._json(session.push_script(body.get("name", ""), body.get("code", ""),
-                                                   bool(body.get("auto_import", True))))
+                    self._json(
+                        session.push_script(
+                            body.get("name", ""),
+                            body.get("code", ""),
+                            bool(body.get("auto_import", True)),
+                        )
+                    )
                 elif path == "/api/scripts/delete":
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
                     self._json(session.set_scripts(body.get("scripts", [])))
                 elif path == "/api/quit":
                     self._json({"ok": True})
-                    if control.get("shutdown"):
-                        control["shutdown"]()
+                    if ctrl.get("shutdown"):
+                        ctrl["shutdown"]()
                 else:
                     self._json({"error": "unknown endpoint"}, 404)
             except Exception as exc:
@@ -236,8 +298,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
     return Handler
 
 
-def make_server(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
-                web_dir: Path = WEB_DIR, control: dict | None = None) -> ThreadingHTTPServer:
+def make_server(
+    session: Session,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    web_dir: Path = WEB_DIR,
+    control: dict | None = None,
+) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), _handler(session, web_dir, control))
 
 
@@ -247,20 +315,26 @@ def _idle_watcher(control: dict, timeout: float, interval: float = 20.0):
         if control.get("stopping"):
             return
         if time.time() - control.get("last", 0) > timeout:
-            print(f"\ninactivité > {int(timeout)}s — arrêt automatique.")
+            print(f"\ninactive > {int(timeout)}s — auto-shutdown.")
             if control.get("shutdown"):
                 control["shutdown"]()
             return
 
 
-def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
-          open_browser: bool = True, single_instance: bool = False,
-          idle_timeout: float | None = None) -> None:
+def serve(
+    session: Session,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+    single_instance: bool = False,
+    idle_timeout: float | None = None,
+) -> None:
     # Single instance: if one is already running, just reopen the browser there.
     if single_instance:
         existing = instance.existing_url()
         if existing:
-            print(f"Déjà en cours d'exécution : {existing}")
+            print(f"Already running: {existing}")
             if open_browser:
                 try:
                     webbrowser.open(existing)
@@ -279,12 +353,15 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
         instance.write(url, actual_port)
 
     ident = session.identity()
-    where = "no calculator — connect one or explore a demo from the page" if not ident.get("connected") \
+    where = (
+        "no calculator — connect one or explore a demo from the page"
+        if not ident.get("connected")
         else f"{ident['model']}{' (demo)' if session.virtual else ''}"
+    )
     print(f"nwupdater UI : {url}  (device: {where})")
-    print("Fermez l'onglet et cliquez « Quitter », ou Ctrl+C pour arrêter.")
+    print('Close the tab and click "Quit", or press Ctrl+C to stop.')
     if idle_timeout and idle_timeout > 0:
-        print(f"Arrêt auto après {int(idle_timeout)}s sans activité.")
+        print(f"Auto-shutdown after {int(idle_timeout)}s of inactivity.")
         threading.Thread(target=_idle_watcher, args=(control, idle_timeout), daemon=True).start()
     if open_browser:
         try:
@@ -294,7 +371,7 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\narrêt.")
+        print("\nstopped.")
     finally:
         control["stopping"] = True
         httpd.server_close()

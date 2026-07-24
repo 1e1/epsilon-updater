@@ -26,8 +26,15 @@ def test_scripts_write_then_read_back():
     cli = _client(dev)
     ident = read_identity(cli, dev.bcdDevice)
     addr, size = ident.storage_ram
-    write_storage(cli, addr, [make_python("mandelbrot", "print(1)\n", True),
-                              make_python("dice", "import random\n", False)], capacity=size)
+    write_storage(
+        cli,
+        addr,
+        [
+            make_python("mandelbrot", "print(1)\n", True),
+            make_python("dice", "import random\n", False),
+        ],
+        capacity=size,
+    )
     back = read_storage(cli, addr, size)
     assert [r.fullname for r in back] == ["mandelbrot.py", "dice.py"]
     assert back[0].code == "print(1)\n" and back[0].auto_import

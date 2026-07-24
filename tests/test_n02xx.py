@@ -31,9 +31,9 @@ def test_n0200_is_modeled_as_opaque_single_slot():
 def test_opaque_image_flashed_verbatim_with_no_boot():
     image = FirmwareImage([FirmwareSegment(DFU_BASE, _opaque_bytes(8192))], bcd_device=0x0000)
     plan = plan_install(N0200, image)
-    assert plan.target_slot is None      # single-slot
+    assert plan.target_slot is None  # single-slot
     assert plan.full_image is False
-    assert plan.boot_address is None     # opaque: nothing to jump to, no guessed offset
+    assert plan.boot_address is None  # opaque: nothing to jump to, no guessed offset
     assert [s.address for s in plan.segments] == [DFU_BASE]  # verbatim
 
 
@@ -41,12 +41,13 @@ def test_opaque_install_verifies_and_version_readback_is_none():
     dev = virtual_calculator("n0200")
     inst = Installer(DfuClient(dev, sleep=lambda *_: None), N0200)
     image = FirmwareImage([FirmwareSegment(DFU_BASE, _opaque_bytes(8192))], bcd_device=0x0000)
-    plan = inst.install(image, verify=True)             # read-back verify must pass
-    assert inst.read_installed_version(plan) is None    # no readable version in an opaque blob
+    plan = inst.install(image, verify=True)  # read-back verify must pass
+    assert inst.read_installed_version(plan) is None  # no readable version in an opaque blob
 
 
 class _RecClient:
     """Minimal DfuClient stand-in recording the erase flag of each write."""
+
     def __init__(self):
         self.writes = []
 
@@ -78,7 +79,8 @@ def test_n0110_flash_still_erases():
 def test_opaque_dfuse_roundtrip_is_compatible_with_n0200():
     # DfuSe like the official one: PID 0xA51A, generic bcdDevice 0x0000, element @0x98000000
     blob = FirmwareImage([FirmwareSegment(DFU_BASE, _opaque_bytes(4096))]).to_dfuse(
-        id_product=0xA51A, bcd_device=0x0000)
+        id_product=0xA51A, bcd_device=0x0000
+    )
     image = FirmwareImage.from_dfuse(blob)
     assert image.id_product == 0xA51A
     assert image.segments[0].address == DFU_BASE

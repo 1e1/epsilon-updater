@@ -41,6 +41,7 @@ def test_decode_app_icon_none_when_no_icon():
 def _elf_with_icon(icon: bytes) -> bytes:
     """Minimal ELF32-LE carrying the icon in a `.rodata.eadk_app_icon` section (like a real .nwa)."""
     import struct
+
     strtab = b"\x00.rodata.eadk_app_icon\x00.shstrtab\x00"
     icon_off = 52
     strtab_off = icon_off + len(icon)
@@ -59,3 +60,12 @@ def test_decode_app_icon_from_elf():
     # Real .nwa are ELF: the icon lives in .rodata.eadk_app_icon, not a flat header.
     uri = decode_app_icon(_elf_with_icon(demo_icon_lz4("RPN")))
     assert uri and uri.startswith("data:image/bmp;base64,")
+
+
+def test_decode_app_icon_truncated_elf_does_not_crash():
+    # A blob that begins with the ELF magic but is only 4-5 bytes must not raise IndexError.
+    from nwupdater.formats.appicon import _elf_section
+
+    assert _elf_section(b"\x7fELF", ".rodata.eadk_app_icon") is None  # 4 bytes
+    assert _elf_section(b"\x7fELF\x01", ".rodata.eadk_app_icon") is None  # 5 bytes
+    assert decode_app_icon(b"\x7fELF\x01") is None

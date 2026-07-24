@@ -39,7 +39,7 @@ class Scrubber:
     def text(self, s: str) -> str:
         if not isinstance(s, str) or not s:
             return s
-        for v, tok in list(self._map.items()):    # explicit values first
+        for v, tok in list(self._map.items()):  # explicit values first
             s = s.replace(v, tok)
         s = _EMAIL.sub(lambda m: self._token(m.group(), "EMAIL"), s)
         s = _LONGTOK.sub(lambda m: self._token(m.group(), "TOKEN"), s)
@@ -67,14 +67,20 @@ def scrub(obj, extra_values=()):
 
 def main(argv=None) -> int:
     import argparse
+
     p = argparse.ArgumentParser(
         prog="python -m nwupdater.tools.scrub",
-        description="Caviarde les données personnelles d'une capture (projet non officiel).")
-    p.add_argument("capture", help="capture.json à nettoyer")
-    p.add_argument("-o", "--out", help="fichier de sortie (défaut: <capture>.scrubbed.json)")
-    p.add_argument("--value", action="append", default=[],
-                   help="valeur exacte à caviarder (email, n° de série) ; répétable")
-    p.add_argument("--mapping", action="store_true", help="afficher la table valeur→jeton")
+        description="Redact personal data from a capture (unofficial project).",
+    )
+    p.add_argument("capture", help="capture.json to clean")
+    p.add_argument("-o", "--out", help="output file (default: <capture>.scrubbed.json)")
+    p.add_argument(
+        "--value",
+        action="append",
+        default=[],
+        help="exact value to redact (email, serial number); repeatable",
+    )
+    p.add_argument("--mapping", action="store_true", help="print the value→token table")
     args = p.parse_args(argv)
 
     with open(args.capture, encoding="utf-8") as f:
@@ -83,7 +89,7 @@ def main(argv=None) -> int:
     out = args.out or (args.capture.rsplit(".", 1)[0] + ".scrubbed.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(scrubbed, f, ensure_ascii=False, indent=2)
-    print(f"caviardé → {out}  ({len(mapping)} valeur(s) remplacée(s))")
+    print(f"redacted → {out}  ({len(mapping)} value(s) replaced)")
     if args.mapping:
         for v, tok in mapping.items():
             print(f"  {tok} ← {v[:12]}…" if len(v) > 12 else f"  {tok} ← {v}")

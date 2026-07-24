@@ -9,7 +9,8 @@ def test_aggregate_local_and_remote(tmp_path):
     (apps / "game.nwa").write_bytes(b"x" * 10)
     (apps / "notes.txt").write_text("ignored")
     (apps / "_urls.txt").write_text(
-        "# comment\nhttps://example.com/apps/demo.nwa\n\nhttps://example.org/x/other.nwa\n")
+        "# comment\nhttps://example.com/apps/demo.nwa\n\nhttps://example.org/x/other.nwa\n"
+    )
     items = aggregate(apps, [".nwa"])
     names = [i.name for i in items]
     assert "game.nwa" in names and "demo.nwa" in names and "other.nwa" in names

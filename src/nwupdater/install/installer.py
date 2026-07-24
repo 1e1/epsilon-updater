@@ -52,17 +52,24 @@ def _slot_origin(model: Model, slot: str) -> int:
 
 
 def _userland_at(data: bytes, off: int) -> bool:
-    return (0 <= off and off + C.USERLAND_HEADER_SIZE <= len(data)
-            and data[off:off + 4] == _UL_MAGIC
-            and data[off + 44:off + 48] == _UL_MAGIC)
+    return (
+        0 <= off
+        and off + C.USERLAND_HEADER_SIZE <= len(data)
+        and data[off : off + 4] == _UL_MAGIC
+        and data[off + 44 : off + 48] == _UL_MAGIC
+    )
 
 
-def _find_userland(segments: list[FirmwareSegment], *, prefer_addr: int | None = None) -> int | None:
+def _find_userland(
+    segments: list[FirmwareSegment], *, prefer_addr: int | None = None
+) -> int | None:
     """Locate a valid UserlandHeader to boot into. Tries a preferred absolute address, then the
     conventional +0x10000 slot offset, then a full scan — robust to real vs synthetic layouts."""
     if prefer_addr is not None:
         for s in segments:
-            if s.address <= prefer_addr < s.address + len(s.data) and _userland_at(s.data, prefer_addr - s.address):
+            if s.address <= prefer_addr < s.address + len(s.data) and _userland_at(
+                s.data, prefer_addr - s.address
+            ):
                 return prefer_addr
     for s in segments:  # fast path: header at the conventional slot offset
         if _userland_at(s.data, SLOT_USERLAND_OFFSET):
@@ -92,6 +99,8 @@ def plan_install(model: Model, image: FirmwareImage, *, active_slot: str = "A") 
         boot = _find_userland(image.segments)
         return InstallPlan(list(image.segments), None, boot, image.total_size)
 
+    # has_ab_slots implies an external QSPI flash origin (see the models.py memory maps).
+    assert mem.external_flash_origin is not None
     slot_a = mem.external_flash_origin
     slot_b = slot_a + mem.slot_size
     has_a = any(slot_a <= s.address < slot_b for s in image.segments)
@@ -131,12 +140,13 @@ class Installer:
         # rejette donc que si l'image déclare un modèle précis, non nul, ET différent.
         if image.bcd_device not in (None, 0) and image.bcd_device != self.model.bcd_device:
             raise CompatibilityError(
-                f"image ciblée n{image.bcd_device:04x} != device {self.model.name}")
+                f"image targets n{image.bcd_device:04x} != device {self.model.name}"
+            )
         for s in image.segments:
-            region_ok = (
-                self.model.memory.internal_flash_origin <= s.address
-                or (self.model.memory.external_flash_origin is not None
-                    and s.address >= self.model.memory.external_flash_origin))
+            region_ok = self.model.memory.internal_flash_origin <= s.address or (
+                self.model.memory.external_flash_origin is not None
+                and s.address >= self.model.memory.external_flash_origin
+            )
             if not region_ok:
                 raise CompatibilityError(f"segment 0x{s.address:08x} hors flash")
 
@@ -151,13 +161,18 @@ class Installer:
             if verify:
                 back = self.client.read(seg.address, len(seg.data))
                 if back != seg.data:
-                    raise VerificationError(
-                        f"read-back mismatch at 0x{seg.address:08x}")
+                    raise VerificationError(f"read-back mismatch at 0x{seg.address:08x}")
                 self._progress("verify", done, total)
 
     # -- full install --------------------------------------------------------------
-    def install(self, image: FirmwareImage, *, active_slot: str = "A", verify: bool = True,
-                boot: bool = False) -> InstallPlan:
+    def install(
+        self,
+        image: FirmwareImage,
+        *,
+        active_slot: str = "A",
+        verify: bool = True,
+        boot: bool = False,
+    ) -> InstallPlan:
         self.check_compatibility(image)
         plan = plan_install(self.model, image, active_slot=active_slot)
         self.flash(plan, verify=verify)
