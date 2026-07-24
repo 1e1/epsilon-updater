@@ -133,6 +133,61 @@ def test_single_instance_detection(server, tmp_path, monkeypatch):
     assert not (tmp_path / "inst.json").exists()
 
 
+def _raw(port, request: str) -> str:
+    """Send a verbatim HTTP request over a raw socket (so literal '..' path segments and a
+    lying Content-Length reach the server unmodified) and return the full response text."""
+    import socket
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+        s.sendall(request.encode())
+        s.shutdown(socket.SHUT_WR)
+        chunks = []
+        while True:
+            b = s.recv(65536)
+            if not b:
+                break
+            chunks.append(b)
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
+def test_static_path_traversal_is_404(tmp_path):
+    from nwupdater.server.httpd import make_server
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html>nwupdater</html>")
+    # Sibling dir sharing the name prefix: the classic case a startswith() check would leak.
+    secret = tmp_path / "web-secret"
+    secret.mkdir()
+    (secret / "flag.txt").write_text("TOP SECRET")
+    session = Session(model_name="n0110", cache_dir=tmp_path / "cache")
+    httpd = make_server(session, port=0, web_dir=web)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        resp = _raw(port, "GET /../web-secret/flag.txt HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        assert "404" in resp.split("\r\n", 1)[0]
+        assert "TOP SECRET" not in resp
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_oversized_body_returns_413(server):
+    port = int(server.rsplit(":", 1)[1])
+    # Content-Length way above MAX_BODY (16 MiB): rejected with 413 before any body is read.
+    resp = _raw(port, "POST /api/quit HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      "Content-Length: 20000000\r\n\r\n")
+    assert "413" in resp.split("\r\n", 1)[0]
+
+
+def test_non_numeric_content_length_does_not_500(server):
+    port = int(server.rsplit(":", 1)[1])
+    resp = _raw(port, "POST /api/channel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      "Content-Length: not-a-number\r\n\r\n")
+    status = resp.split("\r\n", 1)[0]
+    assert "500" not in status  # garbage Content-Length is tolerated, treated as empty body
+
+
 def test_install_local_nwa(server):
     import base64
 

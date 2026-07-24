@@ -25,6 +25,11 @@ from . import instance
 from .session import Session
 
 WEB_DIR = Path(__file__).parent / "web"
+MAX_BODY = 16 * 1024 * 1024  # reject request bodies larger than 16 MiB with HTTP 413
+
+
+class _BodyTooLarge(Exception):
+    """Signals a request whose Content-Length exceeds MAX_BODY (413 already sent)."""
 
 
 def _handler(session: Session, web_dir: Path, control: dict | None = None):
@@ -67,9 +72,15 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             return True
 
         def _read_json(self) -> dict:
-            n = int(self.headers.get("Content-Length", 0) or 0)
-            if not n:
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except (TypeError, ValueError):  # absent or non-numeric -> treat as empty, no 500
                 return {}
+            if n <= 0:
+                return {}
+            if n > MAX_BODY:
+                self._json({"ok": False, "error": "request body too large"}, 413)
+                raise _BodyTooLarge()
             try:
                 return json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
@@ -78,7 +89,9 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
         def _static(self, path: str):
             rel = path.lstrip("/") or "index.html"
             target = (web_dir / rel).resolve()
-            if not str(target).startswith(str(web_dir.resolve())) or not target.is_file():
+            # is_relative_to() is a true containment check: a plain startswith() prefix test lets
+            # a sibling dir sharing the name prefix (…/web-secret) bypass a …/web root.
+            if not target.is_relative_to(web_dir.resolve()) or not target.is_file():
                 self._json({"error": "not found"}, 404)
                 return
             ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
@@ -158,7 +171,10 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             if not self._guard():
                 self._json({"ok": False, "error": "forbidden origin"}, 403)
                 return
-            body = self._read_json()
+            try:
+                body = self._read_json()
+            except _BodyTooLarge:
+                return  # 413 already sent
             try:
                 if path == "/api/install/firmware":
                     self._json(session.install_firmware(body.get("version", ""),
