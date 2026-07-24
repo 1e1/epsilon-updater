@@ -107,7 +107,20 @@ def plan_install(model: Model, image: FirmwareImage, *, active_slot: str = "A") 
     has_b = any(slot_b <= s.address < slot_b + mem.slot_size for s in image.segments)
 
     if has_a and has_b:
-        # Complete multi-slot image → write verbatim; boot the requested slot's userland header.
+        # A complete multi-slot .dfu (both slots + internal/regions). On a RUNNING A/B device the
+        # ACTIVE slot is hardware write-protected: erasing it returns errTARGET and wedges the DFU
+        # session until a physical reset (observed on a real N0120). So flash ONLY the inactive
+        # slot — keep the image's segments that fall in its range, drop the active slot's and any
+        # internal-flash/bootloader segments — then boot the inactive slot's userland header. The
+        # atomic A/B guarantee is preserved (the running slot is never touched).
+        inactive = "B" if active_slot == "A" else "A"
+        lo = _slot_origin(model, inactive)
+        hi = lo + mem.slot_size
+        segs = [s for s in image.segments if lo <= s.address < hi]
+        if segs:
+            boot = _find_userland(segs, prefer_addr=lo + SLOT_USERLAND_OFFSET)
+            return InstallPlan(segs, inactive, boot, sum(len(s.data) for s in segs))
+        # No segment in the inactive slot's range (unexpected) → fall through to verbatim.
         prefer = _slot_origin(model, active_slot) + SLOT_USERLAND_OFFSET
         boot = _find_userland(image.segments, prefer_addr=prefer)
         return InstallPlan(list(image.segments), "A+B", boot, image.total_size, full_image=True)

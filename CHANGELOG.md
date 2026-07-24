@@ -6,6 +6,22 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Corrigé
+
+- **Flash firmware A/B — slot inactif uniquement** : sur un appareil en marche le slot **actif**
+  est protégé matériellement (un `erase` renvoie `errTARGET` et **fige la session DFU** jusqu'à un
+  reset physique — constaté sur N0120 réelle). `install_firmware` détecte désormais le slot actif
+  (`_active_slot` via `SlotInfo`) et n'écrit **que le slot inactif** ; un `.dfu` complet A+B n'est
+  plus écrit verbatim.
+
+### Documentation
+
+- **Avertissement examens / « logiciel non officiel »** : flasher un firmware avec cet outil —
+  **même l'image officielle** — marque la calculatrice « UNOFFICIAL SOFTWARE » et la rend **non
+  conforme au mode examen** (constaté sur N0120 ; l'authenticité tient au flux de mise à jour signé
+  officiel, non reproduit hors ligne). Documenté dans `DISCLAIMER.md`, `README.md` et
+  `docs/03-transfer-install/`. Restauration via my.numworks.com.
+
 ## [1.0.0-rc.4] - 2026-07-24
 
 ### Ajouté

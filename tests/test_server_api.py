@@ -124,6 +124,15 @@ def test_install_firmware_download_requires_auth(tmp_path, monkeypatch):
         s.install_firmware("25.2.0", download=True)
 
 
+def test_active_slot_detection():
+    # Graphing demo device runs from slot A; a single-slot scientific always reports "A".
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    assert s._active_slot() == "A"
+    s.attach_demo("n0200")
+    assert s._active_slot() == "A"
+
+
 def test_ui_parser_rejects_removed_real_flag():
     from nwupdater import cli
 

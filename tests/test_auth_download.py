@@ -345,9 +345,11 @@ def test_official_dfuse_generic_bcd_is_compatible():
     assert plan.target_slot == "B"
 
 
-def test_full_multislot_image_verbatim_and_version_readback():
-    """Reproduit la disposition réelle : image complète (slots A ET B) → flash verbatim,
-    et la relecture de version doit retrouver l'en-tête userland à slot+0x10000."""
+def test_full_multislot_image_flashes_inactive_slot_only():
+    """Image complète (slots A ET B + flash interne) : on ne flashe **que le slot inactif** — le
+    slot actif est protégé matériellement (erase → errTARGET, fige le DFU, vu sur N0120 réelle).
+    Les segments du slot actif et de la flash interne sont écartés ; on relit la version au
+    slot inactif +0x10000."""
     from nwupdater.dfu.protocol import DfuClient
     from nwupdater.formats import headers
     from nwupdater.install.image import FirmwareSegment
@@ -376,11 +378,18 @@ def test_full_multislot_image_verbatim_and_version_readback():
     ]  # slot B (both pre-populated)
     image = FirmwareImage(segs, version="25.2.0", bcd_device=0x0000)
 
+    # active A → flash ONLY inactive B; internal-flash (0x08000000) + slot-A segments are dropped
     plan = plan_install(model, image, active_slot="A")
-    assert plan.full_image is True and plan.target_slot == "A+B"
-    assert plan.boot_address == slot_a + 0x10000  # slot A userland, not a persistent region
+    assert plan.full_image is False and plan.target_slot == "B"
+    assert plan.boot_address == slot_b + 0x10000  # inactive slot B userland
+    assert [s.address for s in plan.segments] == [slot_b]  # only the inactive slot's segment
+
+    # symmetric: running on B → flash only inactive A
+    plan_a = plan_install(model, image, active_slot="B")
+    assert plan_a.target_slot == "A" and [s.address for s in plan_a.segments] == [slot_a]
 
     dev = virtual_calculator("n0110", os_version="23.2.4")
     inst = Installer(DfuClient(dev, sleep=lambda *_: None), model)
     done = inst.install(image, active_slot="A", verify=True)
+    assert done.target_slot == "B"
     assert inst.read_installed_version(done) == "25.2.0"

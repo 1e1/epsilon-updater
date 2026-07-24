@@ -77,6 +77,25 @@ class FirmwareMixin(SessionBase):
         self.cache.clear()
         return {"ok": True, **self.cache_status()}
 
+    def _active_slot(self) -> str:
+        """Which A/B slot the device is currently running, from SlotInfo's userland pointer.
+        ``"A"`` for single-slot models or when it can't be read — the installer then flashes the
+        *other* (inactive) slot, which is the only one writable on a live device."""
+        mem = self.model.memory if self.model else None
+        if not mem or not mem.has_ab_slots or mem.external_flash_origin is None:
+            return "A"
+        from ..dfu import constants as C
+        from ..formats.headers import SlotInfo
+
+        try:
+            si = SlotInfo.unpack(self._conn()[0].read(mem.sram_origin, C.SLOT_INFO_SIZE))
+        except Exception:
+            return "A"
+        slot_b = mem.external_flash_origin + mem.slot_size
+        return (
+            "B" if si.valid and slot_b <= si.userland_header_addr < slot_b + mem.slot_size else "A"
+        )
+
     # -- writes (against the virtual device) ---------------------------------------
     def install_firmware(
         self,
@@ -125,7 +144,9 @@ class FirmwareMixin(SessionBase):
             else:
                 image = FirmwareImage.synthetic(self.model, version=to_version or "0.0.0")
         inst = Installer(self._conn()[0], self.model)
-        plan = inst.install(image, active_slot="A", verify=True, boot=False)
+        # Detect the running slot so the installer flashes the INACTIVE one (the active slot is
+        # hardware-protected; writing it errTARGETs and wedges the DFU session on real hardware).
+        plan = inst.install(image, active_slot=self._active_slot(), verify=True, boot=False)
         self._last_boot_address = plan.boot_address  # enables "boot now" (DFU detach+jump)
         return {
             "ok": True,

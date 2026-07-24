@@ -5,6 +5,11 @@
 > C'est un **outil de hobby**, fourni **SANS AUCUNE GARANTIE**. Mettre à jour ou flasher une
 > calculatrice peut **l'endommager, effacer vos données ou la rendre inutilisable
 > (« brick »)**. **Utilisation à vos seuls risques.** Voir [`DISCLAIMER.md`](DISCLAIMER.md).
+>
+> ⚠️ **Examens :** flasher un firmware (même l'image officielle) fait afficher **« UNOFFICIAL
+> SOFTWARE »** sur la calculatrice et la rend **non conforme au mode examen** (constaté sur
+> N0120) — restaurable via `my.numworks.com`. **N'utilisez pas cet outil sur une calculatrice
+> destinée à un examen surveillé.**
 
 Utilitaire pour mettre à jour les calculatrices **NumWorks** (famille **Graphique N01xx** et
 **Scientifique N02xx**) et y installer des applications tierces, **sans passer par Chrome +
@@ -22,8 +27,9 @@ locale** ouverte dans le navigateur système.
 
 **N0120 (Graphique) — mode individuel.** Les deux ateliers *apps* et *scripts* : contenu de la
 calculatrice (ordre mémoire) face aux éléments **disponibles**, agrégés depuis 3 sources — **cloud
-NumWorks / fichiers locaux / dépôts distants** (Nwagyu pour les `.nwa`, scripts Python publics
-`my.numworks.com/python/…`). Le **plan d'écriture** ne réécrit que la portion de mémoire qui change.
+NumWorks / fichiers locaux / dépôts distants** (dépôts communautaires de `.nwa` fournis par
+l'utilisateur, scripts Python publics `my.numworks.com/python/…`). Le **plan d'écriture** ne
+réécrit que la portion de mémoire qui change.
 
 ![nwupdater — N0120, mode individuel](docs/screenshots/nwupdater-n0120-individual.png)
 

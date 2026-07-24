@@ -53,6 +53,18 @@ nwupdater install --virtual n0110 --dfuse epsilon.dfu
   la session du compte de test ou une source alternative — non implémenté ici (démo
   synthétique). Une fois le `.bin`/`.dfu` récupéré, `from_raw_bins`/`from_dfuse` +
   `Installer.install` font le reste, à l'identique.
-- **Signature** : on ne signe rien (impossible). Flasher un firmware **officiel signé**
-  récupéré tel quel fonctionne ; un firmware tiers non signé bootera avec clearance réduite
-  (mode examen verrouillé) — comportement natif de l'OS, pas contourné.
+- **Signature & « logiciel non officiel » [CONFIRMÉ sur N0120 réelle]** : on ne signe rien
+  (impossible). **Même en flashant l'image officielle 25.2.0 telle quelle**, la calculatrice, une
+  fois bootée sur le slot flashé, affiche **« UNOFFICIAL SOFTWARE »** et se déclare **non conforme
+  au mode examen**. L'authenticité ne tient donc pas au seul contenu binaire mais au **flux de mise
+  à jour signé officiel** (attestation côté my.numworks.com) que cet outil ne reproduit pas. Ceci
+  **contredit l'hypothèse initiale** « un officiel signé récupéré tel quel fonctionne ». Restauration
+  de l'état officiel : re-flash via my.numworks.com. **Implication forte (usage classe) : ne pas
+  flasher une calculatrice destinée à un examen surveillé.**
+- **Slot A/B actif protégé [CONFIRMÉ sur N0120 réelle]** : sur un appareil en marche, le slot
+  **actif** est protégé en écriture — un `erase` y renvoie `errTARGET` et **fige la session DFU**
+  jusqu'à un reset physique. `plan_install` ne flashe donc **que le slot inactif** (détecté via
+  `SlotInfo` → `_active_slot`), jamais l'actif ; un `.dfu` complet A+B n'est **pas** écrit verbatim.
+- **Reprise après boot [CONFIRMÉ]** : après `leave` (boot du slot flashé), l'appareil quitte le
+  DFU ; regagner l'accès DFU en headless exige un **rebranchement USB** physique (l'interface web
+  le gère automatiquement via son re-scan à chaud).
