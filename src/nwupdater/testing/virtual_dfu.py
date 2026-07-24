@@ -239,11 +239,15 @@ class VirtualDfuDevice:
                 raise UsbStall("empty DfuSe command")
             cmd = data[0]
             if cmd == C.DFUSE_SET_ADDRESS:
+                if len(data) < 5:  # real hardware STALLs EP0 on a malformed command
+                    raise UsbStall("truncated SET_ADDRESS (need 4-byte address)")
                 addr, = struct.unpack("<I", data[1:5])
                 self._pending = ("setaddr", addr)
             elif cmd == C.DFUSE_ERASE:
                 if len(data) == 1:
                     self._pending = ("mass_erase",)
+                elif len(data) < 5:  # sector erase needs a 4-byte address; STALL otherwise
+                    raise UsbStall("truncated ERASE (need 4-byte address)")
                 else:
                     addr, = struct.unpack("<I", data[1:5])
                     self._pending = ("erase", addr)

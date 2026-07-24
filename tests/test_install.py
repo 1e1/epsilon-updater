@@ -94,3 +94,20 @@ def test_dfuse_roundtrip():
     assert parsed.bcd_device == 0x0110
     assert [(s.address, s.data) for s in parsed.segments] == \
            [(s.address, s.data) for s in img.segments]
+
+
+def test_from_dfuse_truncated_raises_valueerror_not_structerror():
+    # A truncated container must raise the module's own ValueError, never a bare struct.error.
+    with pytest.raises(ValueError):
+        FirmwareImage.from_dfuse(b"DfuSe\x01")            # prefix present, body missing
+    good = FirmwareImage.synthetic(_model("n0110"), version="1.0.0").to_dfuse()
+    with pytest.raises(ValueError):
+        FirmwareImage.from_dfuse(good[:200])             # cut inside the target/element headers
+
+
+def test_headers_unpack_short_buffer_is_invalid():
+    # Malformed (too short) header buffers return valid=False instead of raising struct.error.
+    from nwupdater.formats.headers import KernelHeader, SlotInfo, UserlandHeader
+    assert SlotInfo.unpack(b"\x00\x00").valid is False
+    assert KernelHeader.unpack(b"\xf0\x0d").valid is False
+    assert UserlandHeader.unpack(b"\xfe\xed").valid is False

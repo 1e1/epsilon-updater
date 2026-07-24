@@ -86,6 +86,8 @@ class FirmwareImage:
         """Parse a DfuSe (.dfu) container. See dfu.py / UM0391."""
         if raw[:5] != b"DfuSe":
             raise ValueError("not a DfuSe file (bad prefix)")
+        if len(raw) < 11 + 16:  # 11-byte DfuSe prefix + 16-byte suffix (VID/PID/bcd + CRC)
+            raise ValueError("DfuSe file truncated (header/suffix)")
         _, _ver, _total, ntargets = struct.unpack("<5sBIB", raw[:11])
         # suffix (last 16 bytes) starts with 4x u16: bcdDevice, idProduct, idVendor, bcdDFU
         suffix = raw[-16:]
@@ -95,12 +97,18 @@ class FirmwareImage:
         off = 11
         for _ in range(ntargets):
             # Target prefix: "Target" + altSetting(1) + named(4) + name(255) + size(4) + nbElem(4)
+            if off + 274 > len(raw):
+                raise ValueError("DfuSe file truncated (target prefix)")
             _sig, _alt, _named, _name, _tsize, nelem = struct.unpack(
                 "<6sBI255sII", raw[off:off + 274])
             off += 274
             for _ in range(nelem):
+                if off + 8 > len(raw):
+                    raise ValueError("DfuSe file truncated (element header)")
                 addr, esize = struct.unpack("<II", raw[off:off + 8])
                 off += 8
+                if off + esize > len(raw):
+                    raise ValueError("DfuSe file truncated (element data)")
                 segments.append(FirmwareSegment(addr, raw[off:off + esize]))
                 off += esize
         return cls(segments, id_product=id_product, bcd_device=bcd_device,

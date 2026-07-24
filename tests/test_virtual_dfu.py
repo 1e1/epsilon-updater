@@ -164,6 +164,19 @@ def test_leave_sets_jump_address_past_userland_header():
     assert dev.jump_address == userland_hdr + C.USERLAND_HEADER_SIZE
 
 
+def test_truncated_dfuse_command_stalls():
+    # A malformed SET_ADDRESS / sector-ERASE (missing the 4-byte address) must STALL EP0
+    # (UsbStall) exactly like real hardware, not raise a bare struct.error.
+    from nwupdater.testing.virtual_dfu import UsbStall
+    dev = virtual_calculator("n0110")
+    with pytest.raises(UsbStall):
+        dev.ctrl_transfer(C.REQ_OUT, C.DFU_DNLOAD, 0, 0, bytes([C.DFUSE_SET_ADDRESS, 0x00]))
+    with pytest.raises(UsbStall):
+        dev.ctrl_transfer(C.REQ_OUT, C.DFU_DNLOAD, 0, 0, bytes([C.DFUSE_ERASE, 0x00, 0x00]))
+    # a bare ERASE (length 1) is still the valid mass-erase, not a stall
+    dev.ctrl_transfer(C.REQ_OUT, C.DFU_DNLOAD, 0, 0, bytes([C.DFUSE_ERASE]))
+
+
 def test_getstatus_reply_shape():
     dev = virtual_calculator("n0110")
     cli = _client(dev)
