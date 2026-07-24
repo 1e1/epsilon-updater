@@ -100,6 +100,15 @@ def test_cache_preload_and_install_from_cache(server):
     assert cleared["version"] is None
 
 
+def test_flash_cached_by_model_without_version(server):
+    # Classroom one-click: preload once, then flash "whatever is cached for this model" with no
+    # version and no sign-in.
+    _post(server, "/api/cache/preload", {"version": "25.2.0"})
+    r = _post(server, "/api/install/firmware", {"from_cache": True})  # no version given
+    assert r["ok"] is True and r["from_cache"] is True
+    assert r["to_version"] == "25.2.0"  # resolved from the model's cached entry
+
+
 def test_boot_after_install(server):
     _post(server, "/api/install/firmware", {"version": "25.2.0"})
     r = _post(server, "/api/boot", {})
@@ -248,6 +257,13 @@ def test_device_and_channel_routes(server):
     assert _post(server, "/api/device/demo", {"model": "n0120"})["model"] == "n0120"
     assert _post(server, "/api/device/rescan", {})["connected"] is False  # no real HW in tests
     assert _post(server, "/api/device/detach", {})["connected"] is False
+
+
+def test_device_health_route(server):
+    # Connected to the demo device in tests → reports alive + virtual.
+    assert _get(server, "/api/device/health") == {"connected": True, "virtual": True}
+    _post(server, "/api/device/detach", {})
+    assert _get(server, "/api/device/health")["connected"] is False
 
 
 def test_scripts_routes(server):

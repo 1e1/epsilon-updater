@@ -66,7 +66,8 @@ async function load() {
   STATE.demoModels = await api("/api/device/demo-models").catch(() => null);
   STATE.identity = await api("/api/identity");
   if (STATE.identity && STATE.identity.connected) await loadConnected();
-  else { renderAll(); startPoll(); }
+  else renderAll();
+  startPoll();  // always on: catches a plug-in while disconnected AND an unplug while connected
 }
 
 async function loadConnected() {
@@ -91,17 +92,33 @@ let POLL = null;
 function startPoll() { if (!POLL) POLL = setInterval(pollOnce, 4000); }
 function stopPoll() { if (POLL) { clearInterval(POLL); POLL = null; } }
 async function pollOnce() {
-  try { const r = await post("/api/device/rescan"); if (r && r.connected) { stopPoll(); await onConnected(true); } }
-  catch (e) { /* keep waiting */ }
+  const i = STATE.identity;
+  if (!i || !i.connected) {
+    // Disconnected: watch for a calculator being plugged in.
+    try { const r = await post("/api/device/rescan"); if (r && r.connected) await onConnected(true); }
+    catch (e) { /* keep waiting */ }
+  } else if (!i.virtual) {
+    // Connected to real hardware: notice an unplug (cheap, lock-guarded liveness probe).
+    try { const r = await api("/api/device/health"); if (r && r.connected === false) await onDisconnected(); }
+    catch (e) { /* transient — retry next tick */ }
+  }
 }
 async function onConnected(real) {
   STATE.identity = await api("/api/identity");
   await loadConnected();
   toast(t(real ? "real_connected" : "demo_connected"));
 }
+async function onDisconnected() {
+  // The cable was pulled: drop to the "no calculator" screen. POLL stays on, so the next ticks
+  // hit the rescan branch and re-attach automatically when it is plugged back in.
+  STATE.identity = { connected: false };
+  STATE.catalog = STATE.cache = STATE.apps = STATE.scripts = null;
+  renderAll();
+  toast(t("device_lost"), true);
+}
 async function rescanDevice() {
   const r = await post("/api/device/rescan").catch(() => ({}));
-  if (r && r.connected) { stopPoll(); await onConnected(true); } else toast(t("nodev_wait"));
+  if (r && r.connected) await onConnected(true); else toast(t("nodev_wait"));
 }
 function demoModelOptions(sel) {
   const ms = STATE.demoModels || [{ name: "n0110", family: "graphique" }];
@@ -110,7 +127,7 @@ function demoModelOptions(sel) {
 }
 async function exploreDemo() {
   const model = ($("demo-model") && $("demo-model").value) || "n0110";
-  try { await post("/api/device/demo", { model }); stopPoll(); await onConnected(false); }
+  try { await post("/api/device/demo", { model }); await onConnected(false); }
   catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 async function switchDemo(model) {
@@ -271,8 +288,13 @@ function renderCache() {
     return;
   }
   el.className = "cache-list";
+  // Channel badge: beta stands out (imp), stable is muted (un) — so a cached pre-release is
+  // never mistaken for a stable image at a glance.
+  const chanTag = (e) => e.channel === "beta"
+    ? ` <span class="tag imp">${t("chan_beta")}</span>`
+    : ` <span class="tag un">${t("chan_stable")}</span>`;
   const rows = entries.map(e => `<div class="cache-row">
-      <span class="cache-nm">${esc(e.model.toUpperCase())} · Epsilon ${esc(e.version)}${
+      <span class="cache-nm">${esc(e.model.toUpperCase())} · Epsilon ${esc(e.version)}${chanTag(e)}${
         e.real ? "" : ` <span class="tag imp">${t("demo_tag")}</span>`}</span>
       <span class="cache-sz">${fmtBytes(e.size)}</span></div>`).join("");
   el.innerHTML = rows + `<div class="cache-foot">
@@ -313,17 +335,25 @@ function renderCatalog() {
   $("c-text").innerHTML = (up ? t("uptodate_txt", { v: esc(c.current) })
     : t("updates_txt", { cur: esc(c.current), n: c.updates.length })) + srcTag;
   $("c-row").style.display = up ? "none" : "flex";
+  // A firmware cached for THIS model can be flashed with no account (classroom / offline). When
+  // present, pre-select it and tag the option so it's the obvious one-click choice.
+  const ce = cachedEntryForDevice();
+  const cachedHit = !!(ce && c.updates.some(u => u.version === ce.version));
   $("c-select").innerHTML = c.updates.map((u, i) =>
-    `<option value="${esc(u.version)}">Epsilon ${esc(u.version)}${i === 0 ? " — " + t("latest_opt") : ""}</option>`).join("");
-  $("c-install").textContent = t("install");
+    `<option value="${esc(u.version)}"${(cachedHit ? u.version === ce.version : i === 0) ? " selected" : ""}>`
+    + `Epsilon ${esc(u.version)}${i === 0 ? " — " + t("latest_opt") : ""}`
+    + `${(ce && u.version === ce.version) ? " · " + t("cached") : ""}</option>`).join("");
+  const isReal = !STATE.identity.virtual;
+  $("c-install").textContent = (cachedHit && isReal) ? t("install_cache") : t("install");
   const slot = STATE.identity.has_external_apps ? t("slot_ab", { slot: "B" }) : t("slot_single");
   const authed = !!(STATE.auth && STATE.auth.authenticated);
-  const isReal = !STATE.identity.virtual;
   const dl = $("c-download");
   if (isReal) {
     $("c-dl-toggle").style.display = "none"; if (dl) dl.checked = true;
-    $("c-install").disabled = up || !authed;
-    $("c-slot").textContent = up ? "" : (authed ? slot : t("dl_need_auth"));
+    // Enable when there's an update AND we can source an image: a cached one (no sign-in) or a
+    // signed-in official download.
+    $("c-install").disabled = up || (!cachedHit && !authed);
+    $("c-slot").textContent = up ? "" : (cachedHit ? t("slot_cache", { v: ce.version }) : (authed ? slot : t("dl_need_auth")));
   } else {
     $("c-dl-toggle").style.display = up ? "none" : "flex";
     if (dl) { dl.disabled = !authed; if (!authed) dl.checked = false; }
@@ -341,16 +371,34 @@ function renderResult() {
   el.innerHTML = `<span class="r-ok">${esc(t("fw_result", { v: res.version }) + slotNote)}</span>`
     + `<span class="r-reboot"><b>${esc(t("fw_reboot"))}</b></span>`;
 }
+// The firmware cached for the CONNECTED model (one entry per model), or null. Classroom preloads
+// the whole fleet, so the fleet-wide STATE.cache.version is null — the per-model entry is what
+// lets us flash this device from cache without a re-download.
+function cachedEntryForDevice() {
+  const m = STATE.identity && STATE.identity.model;
+  const es = (STATE.cache && STATE.cache.entries) || [];
+  return m ? es.find(e => e.model === m) || null : null;
+}
 async function installFw() {
-  const version = $("c-select").value, btn = $("c-install");
+  const btn = $("c-install");
   const isReal = !STATE.identity.virtual;
-  const download = isReal ? true : !!($("c-download") && $("c-download").checked && !$("c-download").disabled);
+  const ce = cachedEntryForDevice();
+  const version = $("c-select").value;
+  // The selected version is cached for THIS model → flash it with no account (classroom/offline).
+  // renderCatalog pre-selects the cached version, so this is the one-click default.
+  const cacheable = !!(ce && ce.version === version);
+  let download, fromCache;
+  if (isReal) {
+    download = !cacheable; fromCache = cacheable;  // cache first; else official download (sign-in)
+  } else {
+    download = !!($("c-download") && $("c-download").checked && !$("c-download").disabled);
+    fromCache = !download && cacheable;
+  }
   const realConsequence = download || isReal;
   if (realConsequence) {
     if (!$("c-supervise").checked) { toast(t("supervise_need"), true); return; }
     if (!window.confirm(t("confirm_flash", { v: version }))) return;
   }
-  const fromCache = !download && STATE.cache && STATE.cache.version === version;
   btn.disabled = true; btn.textContent = fromCache ? t("installing_cache") : t("installing");
   $("c-meterwrap").className = "meterwrap on"; $("c-meter").className = "meter"; $("c-meter").style.width = "0";
   try {
@@ -521,7 +569,7 @@ function workshopBody(kind) {
     <div class="spacer"></div>
     <button class="btn ghost sm" onclick="undoStage('${kind}')" ${(STATE.hist[kind].length && !busy) ? "" : "disabled"}>${t("undo")}</button>
     <button class="btn ghost sm" onclick="resetStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${t("reset")}</button>
-    <button class="btn sm" onclick="commitStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${p.dirty ? t("write") : t("nothing")}</button>
+    <button class="btn sm" onclick="commitStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${busy ? t("writing") : (p.dirty ? t("write") : t("nothing"))}</button>
   </div>`;
   return `<div class="wk${busy ? " wk-busy" : ""}">${head + bar + legend + cols + wplan}</div>`;
 }
@@ -699,9 +747,13 @@ async function refreshLists() {
   initStage("apps"); initStage("scripts");
 }
 async function commitStage(kind) {
+  if (STATE.busy[kind]) return;  // a write (or a remote download) is already in flight
   const slots = STATE.stage[kind], target = slots.filter(s => !s.deleted);
   const removed = slots.filter(s => s.onDevice && s.deleted).map(s => s.name);
   const added = target.filter(s => !s.onDevice);
+  // Lock the workshop straight away: the "Write" button relabels to "Writing…" and disables,
+  // the items sweep (wk-busy) — immediate feedback, and no parallel second commit.
+  STATE.busy[kind] = true; renderWorkbench();
   try {
     if (kind === "apps") {
       for (const name of removed) await post("/api/apps/uninstall", { name });
@@ -716,9 +768,12 @@ async function commitStage(kind) {
         { name: s.name.replace(/\.py$/i, ""), code: s.code || ("# " + s.name + "\n"), auto_import: !!s.auto_import })) });
     }
     await refreshLists();
-    renderWorkbench();
     toast(t("written_ok", { n: removed.length + added.length }));
-  } catch (e) { toast(t("fail", { msg: e.message }), true); }
+  } catch (e) {
+    toast(t("fail", { msg: e.message }), true);
+  } finally {
+    STATE.busy[kind] = false; renderWorkbench();
+  }
 }
 
 async function quitApp() {

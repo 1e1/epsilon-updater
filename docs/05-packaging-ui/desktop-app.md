@@ -47,10 +47,15 @@ Aucun compte payant → l'OS affiche un avertissement **une seule fois** :
   `NWUPDATER_IDLE_TIMEOUT` en secondes, `0` pour désactiver).
 - Fenêtre sans console (`console=False`). Arrêt manuel : bouton **Quitter** dans la page
   (`POST /api/quit`), ou fermer le processus.
-- **USB réel** : l'app **détecte une vraie calculatrice** au démarrage (`pyusb` + `libusb`
-  bundlés via `libusb-package`). Si aucune n'est branchée (ou `NWUPDATER_DEMO=1`), elle bascule
-  automatiquement en **démo virtuelle** (badge DÉMO). Le bouton « Capturer la séquence »
-  fonctionne donc sur le vrai matériel dans l'app packagée.
+- **USB réel + branchement à chaud** : l'app **détecte une vraie calculatrice** au démarrage
+  (`pyusb` + `libusb` bundlés via `libusb-package`). Si aucune n'est branchée, elle **reste
+  déconnectée** (elle ne bascule **jamais** en démo silencieusement) : la page scanne toutes les
+  4 s et **attache automatiquement** une calculatrice branchée *après* le lancement. Pendant
+  qu'une vraie calculatrice est connectée, un test de vivacité (`GET /api/device/health`, DFU
+  GETSTATE bénin, sérialisé avec les opérations) **détecte le débranchement** et repasse en mode
+  scan. La **démo virtuelle** (badge DÉMO) est **explicite** : `NWUPDATER_DEMO=1` / `--demo`, ou
+  le bouton « Explorer une démo » de la page. Le bouton « Capturer la séquence » fonctionne sur
+  le vrai matériel dans l'app packagée.
 
 > Réglages équivalents en CLI : `nwupdater ui --single-instance --idle-timeout 900`.
 

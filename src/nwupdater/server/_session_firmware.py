@@ -31,7 +31,7 @@ class FirmwareMixin(SessionBase):
         if self.model is None:
             raise ValueError(f"unknown model (bcd 0x{self.bcd:04x})")
         v, blob, real = self._fetch_or_synth(self.model, version)
-        self.cache.put(self.model.name, v, blob, real=real)
+        self.cache.put(self.model.name, v, blob, real=real, channel=self.channel)
         return {"ok": True, "real": real, **self.cache_status()}
 
     def preload_all(self) -> dict:
@@ -42,7 +42,7 @@ class FirmwareMixin(SessionBase):
             latest = cat.latest()
             fallback = latest.version if latest else "0.0.0"
             v, blob, real = self._fetch_or_synth(m, fallback)
-            self.cache.put(m.name, v, blob, real=real)
+            self.cache.put(m.name, v, blob, real=real, channel=self.channel)
         return {"ok": True, **self.cache_status()}
 
     def _fetch_or_synth(self, model, fallback_version: str) -> tuple[str, bytes, bool]:
@@ -110,12 +110,20 @@ class FirmwareMixin(SessionBase):
             D.record_download(manifest, sha256, when=datetime.now(timezone.utc).isoformat())
             used_download = True
         else:
-            cached = self.cache.get(self.model.name, to_version) if from_cache else None
+            cached = None
+            if from_cache:
+                # Classroom / offline: no account, no re-download. An explicit version is looked
+                # up as-is; when omitted we flash whatever is cached for THIS model (one-click).
+                if not to_version:
+                    entry = self.cache.entry_for_model(self.model.name)
+                    if entry is not None:
+                        to_version = entry.version
+                cached = self.cache.get(self.model.name, to_version) if to_version else None
             if cached is not None:
                 image = FirmwareImage.from_dfuse(cached)
                 used_cache = True
             else:
-                image = FirmwareImage.synthetic(self.model, version=to_version)
+                image = FirmwareImage.synthetic(self.model, version=to_version or "0.0.0")
         inst = Installer(self._conn()[0], self.model)
         plan = inst.install(image, active_slot="A", verify=True, boot=False)
         self._last_boot_address = plan.boot_address  # enables "boot now" (DFU detach+jump)

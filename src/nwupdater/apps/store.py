@@ -32,6 +32,7 @@ class AppEntry:
     source: str = ""
     url: str = ""
     size: int = 0  # bytes; from the catalogue (a real .nwa carries app_size in its header)
+    local_path: str = ""  # a user-provided .nwa on disk → installed verbatim (not synthesized)
 
     def compatible_with(
         self, *, family: str, device_api_level: int, has_external_apps: bool
@@ -63,6 +64,7 @@ class AppStore:
                     source=a.get("source", ""),
                     url=a.get("url", ""),
                     size=int(a.get("size", 0)),
+                    local_path=a.get("local_path", ""),
                 )
                 for a in apps
             ]

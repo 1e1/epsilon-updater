@@ -17,6 +17,79 @@ def test_install_and_preload_when_disconnected_raise_valueerror():
         s.preload("25.2.0")
 
 
+def test_device_health_not_connected():
+    s = Session(connect=False)
+    assert s.device_health() == {"connected": False, "virtual": False}
+
+
+def test_device_health_virtual_is_alive():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    assert s.device_health() == {"connected": True, "virtual": True}
+
+
+def test_device_alive_probes_a_responding_device():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    s.virtual = False  # force the real-hardware probe path against the responding virtual DFU
+    assert s.device_alive() is True
+
+
+def test_device_health_lost_auto_detaches():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    s.virtual = False  # pretend a real device...
+
+    def boom():
+        raise OSError("device gone")  # ...that has just been unplugged
+
+    s.client.get_state = boom  # type: ignore[union-attr]
+    assert s.device_health() == {"connected": False, "virtual": False, "lost": True}
+    assert s.connected is False
+
+
+def test_device_health_busy_skips_probe():
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    assert s._io_lock.acquire(blocking=False)  # simulate an operation holding the device
+    try:
+        assert s.device_health() == {"connected": True, "virtual": True, "busy": True}
+    finally:
+        s._io_lock.release()
+
+
+def test_user_local_app_listed_and_installed_verbatim(tmp_path, monkeypatch):
+    # #6: a .nwa dropped in the user apps dir shows up in "Available" AND installs its REAL bytes
+    # (not a synthesized demo image) — the generic self-hosted source behind the UI.
+    from nwupdater.formats.nwa import build_nwa
+
+    d = tmp_path / "apps"
+    d.mkdir()
+    blob = build_nwa("LocalGame", api_level=0, code=b"\x07" * 512)
+    (d / "LocalGame.nwa").write_bytes(blob)
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(d))
+    s = Session(connect=False, cache_dir=tmp_path / "cache")
+    s.attach_demo("n0110")
+    assert "LocalGame" in [a["name"] for a in s.apps()["apps"]]
+    r = s.add_store_app("LocalGame")
+    assert r["ok"] and r["name"] == "LocalGame"
+    got = next(m for m in s._appmgr().installed() if m.name == "LocalGame")
+    assert got.blob == blob  # the exact local file bytes were flashed, not a synthesized image
+
+
+def test_user_url_entry_is_proxy_allowlisted(tmp_path, monkeypatch):
+    from nwupdater.apps import proxy
+
+    d = tmp_path / "apps"
+    d.mkdir()
+    (d / "_urls.txt").write_text("https://host.example/cool.nwa\n")
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(d))
+    s = Session(connect=False, cache_dir=tmp_path / "cache")
+    proxy._require_allowed(s.store, "https://host.example/cool.nwa")  # in the store now → allowed
+    with pytest.raises(ValueError):
+        proxy._require_allowed(s.store, "https://evil.example/x.nwa")  # not listed → refused
+
+
 def test_ui_parser_rejects_removed_real_flag():
     from nwupdater import cli
 
@@ -167,6 +240,7 @@ def test_preload_caches_real_firmware_when_signed_in(tmp_path, monkeypatch):
         "version": "25.2.0",
         "size": len(dfu),
         "real": True,
+        "channel": "stable",
     }
 
 

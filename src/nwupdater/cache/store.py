@@ -37,6 +37,7 @@ class CacheEntry:
     sha256: str
     downloaded_at: float  # epoch seconds
     real: bool = False  # True = official .dfu downloaded; False = synthetic demo image
+    channel: str = "stable"  # release channel the image was fetched from ("stable" | "beta")
 
     def key(self) -> str:
         return f"{self.model}/{self.version}"
@@ -102,7 +103,15 @@ class FirmwareCache:
         return removed
 
     # -- writes --------------------------------------------------------------------
-    def put(self, model: str, version: str, data: bytes, *, real: bool = False) -> CacheEntry:
+    def put(
+        self,
+        model: str,
+        version: str,
+        data: bytes,
+        *,
+        real: bool = False,
+        channel: str = "stable",
+    ) -> CacheEntry:
         entries = self._load()
         self._prune(entries)
         # One entry per model: drop any previous version of THIS model, keep the other models.
@@ -111,7 +120,14 @@ class FirmwareCache:
         filename = f"{model}-{version}.bin".replace("/", "_").replace(" ", "_")
         self._atomic_write(self.root / filename, data)
         entry = CacheEntry(
-            model, version, filename, len(data), hashlib.sha256(data).hexdigest(), self._now(), real
+            model,
+            version,
+            filename,
+            len(data),
+            hashlib.sha256(data).hexdigest(),
+            self._now(),
+            real,
+            channel,
         )
         entries[entry.key()] = entry
         self._save(entries)
@@ -140,6 +156,14 @@ class FirmwareCache:
             self._save(entries)
         return f"{model}/{version}" in entries
 
+    def entry_for_model(self, model: str) -> CacheEntry | None:
+        """The single cached entry for ``model`` (one-entry-per-model policy), or None. Lets the
+        classroom flow flash "whatever is cached for this model" without knowing the version."""
+        entries = self._load()
+        if self._prune(entries):
+            self._save(entries)
+        return next((e for e in entries.values() if e.model == model), None)
+
     def cached_version(self, entries: dict[str, CacheEntry] | None = None) -> str | None:
         """The single common version across the fleet, or None. Empty cache -> None; one shared
         version -> that version; a mixed fleet (models at different versions) -> None."""
@@ -162,7 +186,13 @@ class FirmwareCache:
             "version": self.cached_version({e.key(): e for e in entries}),
             "models": sorted(e.model for e in entries),
             "entries": [
-                {"model": e.model, "version": e.version, "size": e.size, "real": e.real}
+                {
+                    "model": e.model,
+                    "version": e.version,
+                    "size": e.size,
+                    "real": e.real,
+                    "channel": e.channel,
+                }
                 for e in sorted(entries, key=lambda e: e.model)
             ],
             "total_size": sum(e.size for e in entries),

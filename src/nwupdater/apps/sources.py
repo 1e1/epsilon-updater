@@ -15,9 +15,14 @@ does — this module only enumerates candidates and downloads bytes on demand.
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from .store import AppEntry
 
 
 @dataclass
@@ -77,6 +82,64 @@ def aggregate(subdir: Path, exts: list[str]) -> list[SourceItem]:
             items.append(it)
             seen.add(it.name)
     return items
+
+
+def user_apps_dir() -> Path:
+    """Where the user drops their own apps: ``$NWUPDATER_APPS_DIR`` or ``<config>/nwupdater/apps``
+    (mirrors the credentials path). Nothing is created here; a missing dir just yields no sources."""
+    override = os.environ.get("NWUPDATER_APPS_DIR")
+    if override:
+        return Path(override)
+    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    return Path(base) / "nwupdater" / "apps"
+
+
+def app_entries(directory: Path) -> list[AppEntry]:
+    """Build catalogue entries from a user directory — the generic, self-hosted source behind the
+    UI's "Available" list. Local ``.nwa`` files are parsed for their real name + API level (so
+    compatibility is honoured and the real bytes are installed); one URL per line in ``_urls.txt``
+    adds a downloadable entry (fetched through the SSRF-guarded proxy, which allowlists it because
+    it is now in the store). Nothing is hard-coded."""
+    from ..formats.nwa import AppInfo
+    from .store import AppEntry
+
+    directory = Path(directory)
+    out: list[AppEntry] = []
+    for it in scan_local(directory, [".nwa"]):
+        assert it.path is not None
+        try:
+            info = AppInfo.parse(it.path.read_bytes())
+        except OSError:
+            continue
+        out.append(
+            AppEntry(
+                name=(info.name if info.valid and info.name else it.path.stem),
+                version="?",
+                api_level=info.api_level if info.valid else 0,
+                family="any",
+                source="local file",
+                url="",
+                size=it.size or 0,
+                local_path=str(it.path),
+            )
+        )
+    for url in read_url_list(directory / "_urls.txt"):
+        p = urlparse(url)
+        name = Path(p.path).name or url
+        if not name.lower().endswith(".nwa"):
+            continue
+        out.append(
+            AppEntry(
+                name=name,
+                version="?",
+                api_level=0,  # unknown until fetched; the device check runs again at install time
+                family="any",
+                source=p.hostname or "remote",
+                url=url,
+                size=0,
+            )
+        )
+    return out
 
 
 class RemoteCache:

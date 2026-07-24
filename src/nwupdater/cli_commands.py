@@ -452,6 +452,9 @@ def _cmd_cache(args) -> int:
     days = max(0, (st["expires_at"] - _t.time()) / 86400)
     print(f"version   : {st['version']}")
     print(f"models    : {', '.join(st['models'])}")
+    for e in st.get("entries", []):
+        tags = "" if e.get("real", False) else " [demo]"
+        print(f"  - {e['model']:<8} {e['version']:<10} [{e.get('channel', 'stable')}]{tags}")
     print(f"size      : {_human(st['total_size'])}")
     print(f"expires   : in {days:.0f} d (TTL {st['ttl_days']} d)")
     return 0

@@ -94,6 +94,13 @@ class AppsMixin(SessionBase):
         entry = self.store.get(name)
         if entry is None:
             raise ValueError(f"unknown app: {name}")
+        if entry.local_path:
+            # A user-provided local .nwa: install its REAL bytes verbatim (validated + verified by
+            # AppManager.push), not a synthesized demo image.
+            from pathlib import Path
+
+            m = self._appmgr().push(Path(entry.local_path).read_bytes())
+            return {"ok": True, "name": m.name, "size": len(m.blob)}
         # Synthesize at the catalogue's declared size so demo region usage is realistic (a real
         # .nwa carries its own app_size; here we pad the body to match — header is 0x20 bytes,
         # plus the NUL-terminated name and the real, decodable demo icon).

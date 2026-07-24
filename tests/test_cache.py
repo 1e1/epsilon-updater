@@ -134,6 +134,38 @@ def test_corrupt_index_is_treated_as_empty_and_self_heals(tmp_path):
     assert c.get("n0120", "1.0.0") == b"E"
 
 
+def test_channel_defaults_to_stable_and_is_reported(tmp_path):
+    c = FirmwareCache(tmp_path)
+    e = c.put("n0110", "25.2.0", b"DATA")
+    assert e.channel == "stable"
+    assert c.status()["entries"][0]["channel"] == "stable"
+
+
+def test_channel_beta_is_persisted_and_surfaced(tmp_path):
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "26.1.0", b"BETA", real=True, channel="beta")
+    # survives a reload from index.json (fresh instance, same dir)
+    c2 = FirmwareCache(tmp_path)
+    entry = next(e for e in c2.status()["entries"] if e["model"] == "n0110")
+    assert entry["channel"] == "beta"
+
+
+def test_old_index_without_channel_loads_as_stable(tmp_path):
+    import json
+
+    # An index written before the channel field existed must still load (defaulted), not be
+    # discarded as schema-incompatible.
+    c = FirmwareCache(tmp_path)
+    c.put("n0110", "25.2.0", b"DATA")
+    raw = json.loads((tmp_path / "index.json").read_text())
+    for v in raw.values():
+        v.pop("channel", None)
+    (tmp_path / "index.json").write_text(json.dumps(raw))
+    c2 = FirmwareCache(tmp_path)
+    assert c2.get("n0110", "25.2.0") == b"DATA"
+    assert c2.status()["entries"][0]["channel"] == "stable"
+
+
 def test_no_temp_files_left_after_writes(tmp_path):
     c = FirmwareCache(tmp_path)
     c.put("n0110", "25.2.0", b"DATA")

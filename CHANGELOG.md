@@ -6,6 +6,31 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Ajouté
+
+- **Branchement à chaud** : une calculatrice branchée *après* le lancement est détectée
+  automatiquement (la page scanne toutes les 4 s) ; pendant qu'une vraie calculatrice est
+  connectée, un test de vivacité (`GET /api/device/health`, DFU GETSTATE bénin, sérialisé avec
+  les opérations via un verrou d'E/S) **détecte le débranchement** et repasse en mode scan.
+  L'app packagée **ne bascule plus jamais en démo silencieusement** : la démo est explicite
+  (`NWUPDATER_DEMO`/`--demo` ou le bouton « Explorer une démo »).
+- **Mode classe — flash à la volée sans connexion élève** : une calculatrice dont le modèle est
+  en cache se flashe **en un clic depuis le cache**, sans compte NumWorks ni re-téléchargement
+  (l'enseignant se connecte une fois pour pré-télécharger). La version en cache est
+  pré-sélectionnée ; `install_firmware(from_cache=True)` sans version résout l'entrée du modèle.
+- **Canal du firmware en cache** : chaque entrée de cache mémorise son canal (`stable`/`beta`) ;
+  l'interface et la CLI affichent un badge pour distinguer une image beta d'une stable en un
+  coup d'œil.
+- **Source d'apps utilisateur générique** : dépôt de `.nwa` locaux + liste d'URLs (`_urls.txt`)
+  sous `NWUPDATER_APPS_DIR` (sinon `<config>/nwupdater/apps`), agrégés dans « Disponibles ». Les
+  apps locales sont installées **telles quelles** (vrais octets, pas une image de démo).
+
+### Corrigé
+
+- **Réactivité des boutons d'installation** (apps + scripts) : « Écrire » se verrouille et
+  affiche « Écriture… » immédiatement (état occupé partagé), fermant aussi la fenêtre de
+  double-soumission — plus d'impression d'absence de réaction pendant l'écriture DFU bloquante.
+
 ## [1.0.0-rc.3] - 2026-07-24
 
 ### Ajouté
