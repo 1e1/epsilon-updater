@@ -11,16 +11,12 @@ key of "My Devices" pairing; see docs/01-specs/scripts-and-device-pairing.md §2
 
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass
 
+from ..formats.headers import KernelHeader, SlotInfo, UserlandHeader
 from ..models import Model, family_for_bcd, model_for_bcd
 from . import constants as C
 from .protocol import DfuClient
-
-
-def _cstr(raw: bytes) -> str:
-    return raw.split(b"\x00", 1)[0].decode("ascii", "replace").strip()
 
 
 @dataclass
@@ -62,35 +58,31 @@ def read_identity(client: DfuClient, bcd_device: int, sram_origin: int | None = 
     client.make_idle()
 
     base = sram_origin if sram_origin is not None else (model.memory.sram_origin if model else 0x20000000)
-    slot_info = client.read(base, 16)
-    header, kern_ptr, user_ptr, footer = struct.unpack("<IIII", slot_info)
-    if header == C.MAGIC_SLOT_INFO and footer == C.MAGIC_SLOT_INFO:
+    slot = SlotInfo.unpack(client.read(base, C.SLOT_INFO_SIZE))
+    if slot.valid:
         ident.slot_info_valid = True
-        _read_kernel_header(client, kern_ptr, ident)
-        _read_userland_header(client, user_ptr, ident)
+        _read_kernel_header(client, slot.kernel_header_addr, ident)
+        _read_userland_header(client, slot.userland_header_addr, ident)
     return ident
 
 
 def _read_kernel_header(client: DfuClient, addr: int, ident: CalculatorIdentity) -> None:
     if not addr:
         return
-    raw = client.read(addr, 24)
-    magic, = struct.unpack("<I", raw[0:4])
-    if magic != C.MAGIC_KERNEL_HEADER:
+    kern = KernelHeader.unpack(client.read(addr, C.KERNEL_HEADER_SIZE))
+    if not kern.valid:
         return
-    ident.kernel_version = _cstr(raw[4:12])
-    ident.commit = _cstr(raw[12:20])
+    ident.kernel_version = kern.software_version
+    ident.commit = kern.commit_hash
 
 
 def _read_userland_header(client: DfuClient, addr: int, ident: CalculatorIdentity) -> None:
     if not addr:
         return
-    raw = client.read(addr, C.USERLAND_HEADER_SIZE)
-    magic, = struct.unpack("<I", raw[0:4])
-    if magic != C.MAGIC_USERLAND_HEADER:
+    user = UserlandHeader.unpack(client.read(addr, C.USERLAND_HEADER_SIZE))
+    if not user.valid:
         return
-    ident.os_version = _cstr(raw[4:12])
-    st_addr, st_size = struct.unpack("<II", raw[0x0C:0x14])
+    ident.os_version = user.expected_software_version
+    st_addr, st_size = user.storage_addr_ram, user.storage_size_ram
     ident.storage_ram = (st_addr, st_size) if st_addr and st_size else None
-    apps_start, apps_end = struct.unpack("<II", raw[0x14:0x1C])
-    ident.external_apps_flash = (apps_start, apps_end)
+    ident.external_apps_flash = user.external_apps_flash
