@@ -2,6 +2,15 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// esc() is for HTML text/attributes. It is UNSAFE for a value passed as a JS-string argument in an
+// inline handler (onclick="fn('…')"): the HTML parser decodes &#39; back to ' before the JS runs,
+// so a name like O'Brien breaks out of the string. jsStr() hex-escapes every non-alphanumeric
+// char (\xHH/\uHHHH) — the result can't break out of the JS string nor the HTML attribute, and
+// decodes back to the exact original for the receiving handler.
+const jsStr = (s) => String(s ?? "").replace(/[^A-Za-z0-9_]/g, c => {
+  const n = c.charCodeAt(0);
+  return (n < 256 ? "\\x" : "\\u") + n.toString(16).padStart(n < 256 ? 2 : 4, "0");
+});
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const APPCOLORS = ["#5a8fef", "#f0a63a", "#38b2ac", "#ef6f6c", "#9b7ede", "#4bb76a", "#e0607e"];
 const color = (n) => APPCOLORS[(n ? n.charCodeAt(0) : 0) % APPCOLORS.length];
@@ -431,22 +440,22 @@ function onCalcRow(kind, s, p, mov) {
   let btns;
   if (st === "del") {
     btns = `<button class="ib" title="${t("restore")}" aria-label="${t("restore")} ${esc(s.name)}"
-      onclick="restoreSlot('${kind}','${esc(s.name)}')">↺</button>`;
+      onclick="restoreSlot('${kind}','${jsStr(s.name)}')">↺</button>`;
   } else {
     let mv = "";
     if (movable) {
       const mi = mov.indexOf(s);
-      mv = `<button class="ib" title="${t("up")}" ${mi <= 0 ? "disabled" : ""} onclick="moveSlot('${kind}','${esc(s.name)}',-1)">▲</button>
-        <button class="ib" title="${t("down")}" ${mi >= mov.length - 1 ? "disabled" : ""} onclick="moveSlot('${kind}','${esc(s.name)}',1)">▼</button>`;
+      mv = `<button class="ib" title="${t("up")}" ${mi <= 0 ? "disabled" : ""} onclick="moveSlot('${kind}','${jsStr(s.name)}',-1)">▲</button>
+        <button class="ib" title="${t("down")}" ${mi >= mov.length - 1 ? "disabled" : ""} onclick="moveSlot('${kind}','${jsStr(s.name)}',1)">▼</button>`;
     }
     btns = mv + `<button class="ib" title="${t("remove")}" aria-label="${t("remove")} ${esc(s.name)}"
-      onclick="stageRemove('${kind}','${esc(s.name)}')">✕</button>`;
+      onclick="stageRemove('${kind}','${jsStr(s.name)}')">✕</button>`;
   }
   // Writable items are draggable; the drop handler keeps them within the writable region.
   const drag = movable
-    ? ` draggable="true" ondragstart="dragStart('${kind}','${esc(s.name)}')" ondragend="dragEnd()"
+    ? ` draggable="true" ondragstart="dragStart('${kind}','${jsStr(s.name)}')" ondragend="dragEnd()"
         ondragover="event.preventDefault()" ondragenter="this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')" ondrop="dropOn(event,'${kind}','${esc(s.name)}')"` : "";
+        ondragleave="this.classList.remove('drag-over')" ondrop="dropOn(event,'${kind}','${jsStr(s.name)}')"` : "";
   return `<div class="item oncalc st-${st}${movable ? " grab" : ""}"${drag}>${slotIcon(kind, s)}
     <div class="grow"><div class="nm">${esc(s.name)} <span class="tag ${st}">${t(tagKey)}</span></div>
       <div class="mt">${meta}</div></div>
@@ -462,7 +471,7 @@ function availRow(kind, a) {
     <div class="grow"><div class="nm">${esc(nm)}${bad ? ` <span class="mt bad">${t("incompatible", { n: a.api_level })}</span>` : ""}</div>
       <div class="mt">${meta}</div></div>
     <button class="ib add" ${inStage || bad ? "disabled" : ""} title="+" aria-label="${esc(nm)}"
-      onclick="stageAdd('${kind}','${esc(nm)}')">+</button></div>`;
+      onclick="stageAdd('${kind}','${jsStr(nm)}')">+</button></div>`;
 }
 function workshopBody(kind) {
   const cfg = wcfg(kind), slots = STATE.stage[kind], p = planFor(kind);
