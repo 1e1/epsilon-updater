@@ -116,6 +116,13 @@ class DfuClient:
         # attribute (set by usbio for real hardware, by the virtual device for tests).
         self._layout = layout
         self._layout_resolved = layout is not None
+        # Alt-setting routing: NumWorks advertises one alt per memory backend (Flash, SRAM, …)
+        # and a DNLOAD only writes within the CURRENT alt's region. We discover the map (attached
+        # to the device by usbio) and switch on demand so a write always lands. usbio selects the
+        # Flash alt right after opening, so start there.
+        self._current_alt = C.ALT_FLASH
+        self._alt_regions = None
+        self._alt_regions_resolved = False
 
     # -- low-level requests --------------------------------------------------------
     def _out(self, request: int, wValue: int = 0, data: bytes = b"") -> None:
@@ -167,6 +174,39 @@ class DfuClient:
                 self.abort()
         raise RuntimeError("could not reach dfuIDLE")
 
+    # -- alt-setting routing -------------------------------------------------------
+    def _alt_map(self):
+        """``[(alt, MemoryLayout)]`` advertised by the device (discovered by usbio), or None
+        for single-region devices / tests — in which case the current alt is kept."""
+        if not self._alt_regions_resolved:
+            self._alt_regions = getattr(self.dev, "alt_regions", None)
+            self._alt_regions_resolved = True
+        return self._alt_regions
+
+    def _alt_for(self, address: int) -> int | None:
+        """The alt-setting whose advertised region owns ``address``, or None."""
+        for alt, layout in self._alt_map() or []:
+            if layout is not None and layout.sector_of(address) is not None:
+                return alt
+        return None
+
+    def select_alt(self, alt: int) -> None:
+        """Switch DFU alt-setting (its memory map governs where a DNLOAD lands), then return the
+        state machine to dfuIDLE. No-op if the device cannot switch (virtual device / tests)."""
+        setter = getattr(self.dev, "set_interface_altsetting", None)
+        if setter is not None:
+            setter(interface=self.interface, alternate_setting=alt)
+            self.make_idle()
+        self._current_alt = alt
+
+    def _route(self, address: int) -> None:
+        """Before a write, select the alt-setting owning ``address`` (Flash / SRAM / …). This is
+        the whole point of discovering the layouts: writing scripts (SRAM) vs firmware/apps
+        (Flash) picks the right backend by address, with nothing model-specific hard-coded."""
+        alt = self._alt_for(address)
+        if alt is not None and alt != self._current_alt:
+            self.select_alt(alt)
+
     # -- DfuSe commands ------------------------------------------------------------
     def set_address(self, address: int) -> None:
         self._out(C.DFU_DNLOAD, 0, struct.pack("<BI", C.DFUSE_SET_ADDRESS, address))
@@ -215,6 +255,7 @@ class DfuClient:
         wipes the whole containing sector (4–128 KiB), so erasing per 2048-byte chunk would
         re-wipe the sector and destroy the chunks already written into it — only the last
         chunk of each sector would survive (docs §6.4, §8.2)."""
+        self._route(address)  # select the alt-setting (Flash/SRAM/…) whose region owns address
         if erase:
             for base in self._sectors_to_erase(address, len(data)):
                 self.erase_page(base)

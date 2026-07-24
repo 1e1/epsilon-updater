@@ -52,6 +52,10 @@ class OpenDevice:
     alt_setting: int
     id_product: int
     memory_layout: object | None = None  # parsed DfuSe flash layout (§6.4), if advertised
+    # Every DFU alt-setting's advertised memory map: [(alt, MemoryLayout)]. NumWorks exposes one
+    # alt per backend (e.g. 0 "@Flash", 1 "@SRAM"); the client routes a write to the alt whose
+    # region owns the address — discovered, never hard-coded, so new models work automatically.
+    alt_regions: list | None = None
 
 
 def _read_memory_layout(dev, intf):
@@ -69,18 +73,17 @@ def _read_memory_layout(dev, intf):
         return None
 
 
-def _find_dfu_interface(cfg):
-    """Return the DFU interface descriptor (class 0xFE / subclass 0x01), or None.
+def _dfu_interfaces(cfg) -> list:
+    """All DFU interface descriptors (class 0xFE / subclass 0x01) — one per alt-setting.
 
     Matches by class like webdfu_numworks (robust to interface renumbering). An active pyusb
-    configuration is directly iterable over its interface descriptors."""
-    for intf in cfg:
-        if (
-            getattr(intf, "bInterfaceClass", None) == C.DFU_INTERFACE_CLASS
-            and getattr(intf, "bInterfaceSubClass", None) == C.DFU_INTERFACE_SUBCLASS
-        ):
-            return intf
-    return None
+    configuration is directly iterable over its interface (alt-setting) descriptors."""
+    return [
+        intf
+        for intf in cfg
+        if getattr(intf, "bInterfaceClass", None) == C.DFU_INTERFACE_CLASS
+        and getattr(intf, "bInterfaceSubClass", None) == C.DFU_INTERFACE_SUBCLASS
+    ]
 
 
 def _resolve_backend(backend):
@@ -133,19 +136,27 @@ def find_calculator(
     except Exception:
         pass
 
-    # 3. locate the DFU interface by class
+    # 3. locate the DFU interface(s). NumWorks advertises one alt-setting per memory backend
+    #    (e.g. alt 0 "@Flash", alt 1 "@SRAM"), each with its own layout string. We enumerate
+    #    them ALL so the client can route a write to the alt owning the address — nothing
+    #    per-model is hard-coded, so a future revision (N0130, …) is handled automatically.
     try:
         cfg = dev.get_active_configuration()
     except Exception as exc:  # pragma: no cover - hardware-specific
         raise UsbError(f"unreadable USB configuration: {exc}") from exc
-    intf = _find_dfu_interface(cfg)
-    if intf is None:
+    dfu_intfs = _dfu_interfaces(cfg)
+    if not dfu_intfs:
         raise DfuInterfaceNotFound(
             "DFU interface not found (class 0xFE/0x01). The device is probably not in "
             "DFU mode — put it back in bootloader and retry."
         )
-    interface = getattr(intf, "bInterfaceNumber", C.DFU_INTERFACE)
-    alt = getattr(intf, "bAlternateSetting", C.ALT_FLASH)
+    # Primary = the Flash alt (reads work from any address there); fall back to the first.
+    primary = next(
+        (i for i in dfu_intfs if getattr(i, "bAlternateSetting", None) == C.ALT_FLASH),
+        dfu_intfs[0],
+    )
+    interface = getattr(primary, "bInterfaceNumber", C.DFU_INTERFACE)
+    alt = getattr(primary, "bAlternateSetting", C.ALT_FLASH)
 
     # 4. claim the interface (surface permission problems clearly)
     try:
@@ -157,21 +168,28 @@ def find_calculator(
             "  • another program (a WebUSB browser?) may already be using it."
         ) from exc
 
-    # 5. select the Flash alt-setting (best effort — NumWorks alt 0 reads/writes any address)
+    # 5. discover every alt-setting's advertised memory map (alt -> parsed layout).
+    alt_regions: list[tuple[int, object]] = []
+    for i in dfu_intfs:
+        lay = _read_memory_layout(dev, i)
+        if lay is not None:
+            alt_regions.append((getattr(i, "bAlternateSetting", C.ALT_FLASH), lay))
+    layout = next((lay for a, lay in alt_regions if a == alt), None)
+
+    # 6. select the Flash alt-setting by default (identity/firmware/apps target flash+QSPI;
+    #    the client switches on demand when a write lands in another alt's region).
     try:
-        dev.set_interface_altsetting(interface=interface, alternate_setting=C.ALT_FLASH)
-        alt = C.ALT_FLASH
+        dev.set_interface_altsetting(interface=interface, alternate_setting=alt)
     except Exception:
         pass
 
-    # 6. read the real flash sector geometry and attach it to the device so DfuClient erases
-    #    correctly (sector-aligned, once per sector). Optional — never blocks opening.
-    layout = _read_memory_layout(dev, intf)
-    if layout is not None:
-        try:
-            dev.memory_layout = layout
-        except Exception:
-            pass
+    # 7. attach the discovery to the device so DfuClient erases correctly (sector-aligned) and
+    #    routes writes to the owning alt. Best-effort — never blocks opening.
+    try:
+        dev.memory_layout = layout
+        dev.alt_regions = alt_regions
+    except Exception:
+        pass
 
     return OpenDevice(
         dev=dev,
@@ -180,6 +198,7 @@ def find_calculator(
         alt_setting=alt,
         id_product=matched_pid,
         memory_layout=layout,
+        alt_regions=alt_regions,
     )
 
 

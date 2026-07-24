@@ -24,12 +24,20 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 - **Source d'apps utilisateur générique** : dépôt de `.nwa` locaux + liste d'URLs (`_urls.txt`)
   sous `NWUPDATER_APPS_DIR` (sinon `<config>/nwupdater/apps`), agrégés dans « Disponibles ». Les
   apps locales sont installées **telles quelles** (vrais octets, pas une image de démo).
+- **Routage d'alt-setting DFU par découverte** : le `DfuClient` lit les régions annoncées par
+  **chaque** alt-setting du device (`usbio`) et route chaque écriture vers l'alt propriétaire de
+  l'adresse (Flash / SRAM / …). Aucune adresse ni alt codée en dur → N0100 … futur N0130 pris en
+  charge automatiquement.
 
 ### Corrigé
 
 - **Réactivité des boutons d'installation** (apps + scripts) : « Écrire » se verrouille et
   affiche « Écriture… » immédiatement (état occupé partagé), fermant aussi la fenêtre de
   double-soumission — plus d'impression d'absence de réaction pendant l'écriture DFU bloquante.
+- **Écriture des scripts Python sur matériel réel** : l'écriture du storage (SRAM) était un
+  *no-op silencieux* car émise sur l'alt-setting `@Flash`. Elle est désormais routée vers l'alt
+  `@SRAM` (découverte du device) et **vérifiée par relecture** (`write_storage` lève si l'écriture
+  n'atterrit pas). Confirmé write→verify→rollback sur une N0120 réelle.
 
 ## [1.0.0-rc.3] - 2026-07-24
 

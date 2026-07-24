@@ -183,7 +183,7 @@ def _install_fake_usb(monkeypatch, adapter):
     core = types.ModuleType("usb.core")
     util = types.ModuleType("usb.util")
 
-    def find(*, find_all=False, idVendor=None, idProduct=None):
+    def find(*, find_all=False, idVendor=None, idProduct=None, backend=None):
         hit = idProduct == C.PID_EPSILON and idVendor == C.USB_VID
         if find_all:
             return iter([adapter] if hit else [])
