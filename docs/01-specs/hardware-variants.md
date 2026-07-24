@@ -39,7 +39,8 @@ familles ; on l'expose en lecture seule (un firmware tiers ne peut pas l'activer
 > **N0200 = architecture proche du N0100** (flash interne uniquement, **pas de slots A/B**,
 > pas de QSPI), mais sur un MCU ultra-basse-conso M0+. bcdDevice attendu **`0x0200`**
 > (pattern `n%04x`). MCU/flash [confirmé via TI-Planet/recherche] ; PID exact et carte
-> mémoire N0200 **à confirmer** (config absente de ce fork).
+> mémoire N0200 **à confirmer** (config absente de ce fork). **PID confirmé sur matériel :
+> `0xA51A`** (voir la capture plus bas), `bcdDevice=0x0200` confirmé.
 >
 > **Versionnage propre** : la scientifique n'utilise PAS le schéma daté du graphique. Elle
 > a une numérotation entière (Version 1, 2, 3…) ; dernière = **Version 3 (10 juin 2026)**,
@@ -61,11 +62,26 @@ Extrait de `shared/ion/src/device/include/<model>/config/usb.h` et `calculator.h
 | N0110 | `0x0483` (STMicro) | `0xA291` | `0x0110` | `NumWorks Calculator` |
 | N0115 | `0x0483` | `0xA291` | `0x0115` | `NumWorks Calculator` |
 | N0120 | `0x0483` | `0xA291` | `0x0120` | `NumWorks Calculator` |
-| N0200 (scientifique) | `0x0483` | `0xA291` (attendu) | `0x0200` (attendu) | à confirmer |
+| N0200 (scientifique) | `0x0483` | **`0xA51A`** (observé matériel) | `0x0200` (confirmé) | `NumWorks Scientific Calculator` (confirmé) |
+
+> **Capture sur N0200 réelle [CONFIRMÉ matériel, lecture seule]** : PID **`0xA51A`** (pas
+> `0xA291` comme supposé), `bcdDevice=0x0200`, `bcdUSB=0x0210`, Manufacturer `NumWorks`,
+> Product **`NumWorks Scientific Calculator`** (distinct du graphique `NumWorks Calculator`),
+> numéro de série 16 car. base64. Interface DFU unique (classe `0xFE`/`0x01`/`0x02`), descripteur
+> fonctionnel DFU `bmAttributes=0x03` (dnload+upload), `wTransferSize=2048`, `bcdDFUVersion=0x0100`
+> (DfuSe). Chaîne de layout mémoire annoncée : **`@FirmwareHeader/0x080040C0/01*64Ba`** (1 secteur
+> de 64 KiB, base `0x08000000` = flash CPU) — à distinguer de la base `0x98000000` du fichier
+> `.dfu` 3.0.0 (voir [n02xx-firmware-format.md](n02xx-firmware-format.md)). `read_identity` en tire
+> correctement modèle/famille/série et l'absence de slots A/B & de zone apps, mais **os_version /
+> kernel / commit reviennent `None`** — c'est **attendu** sur N0200, pas un échec : le firmware
+> est opaque/chiffré et n'expose aucune version lisible sur le device (elle vient du **manifeste**
+> `3.0.0`, cf. [n02xx-firmware-format.md](n02xx-firmware-format.md)). Le resolver de capacités
+> donne bien `firmware_update` seul (`external_apps=False`,
+> `scripts=False`, `ab_slots=False`).
 
 PID additionnels vus dans `tools/device/dfu.py` : `0xDF11` (bootloader ST standard),
-`0xA291` (mode DFU NumWorks), `0xA51A` (à confirmer — probablement un mode bootloader/RAM
-ou une ancienne révision).
+`0xA291` (mode DFU NumWorks, graphique), `0xA51A` (**confirmé présent sur N0200** — la
+scientifique s'énumère à ce PID lorsqu'elle est branchée).
 
 **Règles de détection côté hôte :**
 1. Filtrer sur `idVendor == 0x0483` et `idProduct ∈ {0xA291, 0xDF11, 0xA51A}`.
@@ -94,7 +110,7 @@ Deux niveaux de DFU coexistent (cf. [usb-dfu-protocol.md](usb-dfu-protocol.md)) 
 | **N0100** | Brancher l'USB, calc allumée → `A291`. | Maintenir **6** pendant l'allumage (bouton **RESET**, trou d'épingle au dos). Piles **amovibles** : les retirer/remettre force un démarrage à froid. |
 | **N0110 / N0115** | Brancher l'USB, calc allumée → `A291`. | Maintenir **6**, puis appuyer sur **RESET** (trou d'épingle au dos) en gardant **6** → écran noir + LED **rouge** → « STM32 BOOTLOADER » (`0483:DF11`). |
 | **N0120** | Brancher l'USB, calc allumée → `A291`. | Même geste (**6** + **RESET**). *(Pilotes MCU non publics → récupération bas niveau limitée, mais l'entrée bootloader par la touche reste identique.)* |
-| **N0200** (scientifique) | Brancher l'USB, calc allumée → `A291` (attendu). | **Aucun bouton reset ni trappe pile** → pas d'entrée bootloader manuelle. Mise à jour uniquement via le DFU userland exposé par l'OS. |
+| **N0200** (scientifique) | Brancher l'USB, calc allumée → **`A51A`** (observé, *pas* `A291`). | **Aucun bouton reset ni trappe pile** → pas d'entrée bootloader manuelle ; le DFU exposé par l'OS suffit. |
 
 > Les combos de récupération sont **[communauté / observé]**, pas une documentation officielle
 > NumWorks — à réserver au dépannage. Pour l'usage courant de cet outil, **le DFU userland

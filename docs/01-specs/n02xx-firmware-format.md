@@ -36,6 +36,13 @@ Le conteneur est standard (identique au graphique) :
 STM32U0 en `0x08000000`). C'est l'adresse que le bootloader attend pour la région firmware ;
 c'est donc là qu'on écrit. Pas de QSPI, **pas de double-slot A/B**.
 
+> **[Observé matériel — capture lecture seule]** Branchée, une N0200 s'énumère en
+> `0483:A51A` (bcd `0x0200`, Product `NumWorks Scientific Calculator`) et **annonce** dans sa
+> chaîne de layout DFU la région `@FirmwareHeader/0x080040C0/01*64Ba` (1×64 KiB, base flash CPU
+> `0x08000000`) — donc distincte de l'adresse d'écriture `0x98000000` du fichier `.dfu`. À garder
+> en tête si on implémente un jour la lecture/écriture bas niveau N0200 : l'adresse annoncée par
+> le descripteur (reads) et la cible du `.dfu` (write bootloader) ne coïncident pas.
+
 ## Charge utile : chiffrée / opaque
 
 Mesures sur les 237 297 octets de l'élément :
