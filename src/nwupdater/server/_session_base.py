@@ -21,7 +21,6 @@ class SessionBase:
                  commit: str = "abc1234", *, api_level: int = 0, real: bool = False,
                  cache_dir=None, connect: bool = True, live_catalog: bool = False):
         self.api_level = api_level
-        self.installed_apps: list[dict] = []
         self._cache_dir = cache_dir
         self._cache: FirmwareCache | None = None
         self._last_boot_address: int | None = None  # set after a flash: jump address for "boot now"
@@ -83,7 +82,6 @@ class SessionBase:
         assert self.bcd is not None
         self.model = MODELS.get(self.bcd)
         self.connected = True
-        self.installed_apps = []
         self._last_boot_address = None
     def detach(self) -> dict:
         self.device = self.client = self.model = self.bcd = None

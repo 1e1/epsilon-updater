@@ -221,7 +221,6 @@ def _cmd_install(args) -> int:
 def _cmd_apps(args) -> int:
     from pathlib import Path
 
-    from .apps.installer import AppInstaller
     from .apps.manage import AppError, AppManager
     from .apps.store import THIRD_PARTY_WARNING, AppStore
 
@@ -292,14 +291,12 @@ def _cmd_apps(args) -> int:
             return 1
         # offline demo: synthesize a .nwa (catalog URLs are placeholders)
         blob = build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
-        inst = AppInstaller(client, external_apps_flash=ident.external_apps_flash or (0, 0),
-                            device_api_level=args.api_level)
         try:
-            res = inst.install(blob)
-        except Exception as exc:
+            m = mgr.push(blob)  # append via the minimal rewrite (like the web UI), never overwrite
+        except AppError as exc:
             print(f"app install failed: {exc}", file=sys.stderr)
             return 1
-        print(f"→ installed '{res.name}' @0x{res.address:08x} ({res.size} B), verified ✅")
+        print(f"→ installed '{m.name}' ({len(m.blob)} B), verified ✅")
     return 0
 
 

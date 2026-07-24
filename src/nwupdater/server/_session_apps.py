@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from ..apps.installer import AppInstaller
-from ..formats.nwa import AppInfo, build_nwa
+from ..formats.nwa import build_nwa
 from ._session_base import SessionBase
 
 
@@ -19,33 +18,18 @@ class AppsMixin(SessionBase):
             "apps": [{"name": e.name, "version": e.version, "api_level": e.api_level,
                       "description": e.description, "source": e.source, "size": e.size}
                      for e in compat],
-            "installed": self.installed_apps,
         }
 
-    # -- auth (my.numworks.com, pour télécharger le vrai firmware) ------------------
+    # -- install (append via the device-truth minimal rewrite, never overwrite) ----
     def install_app(self, name: str) -> dict:
-        entry = self.store.get(name)
-        if entry is None:
-            raise ValueError(f"unknown app: {name}")
-        i = self._identity()
-        blob = build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
-        inst = AppInstaller(self._conn()[0], external_apps_flash=i.external_apps_flash or (0, 0),
-                            device_api_level=self.api_level)
-        res = inst.install(blob)
-        rec = {"name": res.name, "address": f"0x{res.address:08x}", "size": res.size}
-        self.installed_apps.append(rec)
-        return {"ok": True, **rec}
+        """Install a catalogue app (synthesised .nwa), appended to the region. Kept for the
+        ``/api/install/app`` route and the CLI; delegates to :meth:`add_store_app`."""
+        return self.add_store_app(name)
+
     def install_local_app(self, filename: str, data: bytes) -> dict:
-        """Install a user-supplied .nwa blob (the official upload method)."""
-        info = AppInfo.parse(data)
-        name = info.name or (filename or "app").rsplit(".", 1)[0]
-        i = self._identity()
-        inst = AppInstaller(self._conn()[0], external_apps_flash=i.external_apps_flash or (0, 0),
-                            device_api_level=self.api_level)
-        res = inst.install(data)
-        rec = {"name": name, "address": f"0x{res.address:08x}", "size": res.size}
-        self.installed_apps.append(rec)
-        return {"ok": True, **rec}
+        """Install a user-supplied .nwa blob, appended to the region (does not overwrite the
+        existing apps) — same minimal-rewrite path as :meth:`push_app`."""
+        return self.push_app(filename, data)
 
     # -- device-truth app management (reads the region, minimal-rewrite; see apps/manage.py) --
     def _appmgr(self):
