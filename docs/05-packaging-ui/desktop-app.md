@@ -58,6 +58,10 @@ Aucun compte payant → l'OS affiche un avertissement **une seule fois** :
   le vrai matériel dans l'app packagée.
 
 > Réglages équivalents en CLI : `nwupdater ui --single-instance --idle-timeout 900`.
+>
+> Brancher simplement la calc allumée suffit (DFU « userland »). Pour la **récupération** (OS
+> non démarrable) et les combinaisons de touches **par modèle**, voir
+> [../01-specs/hardware-variants.md](../01-specs/hardware-variants.md).
 
 ## Icône
 

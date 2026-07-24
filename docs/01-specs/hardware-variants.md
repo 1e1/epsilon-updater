@@ -76,6 +76,34 @@ ou une ancienne révision).
 Le `ProductString` est identique sur les 3 modèles récents → **ne pas** s'en servir pour
 distinguer la révision ; utiliser `bcdDevice` + platforminfo.
 
+## Passer la calculatrice en mode DFU (par modèle)
+
+Deux niveaux de DFU coexistent (cf. [usb-dfu-protocol.md](usb-dfu-protocol.md)) :
+
+- **DFU « userland » (`0483:A291`)** — exposé **automatiquement** par Epsilon dès qu'une
+  calculatrice allumée (OS fonctionnel) est branchée en USB. **C'est le mode qu'utilise cet
+  updater** (identité, mise à jour, apps, scripts) : **aucune combinaison de touches**, il
+  suffit de brancher le câble. *(Vérifié sur matériel : une N0120 sous Epsilon 25.2.0 branchée
+  normalement est détectée en `0483:A291`.)*
+- **Bootloader ST (`0483:DF11`)** — le bootloader ROM STM32 (« STM32 BOOTLOADER »), utile en
+  **récupération** (OS non démarrable) ou pour un flash bas niveau. Atteint par **RESET +
+  touche**, ce qui dépend du modèle.
+
+| Modèle | DFU userland (usage normal) | Entrée bootloader de récupération |
+|---|---|---|
+| **N0100** | Brancher l'USB, calc allumée → `A291`. | Maintenir **6** pendant l'allumage (bouton **RESET**, trou d'épingle au dos). Piles **amovibles** : les retirer/remettre force un démarrage à froid. |
+| **N0110 / N0115** | Brancher l'USB, calc allumée → `A291`. | Maintenir **6**, puis appuyer sur **RESET** (trou d'épingle au dos) en gardant **6** → écran noir + LED **rouge** → « STM32 BOOTLOADER » (`0483:DF11`). |
+| **N0120** | Brancher l'USB, calc allumée → `A291`. | Même geste (**6** + **RESET**). *(Pilotes MCU non publics → récupération bas niveau limitée, mais l'entrée bootloader par la touche reste identique.)* |
+| **N0200** (scientifique) | Brancher l'USB, calc allumée → `A291` (attendu). | **Aucun bouton reset ni trappe pile** → pas d'entrée bootloader manuelle. Mise à jour uniquement via le DFU userland exposé par l'OS. |
+
+> Les combos de récupération sont **[communauté / observé]**, pas une documentation officielle
+> NumWorks — à réserver au dépannage. Pour l'usage courant de cet outil, **le DFU userland
+> suffit** : branchez simplement le câble, calculatrice allumée.
+>
+> Références (récupération/bootloader) : [WebUSB DFU NumWorks (ti-planet)](https://ti-planet.github.io/webdfu_numworks/n0110/) ·
+> [NumWorks Guide — Troubleshooting](https://guide.getomega.dev/docs/troubleshooting/) ·
+> [epsilon#1740](https://github.com/numworks/epsilon/issues/1740).
+
 ## Descripteurs communs (rappel, source `calculator.h`)
 
 - `bcdUSB = 0x0210` (USB 2.1 → active le BOS/WebUSB).
