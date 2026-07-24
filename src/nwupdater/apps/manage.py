@@ -12,12 +12,13 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from ..dfu import constants as C
 from ..dfu.protocol import DfuClient
 from ..formats.nwa import AppInfo, iter_apps
 from ..install.installer import VerificationError
 from ..regions import PlanItem, plan
 
-SECTOR = 0x10000  # external-apps sector unit (Board::Config::ExternalAppsSectorUnit)
+SECTOR = C.EXTERNAL_APP_SECTOR  # external-apps sector unit (Board::Config::ExternalAppsSectorUnit)
 
 
 class AppError(RuntimeError):

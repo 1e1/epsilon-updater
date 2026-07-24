@@ -68,7 +68,7 @@ class InstalledApp:
     info: AppInfo
 
 
-def iter_apps(blob: bytes, *, sector_size: int = 0x10000) -> list[InstalledApp]:
+def iter_apps(blob: bytes, *, sector_size: int = C.EXTERNAL_APP_SECTOR) -> list[InstalledApp]:
     """Enumerate apps in an external-apps region blob.
 
     Apps are laid out from the start, each **sector-aligned** (64 KiB), and the run ends at

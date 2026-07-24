@@ -36,7 +36,8 @@ def _layout_descriptor(mem) -> str:
 
     groups = [(mem.internal_flash_origin, run(0x4000, mem.internal_flash_size))]  # 16 KiB
     if mem.external_flash_origin is not None:
-        groups.append((mem.external_flash_origin, run(0x10000, mem.external_flash_size)))  # 64 KiB
+        groups.append((mem.external_flash_origin,
+                       run(C.EXTERNAL_APP_SECTOR, mem.external_flash_size)))  # 64 KiB
     return "@Flash" + "".join(f"/0x{base:08X}/{seg}" for base, seg in groups)
 
 
@@ -160,7 +161,7 @@ class VirtualDfuDevice:
             kernel_hdr_addr = slot_origin + 8
             userland_hdr_addr = slot_origin + 0x10000  # no extra data (docs §6.2)
             apps_start = userland_hdr_addr + 0x100000
-            apps_end = slot_origin + mem.slot_size - 0x10000
+            apps_end = slot_origin + mem.slot_size - C.EXTERNAL_APP_SECTOR
         else:  # N0100 / N02xx: everything in internal flash, no slots
             slot_origin = mem.internal_flash_origin
             kernel_hdr_addr = slot_origin + 8

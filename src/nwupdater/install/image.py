@@ -65,7 +65,7 @@ class FirmwareImage:
             base = mem.external_flash_origin  # slot A origin
             kernel_off, userland_off = 8, 0x10000
             size = userland_off + 0x1000
-            apps = (base + userland_off + 0x100000, base + mem.slot_size - 0x10000)
+            apps = (base + userland_off + 0x100000, base + mem.slot_size - C.EXTERNAL_APP_SECTOR)
         else:
             base = mem.internal_flash_origin
             kernel_off, userland_off = 8, 0x8000
