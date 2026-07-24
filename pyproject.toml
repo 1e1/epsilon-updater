@@ -62,15 +62,6 @@ warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
 
-# Deferred: the capture tools and the virtual-device test harness carry latent typing issues
-# that are lower priority than the shipped library/server. Type-checked but not gating yet.
-[[tool.mypy.overrides]]
-module = [
-    "nwupdater.tools.*",
-    "nwupdater.testing.virtual_dfu",
-]
-ignore_errors = true
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"

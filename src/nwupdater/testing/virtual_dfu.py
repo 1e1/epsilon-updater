@@ -139,9 +139,9 @@ class VirtualDfuDevice:
         self.state = C.STATE_DFU_IDLE
         self.status = C.STATUS_OK
         self.address_pointer = 0
-        self._pending = None  # deferred action performed on next GETSTATUS
+        self._pending: tuple | None = None  # deferred action performed on next GETSTATUS
         self.left = False  # set True after leave/manifest -> reset
-        self.jump_address = None
+        self.jump_address: int | None = None
 
         mem = model.memory
         writable: list[tuple[int, int]] = [

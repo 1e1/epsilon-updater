@@ -25,7 +25,7 @@ from pathlib import Path
 
 from ..dfu import constants as C
 
-_REQ_NAME = {
+_REQ_NAME: dict = {
     C.DFU_DETACH: "DETACH", C.DFU_DNLOAD: "DNLOAD", C.DFU_UPLOAD: "UPLOAD",
     C.DFU_GETSTATUS: "GETSTATUS", C.DFU_CLRSTATUS: "CLRSTATUS",
     C.DFU_GETSTATE: "GETSTATE", C.DFU_ABORT: "ABORT",

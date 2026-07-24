@@ -18,6 +18,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 
 WEB_DIR = Path(__file__).parent / "web"
 HOOK_JS = WEB_DIR / "capture-hook.js"          # bookmarklet fallback (single page)
@@ -117,8 +118,9 @@ def _make_handler(store: dict, control: dict):
                       "web": len(store["web"]), "usb": len(store["usb"])}
                 self._send(json.dumps(st).encode("utf-8"), "application/json; charset=utf-8")
             else:
-                self._send(_LAUNCH_HTML.format(port=self.server.server_address[1]).encode("utf-8"),
-                           "text/html; charset=utf-8")
+                self._send(
+                    _LAUNCH_HTML.format(port=cast(tuple, self.server.server_address)[1]).encode("utf-8"),
+                    "text/html; charset=utf-8")
 
         def do_POST(self):
             control["last"] = time.time()
@@ -146,8 +148,8 @@ def _make_handler(store: dict, control: dict):
 
 
 def _cmd_serve(args) -> int:
-    store = {"tool": "nwupdater-capture-hook", "version": 1, "started": int(time.time() * 1000),
-             "markers": [], "web": [], "usb": []}
+    store: dict = {"tool": "nwupdater-capture-hook", "version": 1, "started": int(time.time() * 1000),
+                   "markers": [], "web": [], "usb": []}
     control = {"last": time.time(), "scenario": "idle"}
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), _make_handler(store, control))
     port = httpd.server_address[1]
@@ -169,7 +171,7 @@ def _cmd_serve(args) -> int:
     if store["web"] or store["usb"]:
         out = Path(args.out or "capture.json")
         out.write_text(json.dumps(store, ensure_ascii=False, indent=2))
-        print(f"\ncapture live écrite → {out}  ({len(store['web'])} web, {len(store['usb'])} usb)")
+        print(f"\nlive capture written → {out}  ({len(store['web'])} web, {len(store['usb'])} usb)")
     return 0
 
 
