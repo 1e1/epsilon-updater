@@ -66,6 +66,51 @@ def test_dnload_to_sram_on_flash_alt_is_silently_ignored():
     assert client.read(addr, 32) == before  # unchanged — the wrong-backend write was ignored
 
 
+def test_no_alt_map_keeps_current_alt():
+    # A device advertising no alt map (older model / test double) → routing is a no-op and writes
+    # use the current alt. The default virtual device has no alt_regions.
+    dev = virtual_calculator("n0110")
+    client = DfuClient(dev, sleep=lambda *_: None)
+    assert client._alt_map() is None
+    addr, size = read_identity(client, dev.bcdDevice).storage_ram
+    write_storage(client, addr, read_storage(client, addr, size), capacity=size)
+    assert client._current_alt == C.ALT_FLASH  # never switched
+
+
+def test_select_alt_without_setter_is_a_noop():
+    # A device that cannot switch alt-settings (no set_interface_altsetting): select_alt records
+    # the intent without erroring, so routing degrades gracefully.
+    class _NoSetter:
+        idVendor = C.USB_VID
+        idProduct = C.PID_EPSILON
+        bcdDevice = 0x0110
+
+    client = DfuClient(_NoSetter(), sleep=lambda *_: None)
+    client.select_alt(C.ALT_SRAM)
+    assert client._current_alt == C.ALT_SRAM
+
+
+def test_alt_for_address_outside_all_regions_is_none():
+    dev, client = _client()
+    assert client._alt_for(0x00000000) is None  # owned by neither Flash nor SRAM
+
+
+def test_make_idle_recovers_from_busy_and_error_states():
+    # The DFU FSM helper must return to dfuIDLE from any state: ABORT out of DNLOAD_IDLE, and
+    # CLEAR_STATUS out of dfuERROR. Locks down the recovery logic for future refactoring.
+    dev = virtual_calculator("n0110")
+    cli = DfuClient(dev, sleep=lambda *_: None)
+    cli.write(dev.model.memory.sram_origin, b"\x00" * 16)  # leaves the device in DNLOAD_IDLE
+    assert dev.state == C.STATE_DNLOAD_IDLE
+    cli.make_idle()
+    assert dev.state == C.STATE_DFU_IDLE
+    with pytest.raises(Exception):
+        cli.write(0x00000000, b"\x01" * 16)  # out-of-range → errTARGET → dfuERROR
+    assert dev.state == C.STATE_ERROR
+    cli.make_idle()
+    assert dev.state == C.STATE_DFU_IDLE
+
+
 def test_write_storage_raises_on_readback_mismatch():
     # A silent no-op must fail loudly, not pretend success.
     class Dud:

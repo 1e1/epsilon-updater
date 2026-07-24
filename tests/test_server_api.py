@@ -90,6 +90,38 @@ def test_user_url_entry_is_proxy_allowlisted(tmp_path, monkeypatch):
         proxy._require_allowed(s.store, "https://evil.example/x.nwa")  # not listed → refused
 
 
+def test_install_firmware_download_branch(tmp_path, monkeypatch):
+    # Cover the signed-in "download the official .dfu" path without touching the network.
+    from types import SimpleNamespace
+
+    from nwupdater.catalog import auth as A
+    from nwupdater.catalog import download as D
+    from nwupdater.install.image import FirmwareImage
+    from nwupdater.models import MODELS
+
+    s = Session(connect=False, cache_dir=tmp_path)
+    s.attach_demo("n0110")
+    blob = FirmwareImage.synthetic(MODELS[0x0110], version="25.2.0").to_dfuse()
+    monkeypatch.setattr(A, "load_auth", lambda **k: SimpleNamespace(is_expired=lambda: False))
+    monkeypatch.setattr(
+        D, "fetch_firmware", lambda *a, **k: (SimpleNamespace(version="25.2.0", patch_level="c0ffee"), blob)
+    )
+    monkeypatch.setattr(D, "record_download", lambda *a, **k: "/tmp/nwupdater-provenance.log")
+    r = s.install_firmware("", download=True, channel="stable")
+    assert r["downloaded"] is True and r["from_cache"] is False
+    assert r["to_version"] == "25.2.0" and r["sha256"]
+
+
+def test_install_firmware_download_requires_auth(tmp_path, monkeypatch):
+    from nwupdater.catalog import auth as A
+
+    s = Session(connect=False, cache_dir=tmp_path)
+    s.attach_demo("n0110")
+    monkeypatch.setattr(A, "load_auth", lambda **k: None)  # not signed in
+    with pytest.raises(ValueError, match="authentication required"):
+        s.install_firmware("25.2.0", download=True)
+
+
 def test_ui_parser_rejects_removed_real_flag():
     from nwupdater import cli
 
