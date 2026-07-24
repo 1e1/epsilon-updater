@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
-from ..dfu import constants as C
 from ..dfu.protocol import DfuClient
 from ..formats.nwa import AppInfo, iter_apps
 from ..install.installer import VerificationError
@@ -106,13 +105,16 @@ class AppManager:
         new_end = off
         old_end = sum(m.sectors * SECTOR for m in current)
 
-        # erase the changed span (sector by sector) so writes land clean and stale magics die
+        # erase the changed span (sector by sector) so writes land clean and stale magics die.
+        # The erase unit is the 64 KiB app sector, not the 2048-byte transfer chunk: a DfuSe
+        # erase wipes the whole containing sector, so stepping by the chunk size would re-issue
+        # 32 redundant ERASE commands per sector (extra flash wear, slow).
         erase_from = offsets[p.first_changed] if p.first_changed < len(offsets) else new_end
         addr = self.start + erase_from
         end = self.start + max(old_end, new_end)
         while addr < end:
             self.client.erase_page(addr)
-            addr += C.TRANSFER_SIZE
+            addr += SECTOR
 
         for i in range(p.first_changed, len(target)):
             at = self.start + offsets[i]
