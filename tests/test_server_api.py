@@ -1,8 +1,26 @@
 """Web-session API for scripts & device-truth app management (virtual device, offline)."""
 
+import pytest
+
 from nwupdater.catalog.firmware import FirmwareCatalog
 from nwupdater.formats.nwa import build_nwa
 from nwupdater.server.session import Session
+
+
+def test_install_and_preload_when_disconnected_raise_valueerror():
+    # Regression: bcd is None while disconnected; formatting it raised TypeError, not a clean
+    # "no calculator connected" ValueError.
+    s = Session(connect=False)
+    with pytest.raises(ValueError):
+        s.install_firmware("25.2.0")
+    with pytest.raises(ValueError):
+        s.preload("25.2.0")
+
+
+def test_ui_parser_rejects_removed_real_flag():
+    from nwupdater import cli
+    with pytest.raises(SystemExit):  # --real was never read and is removed from the ui subparser
+        cli.main(["ui", "--real", "--no-browser"])
 
 
 def test_scripts_list_and_push_and_delete():

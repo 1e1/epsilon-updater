@@ -209,7 +209,8 @@ def _cmd_install(args) -> int:
         print(f"sha256    : {sha256}")
         print(f"provenance: logged to {log_path}")
     elif args.dfuse:
-        image = FirmwareImage.from_dfuse(open(args.dfuse, "rb").read())
+        with open(args.dfuse, "rb") as f:
+            image = FirmwareImage.from_dfuse(f.read())
         print(f"image     : {args.dfuse} (DfuSe, {image.total_size} B)")
     else:
         image = FirmwareImage.synthetic(model, version=args.to_version)
@@ -740,7 +741,6 @@ def main(argv=None) -> int:
     p_ui.add_argument("--host", default="127.0.0.1", help="listen address (loopback by default)")
     p_ui.add_argument("--port", type=int, default=8765, help="listen port")
     p_ui.add_argument("--no-browser", action="store_true", help="do not open the browser")
-    p_ui.add_argument("--real", action="store_true", help="drive a real calculator (pyusb)")
     p_ui.add_argument("--single-instance", action="store_true", help="reuse an already-running instance")
     p_ui.add_argument("--idle-timeout", type=float, default=0, help="auto-stop after N s idle (0=disabled)")
     p_ui.set_defaults(func=_cmd_ui)

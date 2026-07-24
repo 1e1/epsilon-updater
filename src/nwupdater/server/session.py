@@ -285,6 +285,8 @@ class Session:
         return {**st, "expires_in_days": expires_in_days}
 
     def preload(self, version: str) -> dict:
+        if not self.connected:
+            raise ValueError("no calculator connected")
         if self.model is None:
             raise ValueError(f"unknown model (bcd 0x{self.bcd:04x})")
         v, blob, real = self._fetch_or_synth(self.model, version)
@@ -329,6 +331,8 @@ class Session:
     # -- writes (against the virtual device) ---------------------------------------
     def install_firmware(self, to_version: str, *, from_cache: bool = False,
                          download: bool = False, channel: str = "stable") -> dict:
+        if not self.connected:
+            raise ValueError("no calculator connected")
         if self.model is None:
             raise ValueError(f"unknown model (bcd 0x{self.bcd:04x})")
         used_cache = used_download = False

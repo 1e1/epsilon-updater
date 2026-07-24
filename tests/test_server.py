@@ -188,6 +188,14 @@ def test_non_numeric_content_length_does_not_500(server):
     assert "500" not in status  # garbage Content-Length is tolerated, treated as empty body
 
 
+def test_guard_accepts_ipv6_loopback_host_with_port(server):
+    port = int(server.rsplit(":", 1)[1])
+    # Host "[::1]:port" is loopback and must pass the guard, not be rejected as a foreign origin.
+    resp = _raw(port, f"GET /api/ping HTTP/1.0\r\nHost: [::1]:{port}\r\n\r\n")
+    status = resp.split("\r\n", 1)[0]
+    assert "200" in status and "403" not in status
+
+
 def test_install_local_nwa(server):
     import base64
 

@@ -20,6 +20,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import instance
 from .session import Session
@@ -58,9 +59,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             from our own page send a matching Origin (or none, for top-level GET) and pass.
             """
             port = self.server.server_address[1]
-            loopback = {"127.0.0.1", "localhost", "[::1]", "::1"}
-            host = (self.headers.get("Host") or "").strip().lower()
-            hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+            loopback = {"127.0.0.1", "localhost", "::1"}
+            host = (self.headers.get("Host") or "").strip()
+            # urlsplit unwraps a bracketed IPv6 literal and strips the :port uniformly. A naive
+            # rsplit/count(":") mishandles "[::1]:8765" (multiple colons) -> false 403.
+            try:
+                hostname = (urlsplit("//" + host).hostname or "").lower()
+            except ValueError:
+                return False
             if hostname not in loopback:
                 return False
             origin = self.headers.get("Origin")
