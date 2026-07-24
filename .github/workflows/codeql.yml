@@ -17,6 +17,7 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      actions: read  # CodeQL reads the workflow run it belongs to; without this it fails with "Resource not accessible by integration"
     strategy:
       fail-fast: false
       matrix:

@@ -85,6 +85,10 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}.zip
+          # Per-push builds are for immediate download from the run; keep them short so the
+          # private-repo artifact storage quota can't fill up. Release binaries (on tags) are
+          # attached to the GitHub Release, not kept as artifacts, so this doesn't affect them.
+          retention-days: 7
 
   # Single job that owns the Release, so matrix jobs never race to create it.
   release:

@@ -50,6 +50,9 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}.zip
+          # Consumed by the release job in the same run and then attached to the Release, so the
+          # artifact copy is redundant afterwards — keep it short to spare the storage quota.
+          retention-days: 7
 
   release:
     needs: build
