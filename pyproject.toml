@@ -62,13 +62,10 @@ warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
 
-# Deferred: these modules carry latent Optional/None-attribute issues that are cleanest to
-# resolve alongside the planned server-layer refactor (session/httpd God-object split) and a
-# typing pass over the capture tools. Type-checked but not gating yet.
+# Deferred: the capture tools and the virtual-device test harness carry latent typing issues
+# that are lower priority than the shipped library/server. Type-checked but not gating yet.
 [[tool.mypy.overrides]]
 module = [
-    "nwupdater.server.session",
-    "nwupdater.server.httpd",
     "nwupdater.tools.*",
     "nwupdater.testing.virtual_dfu",
 ]

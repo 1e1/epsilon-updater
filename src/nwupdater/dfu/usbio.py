@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 from . import constants as C
 from .layout import parse_memory_layout
-from .protocol import read_string_descriptor
+from .protocol import UsbDeviceLike, read_string_descriptor
 
 
 class UsbError(RuntimeError):
@@ -46,7 +46,7 @@ class InterfaceClaimError(UsbError):
 
 @dataclass
 class OpenDevice:
-    dev: object          # the pyusb usb.core.Device (opaque here)
+    dev: UsbDeviceLike   # the pyusb usb.core.Device or the virtual device (structural contract)
     bcd_device: int
     interface: int       # DFU interface number (wIndex for control transfers)
     alt_setting: int

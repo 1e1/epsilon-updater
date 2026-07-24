@@ -20,6 +20,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlsplit
 
 from . import instance
@@ -34,7 +35,7 @@ class _BodyTooLarge(Exception):
 
 
 def _handler(session: Session, web_dir: Path, control: dict | None = None):
-    control = control if control is not None else {}
+    ctrl: dict = control if control is not None else {}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "nwupdater/0.1"
@@ -58,7 +59,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             ``Origin`` is present that is not our own (cross-origin POST). Same-origin requests
             from our own page send a matching Origin (or none, for top-level GET) and pass.
             """
-            port = self.server.server_address[1]
+            port = cast(tuple, self.server.server_address)[1]
             loopback = {"127.0.0.1", "localhost", "::1"}
             host = (self.headers.get("Host") or "").strip()
             # urlsplit unwraps a bracketed IPv6 literal and strips the :port uniformly. A naive
@@ -138,7 +139,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
         # -- routing ---------------------------------------------------------------
         def do_GET(self):
             path = self.path.split("?", 1)[0]
-            control["last"] = time.time()
+            ctrl["last"] = time.time()
             if path.startswith("/api/") and not self._guard():
                 self._json({"error": "forbidden origin"}, 403)
                 return
@@ -173,7 +174,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
 
         def do_POST(self):
             path = self.path.split("?", 1)[0]
-            control["last"] = time.time()
+            ctrl["last"] = time.time()
             if not self._guard():
                 self._json({"ok": False, "error": "forbidden origin"}, 403)
                 return
@@ -248,8 +249,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.set_scripts(body.get("scripts", [])))
                 elif path == "/api/quit":
                     self._json({"ok": True})
-                    if control.get("shutdown"):
-                        control["shutdown"]()
+                    if ctrl.get("shutdown"):
+                        ctrl["shutdown"]()
                 else:
                     self._json({"error": "unknown endpoint"}, 404)
             except Exception as exc:

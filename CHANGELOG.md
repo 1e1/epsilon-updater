@@ -6,6 +6,13 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Ajouté
+
+- **Capacités par device** (`nwupdater.capabilities`) : un resolver unique
+  (`structural ∧ observed ∧ policy`) décide ce qu'un appareil peut faire (mise à jour firmware,
+  apps `.nwa`, scripts Python). Le serveur l'expose dans le payload d'identité et l'utilise pour
+  masquer automatiquement les ateliers non pertinents ; overlay `Policy` (ex. mode classe).
+
 ### Corrigé
 
 - **Sécurité — fuite de jeton d'authentification** : le cookie `remember_user_token` n'est
@@ -32,12 +39,17 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   `EXTERNAL_APP_SECTOR`, magies `platform_info`) ; helpers `cstr`/`fixed` uniques.
 - **Couche Python en anglais** (serveur, session, dfudiff, usbio), conformément à la règle
   « sortie CLI/Python en anglais » ; la localisation FR/EN reste gérée côté interface web.
+- **Architecture** : point d'ouverture USB unique (`usbio.open_calculator`) éliminant
+  l'inversion de couche `session → cli` ; bloc d'ouverture device factorisé dans le CLI
+  (`_open_device`) ; primitives d'install d'app partagées (`validate_nwa`, `write_verified`) ;
+  proxy de téléchargement d'apps extrait (`apps.proxy`, garde SSRF unique).
 
 ### Outillage
 
 - Version en **source unique** (`nwupdater.__version__`, relue par `pyproject` via
   `dynamic`) ; fichier `VERSION` orphelin supprimé ; version alignée sur `1.0.0rc2`.
-- Vérification de types **mypy** + marqueur `py.typed` (cœur typé ; `server`/`tools`/`testing`
-  différés le temps du découpage serveur).
+- Vérification de types **mypy** (gating) + marqueur `py.typed` : cœur, `server.session` et
+  `server.httpd` typés et vérifiés ; seuls les outils de capture et le harnais de test virtuel
+  restent différés.
 - **bandit** rendu bloquant en CI ; matrice CI étendue à **macOS** et **Windows** (fumée) en
   plus de Linux (Python 3.10–3.12).

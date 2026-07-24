@@ -16,7 +16,7 @@ from ..dfu.protocol import DfuClient
 from ..formats.nwa import AppInfo, build_nwa
 from ..install.image import FirmwareImage
 from ..install.installer import Installer
-from ..models import MODELS, describe_bcd
+from ..models import MODELS, Model, describe_bcd
 
 
 class Session:
@@ -26,8 +26,8 @@ class Session:
         self.api_level = api_level
         self.installed_apps: list[dict] = []
         self._cache_dir = cache_dir
-        self._cache = None
-        self._last_boot_address = None  # set after a flash: address to jump to on "boot now"
+        self._cache: FirmwareCache | None = None
+        self._last_boot_address: int | None = None  # set after a flash: jump address for "boot now"
         self.channel = "stable"
         self.catalog = FirmwareCatalog.bundled()                      # Graphing N01xx (2x.x)
         self.sci_catalog = FirmwareCatalog.bundled("firmwares-n0200")  # Scientific N0200 (3.x)
@@ -43,7 +43,10 @@ class Session:
         # calculator (hardware plugged in) or an explicit demo device — it never fakes a
         # detection silently. Tests keep the old ergonomics via connect=True (default).
         self._demo_defaults = (model_name, os_version, commit)
-        self.device = self.client = self.model = self.bcd = None
+        self.device: object | None = None
+        self.client: DfuClient | None = None
+        self.model: Model | None = None
+        self.bcd: int | None = None
         self.virtual = False
         self.connected = False
         self.policy = Policy()  # UX overlay (e.g. classroom mode); feeds the capability resolver
@@ -82,6 +85,7 @@ class Session:
         return self.identity()
 
     def _on_attached(self) -> None:
+        assert self.bcd is not None
         self.model = MODELS.get(self.bcd)
         self.connected = True
         self.installed_apps = []
@@ -147,10 +151,15 @@ class Session:
         return {"channel": self.channel, "channels": list(D.CHANNELS)}
 
     # -- reads ---------------------------------------------------------------------
+    def _conn(self) -> tuple[DfuClient, int]:
+        """The connected device's ``(client, bcd)``, narrowed. Callers guard on ``connected``."""
+        assert self.client is not None and self.bcd is not None
+        return self.client, self.bcd
+
     def _identity(self) -> CalculatorIdentity:
         if not self.connected:
             raise ValueError("no calculator connected")
-        return read_identity(self.client, self.bcd)
+        return read_identity(*self._conn())
 
     def _capabilities(self, identity: CalculatorIdentity) -> Capabilities:
         """Effective capabilities for the connected device (structural ∧ observed ∧ policy)."""
@@ -160,16 +169,17 @@ class Session:
         if not self.connected:
             return {"connected": False, "virtual": False}
         i = self._identity()
+        bcd = self._conn()[1]
         caps = self._capabilities(i)
         region = i.external_apps_flash if (i.external_apps_flash and i.external_apps_flash != (0, 0)) else None
         return {
             "connected": True,
             "virtual": self.virtual,
-            "bcd_device": f"0x{self.bcd:04x}",
+            "bcd_device": f"0x{bcd:04x}",
             "model": i.model_name,
             "family": i.family,
             "mcu": self.model.mcu if self.model else None,
-            "description": describe_bcd(self.bcd),
+            "description": describe_bcd(bcd),
             "serial_number": i.serial_number,
             "os_version": i.os_version,
             "kernel_version": i.kernel_version,
@@ -255,7 +265,7 @@ class Session:
     def _serial(self) -> str | None:
         """Serial number via a standard string-descriptor read (works virtual + real)."""
         from ..dfu import constants as C
-        return self.client.get_string_descriptor(C.SERIAL_STRING_INDEX)
+        return self._conn()[0].get_string_descriptor(C.SERIAL_STRING_INDEX)
 
     def capture_sequence(self, *, timestamp: str, transport=None, model: str | None = None,
                          channel: str = "stable") -> dict:
@@ -307,7 +317,8 @@ class Session:
         signed in, else a synthetic demo image) so a whole mixed fleet is ready offline."""
         for m in MODELS.values():
             cat = self._catalog_for(m.family, self.channel)
-            fallback = cat.latest().version if cat.latest() else "0.0.0"
+            latest = cat.latest()
+            fallback = latest.version if latest else "0.0.0"
             v, blob, real = self._fetch_or_synth(m, fallback)
             self.cache.put(m.name, v, blob, real=real)
         return {"ok": True, **self.cache_status()}
@@ -363,13 +374,13 @@ class Session:
             D.record_download(manifest, sha256, when=datetime.now(timezone.utc).isoformat())
             used_download = True
         else:
-            blob = self.cache.get(self.model.name, to_version) if from_cache else None
-            if blob is not None:
-                image = FirmwareImage.from_dfuse(blob)
+            cached = self.cache.get(self.model.name, to_version) if from_cache else None
+            if cached is not None:
+                image = FirmwareImage.from_dfuse(cached)
                 used_cache = True
             else:
                 image = FirmwareImage.synthetic(self.model, version=to_version)
-        inst = Installer(self.client, self.model)
+        inst = Installer(self._conn()[0], self.model)
         plan = inst.install(image, active_slot="A", verify=True, boot=False)
         self._last_boot_address = plan.boot_address  # enables "boot now" (DFU detach+jump)
         return {
@@ -393,7 +404,7 @@ class Session:
         addr = self._last_boot_address
         if not addr:
             raise ValueError("no freshly installed firmware to boot")
-        self.client.leave(addr)
+        self._conn()[0].leave(addr)
         return {"ok": True, "jumped_to": f"0x{addr:08x}"}
 
     def install_app(self, name: str) -> dict:
@@ -402,7 +413,7 @@ class Session:
             raise ValueError(f"unknown app: {name}")
         i = self._identity()
         blob = build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
-        inst = AppInstaller(self.client, external_apps_flash=i.external_apps_flash or (0, 0),
+        inst = AppInstaller(self._conn()[0], external_apps_flash=i.external_apps_flash or (0, 0),
                             device_api_level=self.api_level)
         res = inst.install(blob)
         rec = {"name": res.name, "address": f"0x{res.address:08x}", "size": res.size}
@@ -414,7 +425,7 @@ class Session:
         info = AppInfo.parse(data)
         name = info.name or (filename or "app").rsplit(".", 1)[0]
         i = self._identity()
-        inst = AppInstaller(self.client, external_apps_flash=i.external_apps_flash or (0, 0),
+        inst = AppInstaller(self._conn()[0], external_apps_flash=i.external_apps_flash or (0, 0),
                             device_api_level=self.api_level)
         res = inst.install(data)
         rec = {"name": name, "address": f"0x{res.address:08x}", "size": res.size}
@@ -425,7 +436,7 @@ class Session:
     def _appmgr(self):
         from ..apps.manage import AppManager
         i = self._identity()
-        return AppManager(self.client, i.external_apps_flash, device_api_level=self.api_level)
+        return AppManager(self._conn()[0], i.external_apps_flash, device_api_level=self.api_level)
 
     def installed_apps_on_device(self) -> dict:
         from ..formats.appicon import decode_app_icon
@@ -486,6 +497,7 @@ class Session:
         i = self._identity()
         if not self._capabilities(i).scripts:
             return {"has_scripts": False, "capacity": 0, "scripts": []}
+        assert i.storage_ram is not None  # capabilities.scripts implies storage is present
         addr, size = i.storage_ram
         pys = python_scripts(read_storage(self.client, addr, size))
         return {"has_scripts": True, "capacity": size,
@@ -512,7 +524,8 @@ class Session:
         if not i.storage_ram:
             raise ValueError("this model has no Python scripts (no storage)")
         addr, size = i.storage_ram
-        recs, extra = read_storage(self.client, addr, size), []
+        recs = read_storage(self.client, addr, size)
+        extra: list = []
         kept = keep_pred(recs, extra)
         n = write_storage(self.client, addr, kept + extra, capacity=size)
         return {"ok": True, "written": n, "capacity": size}
