@@ -372,32 +372,32 @@ def analyze(dump_dir: str | Path) -> dict:
     findings: list[str] = []
     if cap["usb"]:
         if usb.writes:
-            findings.append(f"⚠️ {len(usb.writes)} ÉCRITURE(S) vers la calculatrice détectée(s) "
-                            "(attendu pour charger/supprimer une app ou pousser un script ; "
-                            "anormal pour un simple téléchargement de firmware).")
+            findings.append(f"⚠️ {len(usb.writes)} WRITE(S) to the calculator detected "
+                            "(expected when loading/removing an app or pushing a script; "
+                            "abnormal for a plain firmware download).")
         else:
-            findings.append("✓ aucune écriture vers la calculatrice (conforme au plan).")
+            findings.append("✓ no write to the calculator (matches the plan).")
         if usb.reads:
-            span = f"{len(usb.reads)} lecture(s), {sum(n for _, n in usb.reads)} o"
-            findings.append(f"identité lue en USB : {span} — adresses {[hex(a) for a, _ in usb.reads][:6]}.")
+            span = f"{len(usb.reads)} read(s), {sum(n for _, n in usb.reads)} B"
+            findings.append(f"identity read over USB: {span} — addresses {[hex(a) for a, _ in usb.reads][:6]}.")
         err = [s for s in usb.statuses if s[0] != 'OK']
         if err:
-            findings.append(f"⚠️ statut(s) DFU non-OK : {err[:5]}.")
+            findings.append(f"⚠️ non-OK DFU status(es): {err[:5]}.")
     if cap["web"]:
         if web["refusals"]:
-            findings.append("⚠️ REFUS serveur (≥400) : " +
+            findings.append("⚠️ server refusal(s) (≥400): " +
                             ", ".join(f"{c.status} {c.url}" for c in web["refusals"][:5]) +
-                            " — hypothèse « calculatrice non enregistrée » à vérifier.")
+                            " — check the \"calculator not registered\" hypothesis.")
         if web["enrollment_candidates"]:
-            findings.append("↳ étape(s) d'ENRÔLEMENT possible(s) : " +
+            findings.append("↳ possible ENROLLMENT step(s): " +
                             ", ".join(f"{e['method']} {e['url']}" for e in web["enrollment_candidates"][:5]))
         if web["firmware_downloads"]:
             fw = web["firmware_downloads"][0]
-            findings.append(f"téléchargement firmware : {fw['url']} → {fw['status']} "
-                            f"({fw.get('resp_len')} o, sha256 {fw.get('resp_sha256')}).")
+            findings.append(f"firmware download: {fw['url']} → {fw['status']} "
+                            f"({fw.get('resp_len')} B, sha256 {fw.get('resp_sha256')}).")
     if serials:
-        findings.append(f"🔗 n° de série lu en USB retrouvé dans un corps WEB : {serials} "
-                        "→ l'enrôlement transmet bien l'identité de la calculatrice.")
+        findings.append(f"🔗 serial number read over USB found in a WEB body: {serials} "
+                        "→ enrollment does transmit the calculator's identity.")
 
     return {
         "meta": cap["meta"],
@@ -419,32 +419,32 @@ def analyze(dump_dir: str | Path) -> dict:
 
 
 def format_report(rep: dict) -> str:
-    L = ["=== Analyse de capture (première-allumage Scientifique) ==="]
+    L = ["=== Capture analysis (Scientific first-boot) ==="]
     if rep["meta"]:
         m = rep["meta"]
-        L.append(f"contexte : {m.get('calculator', {}).get('model', '?')} "
+        L.append(f"context: {m.get('calculator', {}).get('model', '?')} "
                  f"first_boot={m.get('calculator', {}).get('first_boot')} · app {m.get('app_version', '?')}")
-    L.append("\n-- Constats --")
+    L.append("\n-- Findings --")
     if rep["findings"]:
         L.extend(f"  • {f}" for f in rep["findings"])
     else:
-        L.append("  (aucun)")
+        L.append("  (none)")
     if rep["usb"]["present"]:
-        L.append(f"\n-- USB ({len(rep['usb']['ops'])} opérations DFU) --")
-        L.append(f"  lectures : {rep['usb']['reads']}")
-        L.append(f"  écritures: {rep['usb']['writes'] or 'aucune'}")
+        L.append(f"\n-- USB ({len(rep['usb']['ops'])} DFU operations) --")
+        L.append(f"  reads : {rep['usb']['reads']}")
+        L.append(f"  writes: {rep['usb']['writes'] or 'none'}")
         if rep["usb"]["statuses"]:
-            L.append(f"  statuts  : {rep['usb']['statuses'][:8]}")
+            L.append(f"  status : {rep['usb']['statuses'][:8]}")
     if rep["web"]["present"]:
-        L.append(f"\n-- WEB ({len(rep['web']['calls'])} requêtes) --")
+        L.append(f"\n-- WEB ({len(rep['web']['calls'])} requests) --")
         for c in rep["web"]["calls"]:
             L.append(f"  {c['status'] or '---'}  {c['method']:5s} {c['kind']:12s} {c['url']}")
     by = rep.get("by_scenario") or {}
     if by and set(by) != {"?"}:
-        L.append("\n-- Carte d'API par fonctionnalité --")
+        L.append("\n-- API map by feature --")
         for sc in sorted(by):
             d = by[sc]
-            L.append(f"  [{sc}]  ({d['usb_transfers']} transferts USB)")
+            L.append(f"  [{sc}]  ({d['usb_transfers']} USB transfers)")
             for e in sorted(d["web"], key=lambda x: x["endpoint"]):
                 L.append(f"      {e['method']:5s} {e['endpoint']}  ×{e['count']} {e['statuses']}")
     return "\n".join(L)
@@ -454,9 +454,9 @@ def main(argv=None) -> int:
     import argparse
     p = argparse.ArgumentParser(
         prog="python -m nwupdater.tools.capture_analyze",
-        description="Analyse un dump de capture USB+WEB (projet non officiel).")
-    p.add_argument("dump_dir", help="répertoire du dump (meta.json, usb.jsonl, web.jsonl|web.har)")
-    p.add_argument("--json", action="store_true", help="sortie JSON")
+        description="Analyse a USB+WEB capture dump (unofficial project).")
+    p.add_argument("dump_dir", help="dump directory (meta.json, usb.jsonl, web.jsonl|web.har)")
+    p.add_argument("--json", action="store_true", help="JSON output")
     args = p.parse_args(argv)
     rep = analyze(args.dump_dir)
     print(json.dumps(rep, ensure_ascii=False, indent=2) if args.json else format_report(rep))

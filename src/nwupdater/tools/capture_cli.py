@@ -155,8 +155,8 @@ def _cmd_serve(args) -> int:
     port = httpd.server_address[1]
     url = f"http://127.0.0.1:{port}/"
     print(f"nwupdater capture : {url}")
-    print("Installe le userscript depuis la page, joue les scénarios sur numworks.com,")
-    print("puis Ctrl-C ici pour écrire capture.json (la capture est continue et persistante).")
+    print("Install the userscript from the page, run the scenarios on numworks.com,")
+    print("then Ctrl-C here to write capture.json (capture is continuous and persistent).")
     if not args.no_browser:
         try:
             webbrowser.open(url)
@@ -193,18 +193,18 @@ def main(argv=None) -> int:
                                 description="Capture/analyse des fonctions web NumWorks (non officiel).")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("serve", help="page locale : bookmarklet + checklist + réception live")
+    s = sub.add_parser("serve", help="local page: bookmarklet + checklist + live reception")
     s.add_argument("--port", type=int, default=8766)
     s.add_argument("--out", help="fichier capture.json (mode live)")
     s.add_argument("--no-browser", action="store_true")
     s.set_defaults(func=_cmd_serve)
 
-    a = sub.add_parser("analyze", help="analyser capture.json → carte d'API par fonctionnalité")
+    a = sub.add_parser("analyze", help="analyse capture.json → API map by feature")
     a.add_argument("capture")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=_cmd_analyze)
 
-    sc = sub.add_parser("scrub", help="caviarder email/série/jetons avant partage")
+    sc = sub.add_parser("scrub", help="redact email/serial/tokens before sharing")
     sc.add_argument("capture")
     sc.add_argument("-o", "--out")
     sc.add_argument("--value", action="append", default=[])

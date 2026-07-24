@@ -49,7 +49,7 @@ def test_analyze_first_boot_capture(tmp_path):
     # USB: identity read, no write to the calculator
     assert rep["usb"]["writes"] == []
     assert rep["usb"]["reads"] == [["0x20000000", len(SERIAL)]]
-    assert any("aucune écriture" in f for f in rep["findings"])
+    assert any("no write" in f for f in rep["findings"])
 
     # WEB: refusal + enrollment candidate + firmware attempt
     assert rep["web"]["refusals"] == [{"url": "https://my.numworks.com/devices", "status": 403}]
@@ -60,12 +60,12 @@ def test_analyze_first_boot_capture(tmp_path):
 
     # LINK: the serial read over USB appears in the enrollment body
     assert rep["serial_correlation"] == [SERIAL]
-    assert any("REFUS serveur" in f for f in rep["findings"])
-    assert any("série lu en USB" in f for f in rep["findings"])
+    assert any("server refusal" in f for f in rep["findings"])
+    assert any("serial number read over USB" in f for f in rep["findings"])
 
     # report renders the findings (and does not print the empty-state placeholder)
     text = CA.format_report(rep)
-    assert "(aucun)" not in text and "REFUS serveur" in text
+    assert "(none)" not in text and "server refusal" in text
 
 
 def test_write_to_calculator_is_flagged(tmp_path):
@@ -75,7 +75,7 @@ def test_write_to_calculator_is_flagged(tmp_path):
     ]))
     rep = CA.analyze(tmp_path)
     assert rep["usb"]["writes"] == [["0x98000000", 4]]
-    assert any("ÉCRITURE" in f for f in rep["findings"])
+    assert any("WRITE" in f for f in rep["findings"])
 
 
 def test_har_web_loading(tmp_path):
@@ -131,7 +131,7 @@ def test_analyze_run_capture_dict_directly():
     assert rep["usb"]["writes"] == []
     # WEB refusal surfaced from the nested RecordingTransport response
     assert {"url": "https://my.numworks.com/firmwares/n0200/stable.json", "status": 403} in rep["web"]["refusals"]
-    assert any("aucune écriture" in f for f in rep["findings"])
+    assert any("no write" in f for f in rep["findings"])
 
 
 def test_analyze_run_capture_from_capture_json(tmp_path):

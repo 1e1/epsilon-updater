@@ -52,7 +52,7 @@ def test_hook_ingestion_and_api_map_by_scenario():
 
     # control USB decoded (bulk ignored); SET_ADDRESS then identity read
     assert rep["usb"]["reads"] == [["0x20000000", 12]]
-    assert "Carte d'API par fonctionnalité" in CA.format_report(rep)
+    assert "API map by feature" in CA.format_report(rep)
 
 
 def test_serial_correlation_across_usb_and_web():
