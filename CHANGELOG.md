@@ -74,3 +74,5 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 - **Analyse de sécurité CodeQL** (Python + JavaScript de l'UI) et **Dependabot** (pip +
   github-actions) ajoutés.
 - **Fichiers communautaires** : `CODE_OF_CONDUCT.md`, templates d'issue/PR, `CODEOWNERS`.
+- **Format de code** : `ruff format` appliqué à tout le dépôt + `ruff format --check` en CI
+  (style canonique, plus de débats de formatage).
