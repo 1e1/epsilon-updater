@@ -68,3 +68,20 @@ nwupdater install --virtual n0110 --dfuse epsilon.dfu
 - **Reprise après boot [CONFIRMÉ]** : après `leave` (boot du slot flashé), l'appareil quitte le
   DFU ; regagner l'accès DFU en headless exige un **rebranchement USB** physique (l'interface web
   le gère automatiquement via son re-scan à chaud).
+- **Le tampon « officiel » / examen vient du flux d'install signé, pas des octets du slot
+  [CONFIRMÉ matériel — N0120 réelle]** : le statut « officiel » (donc la conformité examen) est posé
+  par le **flux d'installation signé**, **pas** par le contenu du slot userland. Preuve : un slot
+  flashé par cet outil contient les octets du firmware officiel **correctement rebasés** (vérifié
+  **octet-exact** ; seule différence vs le slot officiel = la **relocation d'adresse par slot**,
+  `0x90000000` vs `0x90400000`) et boote pourtant **« UNOFFICIAL SOFTWARE »**, alors que le slot
+  écrit par le flux officiel boote **« officiel »** — **octets équivalents, verdict opposé** ⇒ le
+  tampon officiel vit **hors du slot userland** (signature vérifiée par le kernel en **flash
+  interne** + attestation du flux d'install). La **mémoire est partitionnée selon le mode** : le DFU
+  userland (`0483:A291`) n'écrit **que la QSPI** (jamais la flash interne `0x08000000`) ; le
+  **bootloader ROM ST** (`0483:DF11`) écrit la **flash interne** mais **pas la QSPI** (il faut un
+  flasher chargé en RAM). Conclusion : installer un firmware **certifié examen hors ligne est
+  infaisable *par conception*** (intégrité du mode examen) — on peut **copier les octets** mais
+  **pas forger l'attestation d'install signée**. Le drapeau « non officiel » est **par slot** :
+  rebooter le slot officiel resté intact ne restaure l'état officiel que **temporairement** (au boot
+  suivant, le bootloader **re-sélectionne le dernier slot écrit**). Firmware certifié →
+  **my.numworks.com**.

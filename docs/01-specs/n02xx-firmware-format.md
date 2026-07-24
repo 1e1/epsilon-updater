@@ -43,6 +43,17 @@ c'est donc là qu'on écrit. Pas de QSPI, **pas de double-slot A/B**.
 > en tête si on implémente un jour la lecture/écriture bas niveau N0200 : l'adresse annoncée par
 > le descripteur (reads) et la cible du `.dfu` (write bootloader) ne coïncident pas.
 
+> **[CONFIRMÉ matériel — N0200 réelle]** En **runtime** (PID `0xA51A`), la N0200 n'expose dans sa
+> chaîne de layout DFU **qu'une seule** région : `@FirmwareHeader/0x080040C0/01*64Ba`. Lecture fine
+> du descripteur : la lettre de type **`a` = *readable-only*** (lecture seule) et `01*64B` vaut
+> **64 octets** (et **non** 64 KiB) — c'est donc une fenêtre de **64 octets en LECTURE SEULE**,
+> **aucune région inscriptible n'est annoncée**. Le firmware réel (~232 Kio @ `0x98000000`) n'est
+> dans cet état **ni adressable ni inscriptible**. Le flux officiel doit d'abord **basculer
+> l'appareil en mode flasher**, bascule **déclenchée logiciellement** — la N0200 **n'a pas de bouton
+> reset** physique. Combiné au **mono-slot** (pas de repli A/B) et au firmware **chiffré/signé**, le
+> flashage **hors ligne** du firmware N0200 avec cet outil **n'est ni viable ni sûr** → passer par
+> **my.numworks.com**.
+
 ## Charge utile : chiffrée / opaque
 
 Mesures sur les 237 297 octets de l'élément :

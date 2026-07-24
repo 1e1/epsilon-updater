@@ -6,6 +6,16 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [1.0.0-rc.5] - 2026-07-25
+
+### Ajouté
+
+- **Avertissement examens dans l'interface** : bandeau persistant dans la carte de mise à jour et
+  **dialogue de confirmation renforcé** (FR/EN) avant tout flash — flasher un firmware via cet
+  outil, **même l'image officielle**, marque l'appareil « UNOFFICIAL SOFTWARE » et rompt la
+  conformité au mode examen ; renvoi vers my.numworks.com pour un firmware certifié. S'applique
+  aussi au flash « mode classe » en un clic depuis le cache.
+
 ### Corrigé
 
 - **Flash firmware A/B — slot inactif uniquement** : sur un appareil en marche le slot **actif**
@@ -16,11 +26,21 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ### Documentation
 
-- **Avertissement examens / « logiciel non officiel »** : flasher un firmware avec cet outil —
-  **même l'image officielle** — marque la calculatrice « UNOFFICIAL SOFTWARE » et la rend **non
-  conforme au mode examen** (constaté sur N0120 ; l'authenticité tient au flux de mise à jour signé
-  officiel, non reproduit hors ligne). Documenté dans `DISCLAIMER.md`, `README.md` et
-  `docs/03-transfer-install/`. Restauration via my.numworks.com.
+- **Certification examen non reproductible hors ligne** : le statut « officiel » (donc la
+  conformité au mode examen) est posé par le **flux d'installation signé**, **pas** par les octets
+  du slot userland. Constaté sur N0120 réelle : un slot flashé par cet outil contient les octets
+  officiels **rebasés octet-exact** (seule différence = la relocation d'adresse par slot,
+  `0x90000000` vs `0x90400000`) et boote pourtant « UNOFFICIAL SOFTWARE ». On peut copier les
+  octets mais **pas forger l'attestation d'install signée** → installer un firmware certifié examen
+  **hors ligne est infaisable par conception**. Firmware certifié via my.numworks.com. Détaillé
+  dans `docs/03-transfer-install/implementation.md`.
+- **N0200 — flash hors ligne non viable** : en runtime (PID `0xA51A`), la N0200 n'expose qu'une
+  région DFU `@FirmwareHeader/0x080040C0/01*64Ba` de **64 octets en lecture seule** (type `a`),
+  aucune région inscriptible ; le firmware réel (~232 Kio @ `0x98000000`) n'y est ni adressable ni
+  inscriptible. Le flux officiel doit basculer l'appareil en mode flasher (déclenché
+  logiciellement — pas de bouton reset). Combiné au mono-slot et au firmware chiffré/signé, le
+  flashage **hors ligne du firmware N0200 n'est ni viable ni sûr** avec cet outil → my.numworks.com.
+  Détaillé dans `docs/01-specs/n02xx-firmware-format.md`.
 
 ## [1.0.0-rc.4] - 2026-07-24
 
