@@ -53,12 +53,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             self.end_headers()
             self.wfile.write(body)
 
-        def _guard(self) -> bool:
+        def _guard(self, *, require_origin: bool = False) -> bool:
             """True if the request may touch the API. Blocks CSRF & DNS-rebinding.
 
-            Rejects when the ``Host`` header is not a loopback name (rebinding), or when an
-            ``Origin`` is present that is not our own (cross-origin POST). Same-origin requests
-            from our own page send a matching Origin (or none, for top-level GET) and pass.
+            Always rejects when the ``Host`` header is not a loopback name (rebinding), or when a
+            present ``Origin`` is not our own. With ``require_origin`` (mutating requests) it also
+            rejects when NO ``Origin`` is sent: a same-origin fetch/XHR POST from our own page
+            always carries one, so its absence means a cross-context or non-browser client. Reads
+            (GET) stay lenient — top-level navigation legitimately omits Origin.
             """
             port = cast(tuple, self.server.server_address)[1]
             loopback = {"127.0.0.1", "localhost", "::1"}
@@ -75,9 +77,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             if origin:
                 allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}",
                            f"http://[::1]:{port}"}
-                if origin.strip().lower() not in allowed:
-                    return False
-            return True
+                return origin.strip().lower() in allowed
+            return not require_origin
 
         def _read_json(self) -> dict:
             try:
@@ -185,7 +186,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
         def do_POST(self):
             path = self.path.split("?", 1)[0]
             ctrl["last"] = time.time()
-            if not self._guard():
+            if not self._guard(require_origin=True):  # mutations require a same-origin Origin
                 self._json({"ok": False, "error": "forbidden origin"}, 403)
                 return
             try:

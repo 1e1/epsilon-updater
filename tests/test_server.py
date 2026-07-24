@@ -29,8 +29,10 @@ def _get(base, path):
 
 
 def _post(base, path, payload):
+    # A real browser's fetch() sends Origin on a same-origin POST; the CSRF guard requires it.
     req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json"}, method="POST")
+                                 headers={"Content-Type": "application/json", "Origin": base},
+                                 method="POST")
     with urllib.request.urlopen(req, timeout=5) as r:
         return json.loads(r.read())
 
@@ -175,17 +177,35 @@ def test_static_path_traversal_is_404(tmp_path):
 def test_oversized_body_returns_413(server):
     port = int(server.rsplit(":", 1)[1])
     # Content-Length way above MAX_BODY (16 MiB): rejected with 413 before any body is read.
-    resp = _raw(port, "POST /api/quit HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+    resp = _raw(port, f"POST /api/quit HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      f"Origin: http://127.0.0.1:{port}\r\n"
                       "Content-Length: 20000000\r\n\r\n")
     assert "413" in resp.split("\r\n", 1)[0]
 
 
 def test_non_numeric_content_length_does_not_500(server):
     port = int(server.rsplit(":", 1)[1])
-    resp = _raw(port, "POST /api/channel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+    resp = _raw(port, f"POST /api/channel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      f"Origin: http://127.0.0.1:{port}\r\n"
                       "Content-Length: not-a-number\r\n\r\n")
     status = resp.split("\r\n", 1)[0]
     assert "500" not in status  # garbage Content-Length is tolerated, treated as empty body
+
+
+def test_post_without_origin_is_forbidden(server):
+    port = int(server.rsplit(":", 1)[1])
+    # A state-changing POST with no Origin (CSRF / non-browser client) is rejected up front.
+    resp = _raw(port, "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
+    assert "403" in resp.split("\r\n", 1)[0]
+
+
+def test_post_with_foreign_origin_is_forbidden(server):
+    port = int(server.rsplit(":", 1)[1])
+    resp = _raw(port, "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                      "Origin: http://evil.example\r\n"
+                      "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
+    assert "403" in resp.split("\r\n", 1)[0]
 
 
 def test_guard_accepts_ipv6_loopback_host_with_port(server):
