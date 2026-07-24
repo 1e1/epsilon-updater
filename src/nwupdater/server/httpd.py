@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import cast
 from urllib.parse import urlsplit
 
+from ..apps.proxy import MAX_APP_BYTES
 from . import instance
 from .session import Session
 
@@ -121,14 +122,23 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 self._json({"error": str(exc)}, 400)
                 return
             try:
+                # Cap the proxied size even though the URL is catalogue-allowlisted: a rogue CDN
+                # behind a listed URL must not be able to stream unbounded data through us.
+                if length is not None and length > MAX_APP_BYTES:
+                    self._json({"error": "file too large"}, 400)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 if length is not None:
                     self.send_header("Content-Length", str(length))
                 self.end_headers()
+                sent = 0
                 while True:
                     chunk = up.read(65536)
                     if not chunk:
+                        break
+                    sent += len(chunk)
+                    if sent > MAX_APP_BYTES:  # absent or lying Content-Length — stop, don't OOM
                         break
                     self.wfile.write(chunk)
             except (BrokenPipeError, ConnectionResetError):
