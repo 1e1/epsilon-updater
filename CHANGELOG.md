@@ -6,6 +6,8 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [1.0.0-rc.4] - 2026-07-24
+
 ### Ajouté
 
 - **Branchement à chaud** : une calculatrice branchée *après* le lancement est détectée
@@ -28,6 +30,10 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   **chaque** alt-setting du device (`usbio`) et route chaque écriture vers l'alt propriétaire de
   l'adresse (Flash / SRAM / …). Aucune adresse ni alt codée en dur → N0100 … futur N0130 pris en
   charge automatiquement.
+- **Export apps/scripts vers l'ordinateur** : les apps `.nwa` et scripts `.py` installés sur la
+  calculatrice peuvent être **exportés vers l'ordinateur** (bibliothèque locale sous le dossier
+  apps/scripts utilisateur), avec un indicateur « déjà sur l'ordinateur » quand un fichier de même
+  nom et taille y est déjà présent.
 
 ### Corrigé
 
@@ -38,6 +44,16 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   *no-op silencieux* car émise sur l'alt-setting `@Flash`. Elle est désormais routée vers l'alt
   `@SRAM` (découverte du device) et **vérifiée par relecture** (`write_storage` lève si l'écriture
   n'atterrit pas). Confirmé write→verify→rollback sur une N0120 réelle.
+
+### Outillage
+
+- **Harnais de test JS (Playwright)** : `tests/test_ui_logic.py` teste la logique de `app.js` en
+  navigateur réel — logique pure (planificateur d'écriture, résolveur de cache par modèle,
+  échappement `jsStr`) via `page.evaluate`, et interaction (staging → « Écrire » → mise à jour de
+  la liste device). Un filet de sécurité pour refactorer l'interface.
+- **Couverture durcie** à l'aide de calculatrices réelles : tests précis du routage d'alt-setting,
+  de la découverte multi-alt (`usbio`), de la reprise de la machine à états DFU (`make_idle`), de
+  la vérification d'écriture du storage et de la branche de téléchargement firmware.
 
 ## [1.0.0-rc.3] - 2026-07-24
 
