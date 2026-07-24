@@ -120,6 +120,7 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
             "    (ex. N0110 : RESET en maintenant la touche 6 ; écran noir, LED),\n"
             "  • vérifiez le câble (données, pas seulement charge),\n"
             f"  • VID 0x{vid:04x}, PID attendus : {', '.join(f'0x{p:04x}' for p in pids)}.")
+    assert matched_pid is not None  # set alongside dev in the scan loop above
 
     # 2. activate configuration (idempotent; ignore if already configured)
     try:

@@ -92,6 +92,8 @@ def plan_install(model: Model, image: FirmwareImage, *, active_slot: str = "A") 
         boot = _find_userland(image.segments)
         return InstallPlan(list(image.segments), None, boot, image.total_size)
 
+    # has_ab_slots implies an external QSPI flash origin (see the models.py memory maps).
+    assert mem.external_flash_origin is not None
     slot_a = mem.external_flash_origin
     slot_b = slot_a + mem.slot_size
     has_a = any(slot_a <= s.address < slot_b for s in image.segments)

@@ -4,7 +4,10 @@
 fichier ``DISCLAIMER.md`` à la racine.
 """
 
-__version__ = "0.0.1"
+# Single source of truth for the version. pyproject.toml reads it back via
+# [tool.setuptools.dynamic]; diagnose._version falls back to it when the package
+# metadata is unavailable (e.g. running from source via PYTHONPATH=src).
+__version__ = "1.0.0rc2"
 
 # ----------------------------------------------------------------------------------------
 # Avertissement affiché un peu partout (CLI, UI web, docs). Le flashage d'une calculatrice

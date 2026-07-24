@@ -1,6 +1,6 @@
 [project]
 name = "nwupdater"
-version = "0.0.2rc1"
+dynamic = ["version"]
 description = "Unofficial, hobby headless updater for NumWorks calculators (Graphique N01xx / Scientifique N02xx) without Chrome/WebUSB — no warranty, use at your own risk"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ dependencies = []
 [project.optional-dependencies]
 usb = ["pyusb>=1.3", "libusb-package>=1.0"]  # talk to REAL hardware (bundled libusb backend)
 auth = ["certifi>=2024.0"]            # CA bundle for TLS on Python builds without system CAs
-dev = ["pytest>=8", "ruff>=0.11", "bandit>=1.8"]
+dev = ["pytest>=8", "ruff>=0.11", "bandit>=1.8", "mypy>=1.8"]
 
 [project.urls]
 Repository = "https://github.com/1e1/epsilon-updater"
@@ -35,10 +35,14 @@ nwupdater-capture = "nwupdater.tools.capture_cli:main"
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.dynamic]
+version = { attr = "nwupdater.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
+"nwupdater" = ["py.typed"]
 "nwupdater.catalog" = ["data/*.json"]
 "nwupdater.apps" = ["data/*.json"]
 "nwupdater.server" = ["web/*"]
@@ -47,6 +51,27 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+# Pragmatic, not strict: the goal is to catch real type errors without drowning a hobby
+# project in churn. Third-party stubs (pyusb/libusb/certifi) are absent by design.
+ignore_missing_imports = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Deferred: these modules carry latent Optional/None-attribute issues that are cleanest to
+# resolve alongside the planned server-layer refactor (session/httpd God-object split) and a
+# typing pass over the capture tools. Type-checked but not gating yet.
+[[tool.mypy.overrides]]
+module = [
+    "nwupdater.server.session",
+    "nwupdater.server.httpd",
+    "nwupdater.tools.*",
+    "nwupdater.testing.virtual_dfu",
+]
+ignore_errors = true
 
 [tool.ruff]
 line-length = 100

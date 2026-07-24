@@ -33,7 +33,8 @@ def _version() -> str:
         from importlib.metadata import version
         return version("nwupdater")
     except Exception:
-        return "0.0.1"
+        from . import __version__
+        return __version__
 
 
 def diagnose(device, *, interface: int = 0, bcd_device: int | None = None,
