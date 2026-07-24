@@ -53,14 +53,15 @@ class Session:
 
     # -- device attach / detach ----------------------------------------------------
     def attach_real(self) -> dict:
-        """Open a real calculator over USB (pyusb). Raises a plain error if none is plugged
-        in (the CLI helper exits via SystemExit; we convert it so callers can stay running)."""
-        from .. import cli
+        """Open a real calculator over USB (pyusb). Raises a plain RuntimeError if none is
+        plugged in, so a long-running server stays up and reports it instead of exiting."""
+        from ..dfu import usbio
         try:
-            self.device, self.bcd, _iface = cli._open_real_device()
-        except SystemExit as exc:
-            raise RuntimeError("no calculator connected") from exc
-        self.client = DfuClient(self.device, interface=_iface)
+            od = usbio.open_calculator()
+        except usbio.UsbError as exc:
+            raise RuntimeError(str(exc)) from exc
+        self.device, self.bcd = od.dev, od.bcd_device
+        self.client = DfuClient(self.device, interface=od.interface)
         self.virtual = False
         self._on_attached()
         return self.identity()

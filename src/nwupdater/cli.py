@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
+from typing import Callable, NamedTuple
 
 from . import DISCLAIMER_SHORT
 from .dfu.identity import read_identity
@@ -24,16 +26,9 @@ def _print_disclaimer() -> None:
 
 
 def _cmd_identify(args) -> int:
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-        print(f"[virtual] {describe_bcd(bcd)}")
-    else:
-        dev, bcd, _iface = _open_real_device()
-        client = DfuClient(dev, interface=_iface)
-        print(describe_bcd(bcd))
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
+    print(f"[virtual] {describe_bcd(bcd)}" if args.virtual else describe_bcd(bcd))
 
     ident = read_identity(client, bcd)
     print(f"  model     : {ident.model_name} ({ident.family})")
@@ -66,14 +61,8 @@ def _cmd_catalog(args) -> int:
         src = "bundled snapshot"
 
     # identity (virtual by default so it runs without USB)
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-    else:
-        dev, bcd, _iface = _open_real_device()
-        client = DfuClient(dev, interface=_iface)
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
     ident = read_identity(client, bcd)
 
     latest = catalog.latest()
@@ -155,14 +144,8 @@ def _cmd_install(args) -> int:
     from .models import MODELS
 
     _print_disclaimer()
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-    else:
-        dev, bcd, _iface = _open_real_device()
-        client = DfuClient(dev, interface=_iface)
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
 
     model = MODELS.get(bcd)
     if model is None:
@@ -249,14 +232,8 @@ def _cmd_apps(args) -> int:
     from .apps.manage import AppError, AppManager
     from .apps.store import THIRD_PARTY_WARNING, AppStore
 
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-    else:
-        dev, bcd, _iface = _open_real_device()
-        client = DfuClient(dev, interface=_iface)
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
     ident = read_identity(client, bcd)
     has_region = bool(ident.external_apps_flash and ident.external_apps_flash != (0, 0))
     mgr = AppManager(client, ident.external_apps_flash, device_api_level=args.api_level)
@@ -339,14 +316,8 @@ def _cmd_scripts(args) -> int:
     from .formats.storage import make_python, python_scripts
     from .scripts import read_storage, write_storage
 
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-    else:
-        dev, bcd, _iface = _open_real_device()
-        client = DfuClient(dev, interface=_iface)
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
     ident = read_identity(client, bcd)
     if not ident.storage_ram:
         print("this model has no Python scripts (no storage).", file=sys.stderr)
@@ -485,14 +456,9 @@ def _cmd_diagnose(args) -> int:
 
     from .diagnose import diagnose
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        report = diagnose(dev, interface=0, bcd_device=dev.bcdDevice,
-                          sleep=lambda *_: None, timestamp=ts)
-    else:
-        dev, bcd, iface = _open_real_device()
-        report = diagnose(dev, interface=iface, bcd_device=bcd, timestamp=ts)
+    opened = _open_device(args)
+    report = diagnose(opened.dev, interface=opened.iface, bcd_device=opened.bcd,
+                      sleep=opened.sleep, timestamp=ts)
 
     out = args.out or f"nwupdater-diagnostic-{ts.replace(':', '').replace('-', '')}.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -514,7 +480,6 @@ def _cmd_capture(args) -> int:
     """Bespoke capture (real hardware): USB + WEB dialogue, NO flash. Needs login + pyusb."""
     import datetime
     import json
-    import time as _t
 
     from .capture_session import run_capture
     from .catalog import auth as A
@@ -524,16 +489,11 @@ def _cmd_capture(args) -> int:
         return 2
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version)
-        bcd, iface, sleep = dev.bcdDevice, 0, (lambda *_: None)
-    else:
-        dev, bcd, iface = _open_real_device()
-        sleep = _t.sleep
+    opened = _open_device(args)
+    dev, bcd, iface, sleep = opened.dev, opened.bcd, opened.iface, opened.sleep
     # Serial number via the transport-agnostic client (works virtual + real).
     from .dfu import constants as C
-    serial = DfuClient(dev, interface=iface, sleep=sleep).get_string_descriptor(C.SERIAL_STRING_INDEX)
+    serial = opened.client.get_string_descriptor(C.SERIAL_STRING_INDEX)
 
     model = args.model or f"n{bcd:04x}"
     dump = run_capture(dev, auth=a, transport=A.UrllibTransport(), interface=iface,
@@ -564,14 +524,8 @@ def _cmd_pair(args) -> int:
     from .catalog import device as DEV
     from .models import MODELS
 
-    if args.virtual:
-        from .testing.virtual_dfu import virtual_calculator
-        dev = virtual_calculator(args.virtual, os_version=args.os_version, commit=args.commit)
-        client = DfuClient(dev, sleep=lambda *_: None)
-        bcd = dev.bcdDevice
-    else:
-        dev, bcd, iface = _open_real_device()
-        client = DfuClient(dev, interface=iface)
+    opened = _open_device(args)
+    client, bcd = opened.client, opened.bcd
     model = MODELS.get(bcd)
     if model is None:
         print(f"unknown model (bcd 0x{bcd:04x})", file=sys.stderr)
@@ -610,19 +564,50 @@ def _open_real_device():
 
     Returns ``(device, bcdDevice, interface)``. Exits with a helpful message if pyusb is
     missing or no calculator/DFU interface is available."""
-    try:
-        import usb.core
-        import usb.util
-    except ImportError:
-        print("pyusb required for real mode: pip install 'nwupdater[usb]'", file=sys.stderr)
-        raise SystemExit(2)
     from .dfu import usbio
     try:
-        od = usbio.find_calculator(usb.core, usb.util)
+        od = usbio.open_calculator()
+    except usbio.PyusbMissing as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2)
     except usbio.UsbError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1)
     return od.dev, od.bcd_device, od.interface
+
+
+def _nosleep(*_) -> None:
+    """No-op sleep for the in-memory virtual device (no real DFU polling delay)."""
+
+
+class _Opened(NamedTuple):
+    """A device opened for a CLI command (virtual or real)."""
+
+    dev: object
+    bcd: int
+    client: DfuClient
+    iface: int
+    sleep: Callable[..., None]
+
+
+def _open_device(args) -> _Opened:
+    """Open the device a CLI command targets — the in-memory virtual device when ``--virtual``,
+    otherwise a real calculator (pyusb). One place instead of the per-command copy.
+
+    ``client`` is ``DfuClient(dev, interface=iface, sleep=sleep)`` in both cases; ``iface`` and
+    ``sleep`` are also returned for the read-only harnesses (diagnose/capture) that drive the raw
+    device with their own timing."""
+    if args.virtual:
+        from .testing.virtual_dfu import virtual_calculator
+        kw: dict[str, str] = {}
+        if getattr(args, "os_version", None) is not None:
+            kw["os_version"] = args.os_version
+        if getattr(args, "commit", None) is not None:
+            kw["commit"] = args.commit
+        dev = virtual_calculator(args.virtual, **kw)
+        return _Opened(dev, dev.bcdDevice, DfuClient(dev, sleep=_nosleep), 0, _nosleep)
+    dev, bcd, iface = _open_real_device()
+    return _Opened(dev, bcd, DfuClient(dev, interface=iface), iface, time.sleep)
 
 
 def main(argv=None) -> int:

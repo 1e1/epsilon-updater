@@ -168,3 +168,22 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
 
     return OpenDevice(dev=dev, bcd_device=dev.bcdDevice, interface=interface,
                       alt_setting=alt, id_product=matched_pid, memory_layout=layout)
+
+
+def open_calculator(core=None, util=None, *, backend=None) -> OpenDevice:
+    """Import pyusb (unless ``core``/``util`` are injected) then find/configure/claim a calculator.
+
+    The single library entry point both the CLI and the local server use to reach real hardware,
+    so neither reaches into the other. Library-clean: raises :class:`PyusbMissing` when pyusb is
+    absent, or another :class:`UsbError` subclass on failure — it never prints or calls
+    ``sys.exit``, leaving each caller to present the error its own way.
+    """
+    if core is None or util is None:
+        try:
+            import usb.core
+            import usb.util
+        except ImportError as exc:
+            raise PyusbMissing(
+                "pyusb required for real mode: pip install 'nwupdater[usb]'") from exc
+        core, util = usb.core, usb.util
+    return find_calculator(core, util, backend=backend)
