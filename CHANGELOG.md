@@ -43,6 +43,10 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   l'inversion de couche `session → cli` ; bloc d'ouverture device factorisé dans le CLI
   (`_open_device`) ; primitives d'install d'app partagées (`validate_nwa`, `write_verified`) ;
   proxy de téléchargement d'apps extrait (`apps.proxy`, garde SSRF unique).
+- **Découpe des gros fichiers** : `cli.py` scindé en `cli` (argparse + dispatch) / `cli_commands`
+  (handlers) / `cli_device` (acquisition device) ; `session.py` scindé en une base `SessionBase`
+  (état + cycle de vie device) et des mixins par préoccupation (catalogue, apps, auth, firmware,
+  scripts). API publique et points d'entrée inchangés.
 
 ### Outillage
 
