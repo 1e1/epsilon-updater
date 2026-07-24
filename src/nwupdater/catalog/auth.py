@@ -129,7 +129,7 @@ class UrllibTransport:
         opener = urllib.request.build_opener(*handlers)
         req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
         try:
-            r = opener.open(req, timeout=timeout)  # noqa: S310 (hôte de confiance)
+            r = opener.open(req, timeout=timeout)
         except urllib.error.HTTPError as e:  # 3xx (no-redirect), 401, 4xx… restent exploitables
             r = e
         except urllib.error.URLError as e:  # DNS, connexion, TLS…

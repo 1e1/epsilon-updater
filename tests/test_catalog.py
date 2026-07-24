@@ -30,7 +30,7 @@ def test_catalog_sorted_newest_first_and_deduped():
     cat = FirmwareCatalog.from_json(FIXTURE + [{"version": "25.2.0", "patch_level": "dup"}])
     assert len(cat) == 4  # dedup
     assert cat.latest().version == "25.2.0"
-    assert [r.version for r in cat.releases][0] == "25.2.0"
+    assert next(r.version for r in cat.releases) == "25.2.0"
 
 
 def test_updates_for():

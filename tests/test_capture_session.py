@@ -90,7 +90,7 @@ def test_firmware_binary_never_stored():
         sleep=lambda *_: None,
         timestamp="t",
     )
-    dfu_tr = [x for x in dump["web"]["transfers"] if x["request"]["url"].endswith(".dfu")][0]
+    dfu_tr = next(x for x in dump["web"]["transfers"] if x["request"]["url"].endswith(".dfu"))
     body = dfu_tr["response"]["body"]
     assert body.get("binary") is True and "text" not in body
     assert body["size"] == len(blob) and len(body["sha256"]) == 64
@@ -157,8 +157,8 @@ def test_capture_auth_required():
 
 
 # -- HTML form inspection (device-enrollment endpoint discovery) ----------------------
-from nwupdater.capture_session import ENROLL_PORTAL_URL, inspect_enrollment  # noqa: E402
-from nwupdater.net_capture import inspect_forms  # noqa: E402
+from nwupdater.capture_session import ENROLL_PORTAL_URL, inspect_enrollment
+from nwupdater.net_capture import inspect_forms
 
 # Synthetic portal markup — ONLY exercises the parser; NOT the real NumWorks form (whose
 # exact shape a volunteer's capture will reveal).

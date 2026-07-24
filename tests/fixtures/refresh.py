@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "src")
-from nwupdater.catalog import auth as A  # noqa: E402
-from nwupdater.catalog import download as D  # noqa: E402
+from nwupdater.catalog import auth as A
+from nwupdater.catalog import download as D
 
 HERE = Path(__file__).parent
 MODELS = ("n0110", "n0200")

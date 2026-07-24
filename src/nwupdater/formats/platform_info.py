@@ -32,11 +32,11 @@ from ._bytes import fixed as _fixed
 # Re-exported for backward compatibility (tests + device.py import these from here).
 __all__ = [
     "MAGIC_PLATFORM_INFO",
-    "PLATFORM_INFO_SIZE",
     "N0200_FIRMWARE_HEADER_ADDR",
+    "PLATFORM_INFO_SIZE",
     "PlatformInfo",
-    "parse",
     "pack",
+    "parse",
 ]
 
 

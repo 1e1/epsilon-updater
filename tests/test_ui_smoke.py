@@ -14,8 +14,8 @@ import pytest
 
 sync_api = pytest.importorskip("playwright.sync_api")
 
-from nwupdater.server.httpd import make_server  # noqa: E402
-from nwupdater.server.session import Session  # noqa: E402
+from nwupdater.server.httpd import make_server
+from nwupdater.server.session import Session
 
 
 def _launch(p):

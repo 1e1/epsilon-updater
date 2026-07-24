@@ -20,13 +20,13 @@ _SECRET_FORM_KEYS = {"user[password]", "authenticity_token", "utf8"}
 _MAX_BODY = 4096  # bytes of a text body to keep; larger/binary bodies -> metadata only
 
 # -- HTML form inspection (to document a POST endpoint from a captured page) -----------
-_FORM_RE = re.compile(r"<form\b([^>]*)>(.*?)</form>", re.I | re.S)
-_FIELD_RE = re.compile(r'<(?:input|select|textarea)\b[^>]*?\bname\s*=\s*"([^"]+)"', re.I)
-_CAPTCHA_RE = re.compile(r"recaptcha|hcaptcha|turnstile", re.I)
+_FORM_RE = re.compile(r"<form\b([^>]*)>(.*?)</form>", re.IGNORECASE | re.DOTALL)
+_FIELD_RE = re.compile(r'<(?:input|select|textarea)\b[^>]*?\bname\s*=\s*"([^"]+)"', re.IGNORECASE)
+_CAPTCHA_RE = re.compile(r"recaptcha|hcaptcha|turnstile", re.IGNORECASE)
 
 
 def _attr(attrs: str, name: str) -> str | None:
-    m = re.search(rf'\b{name}\s*=\s*"([^"]*)"', attrs, re.I)
+    m = re.search(rf'\b{name}\s*=\s*"([^"]*)"', attrs, re.IGNORECASE)
     return m.group(1) if m else None
 
 
@@ -43,7 +43,7 @@ def inspect_forms(html: str) -> list[dict]:
                 "method": (_attr(attrs, "method") or "GET").upper(),
                 "fields": sorted(set(_FIELD_RE.findall(inner))),
                 "captcha": bool(_CAPTCHA_RE.search(inner) or _CAPTCHA_RE.search(attrs)),
-                "file_input": bool(re.search(r'type\s*=\s*"file"', inner, re.I)),
+                "file_input": bool(re.search(r'type\s*=\s*"file"', inner, re.IGNORECASE)),
             }
         )
     return forms

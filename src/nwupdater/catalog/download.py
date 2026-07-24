@@ -65,7 +65,7 @@ class FirmwareManifest:
     device_type_id: int | None = None  # 1 = graphique, 6 = scientifique (observé)
 
     @classmethod
-    def from_json(cls, model: str, channel: str, data) -> "FirmwareManifest":
+    def from_json(cls, model: str, channel: str, data) -> FirmwareManifest:
         if isinstance(data, (str, bytes)):
             data = json.loads(data)
         dm = data.get("device_model") or {}

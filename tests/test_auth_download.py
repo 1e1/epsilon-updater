@@ -112,7 +112,7 @@ def test_save_load_clear_roundtrip(tmp_path):
 # -- login Devise (fake transport) -----------------------------------------------------
 def test_login_with_password_success():
     token = make_token()
-    html = '<input name="authenticity_token" value="CSRF">'.encode()
+    html = b'<input name="authenticity_token" value="CSRF">'
     routes = {
         ("GET", A.SIGNIN_URL): Response(
             200, [("Set-Cookie", "_workshop_session=s3ss; path=/; httponly")], html
@@ -135,7 +135,7 @@ def test_login_with_password_success():
 
 
 def test_login_with_password_bad_credentials():
-    html = '<input name="authenticity_token" value="CSRF">'.encode()
+    html = b'<input name="authenticity_token" value="CSRF">'
     routes = {
         ("GET", A.SIGNIN_URL): Response(200, [("Set-Cookie", "_workshop_session=s; path=/")], html),
         ("POST", A.SIGNIN_URL): Response(200, [], b"<html>invalid</html>"),  # no remember token

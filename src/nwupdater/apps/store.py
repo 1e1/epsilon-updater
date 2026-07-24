@@ -48,7 +48,7 @@ class AppStore:
         self.entries = entries
 
     @classmethod
-    def from_json(cls, data) -> "AppStore":
+    def from_json(cls, data) -> AppStore:
         if isinstance(data, (str, bytes)):
             data = json.loads(data)
         apps = data["apps"] if isinstance(data, dict) else data
@@ -69,7 +69,7 @@ class AppStore:
         )
 
     @classmethod
-    def bundled(cls) -> "AppStore":
+    def bundled(cls) -> AppStore:
         try:
             raw = resources.files("nwupdater.apps").joinpath("data/community-apps.json").read_text()
         except (ModuleNotFoundError, FileNotFoundError, AttributeError):
@@ -77,7 +77,7 @@ class AppStore:
         return cls.from_json(raw)
 
     @classmethod
-    def load(cls, path: str | Path) -> "AppStore":
+    def load(cls, path: str | Path) -> AppStore:
         return cls.from_json(Path(path).read_text())
 
     def compatible(

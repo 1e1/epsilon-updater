@@ -251,10 +251,7 @@ class VirtualDfuDevice:
     def _handle_out(self, request, wValue, data):
         if request == C.DFU_DNLOAD:
             self._dnload(wValue, data)
-        elif request == C.DFU_CLRSTATUS:
-            self.status = C.STATUS_OK
-            self.state = C.STATE_DFU_IDLE
-        elif request == C.DFU_ABORT:
+        elif request == C.DFU_CLRSTATUS or request == C.DFU_ABORT:
             self.status = C.STATUS_OK
             self.state = C.STATE_DFU_IDLE
         elif request == C.DFU_DETACH:

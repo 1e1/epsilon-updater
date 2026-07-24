@@ -205,7 +205,7 @@ def _cmd_scrub(args) -> int:
     return S.main(
         [args.capture]
         + (["-o", args.out] if args.out else [])
-        + sum((["--value", v] for v in args.value), [])
+        + [arg for v in args.value for arg in ("--value", v)]
     )
 
 

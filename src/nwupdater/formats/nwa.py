@@ -36,7 +36,7 @@ class AppInfo:
     icon_address: int = 0
 
     @classmethod
-    def parse(cls, blob: bytes) -> "AppInfo":
+    def parse(cls, blob: bytes) -> AppInfo:
         if len(blob) < APPINFO_SIZE:
             return cls(0, "", 0, len(blob), valid=False)
         (magic0, api, name_addr, icon_size, icon_addr, entry, app_size, magic1) = struct.unpack(

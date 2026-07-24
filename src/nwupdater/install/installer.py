@@ -10,8 +10,8 @@ No real USB: drive it with the virtual device.
 from __future__ import annotations
 
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from ..dfu import constants as C
 from ..dfu.protocol import DfuClient

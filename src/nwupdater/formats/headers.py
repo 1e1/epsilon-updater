@@ -40,7 +40,7 @@ class SlotInfo:
     valid: bool
 
     @classmethod
-    def unpack(cls, raw: bytes) -> "SlotInfo":
+    def unpack(cls, raw: bytes) -> SlotInfo:
         size = struct.calcsize(_SLOT_INFO_FMT)
         if len(raw) < size:
             return cls(0, 0, valid=False)  # truncated buffer -> invalid, never a struct.error
@@ -66,7 +66,7 @@ class KernelHeader:
     valid: bool
 
     @classmethod
-    def unpack(cls, raw: bytes) -> "KernelHeader":
+    def unpack(cls, raw: bytes) -> KernelHeader:
         size = struct.calcsize(_KERNEL_HEADER_FMT)
         if len(raw) < size:
             return cls("", "", valid=False)  # truncated buffer -> invalid
@@ -113,7 +113,7 @@ class UserlandHeader:
     valid: bool
 
     @classmethod
-    def unpack(cls, raw: bytes) -> "UserlandHeader":
+    def unpack(cls, raw: bytes) -> UserlandHeader:
         if len(raw) < C.USERLAND_HEADER_SIZE:
             return cls("", 0, 0, (0, 0), valid=False)  # truncated buffer -> invalid
         fields = struct.unpack(_USERLAND_HEADER_FMT, raw[: C.USERLAND_HEADER_SIZE])

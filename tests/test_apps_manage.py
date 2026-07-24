@@ -85,7 +85,7 @@ def test_push_then_uninstall_compacts():
 
 
 def test_reorder():
-    cli, ident, mgr = _mgr()
+    _cli, _ident, mgr = _mgr()
     mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
     mgr.push(build_nwa("Beta", api_level=0, code=b"\x02" * 100))
     mgr.reorder(["Beta", "Alpha"])

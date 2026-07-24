@@ -361,13 +361,14 @@ def _cmd_scripts(args) -> int:
         target.append(
             make_python(name, src.read_text(encoding="utf-8"), auto_import=not args.no_auto_import)
         )
-        if not args.virtual and not args.yes:
-            if input(f"Write {name}.py to storage (RAM)? [y/N] ").strip().lower() not in (
-                "y",
-                "yes",
-            ):
-                print("cancelled.", file=sys.stderr)
-                return 1
+        if (
+            not args.virtual
+            and not args.yes
+            and input(f"Write {name}.py to storage (RAM)? [y/N] ").strip().lower()
+            not in ("y", "yes")
+        ):
+            print("cancelled.", file=sys.stderr)
+            return 1
         n = write_storage(client, addr, target, capacity=size)
         print(f"→ pushed {name}.py; storage rewritten ({n} B / {size} B), verified ✅")
         return 0

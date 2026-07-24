@@ -61,6 +61,6 @@ def open_stream(store: AppStore, url: str):
     _require_allowed(store, url)
     opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ssl_context()))
     req = urllib.request.Request(url, headers={"User-Agent": "nwupdater"})
-    resp = opener.open(req, timeout=30)  # noqa: S310 - https + catalogue allowlist enforced above
+    resp = opener.open(req, timeout=30)
     cl = resp.headers.get("Content-Length")
     return (int(cl) if cl and cl.isdigit() else None), resp

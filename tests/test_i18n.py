@@ -16,9 +16,9 @@ WEB = Path(__file__).resolve().parent.parent / "src" / "nwupdater" / "server" / 
 
 def _keys(lang: str) -> list[str]:
     txt = (WEB / "i18n.js").read_text(encoding="utf-8")
-    m = re.search(rf"\n  {lang}: \{{\n(.*?)\n  \}},", txt, re.S)
+    m = re.search(rf"\n  {lang}: \{{\n(.*?)\n  \}},", txt, re.DOTALL)
     assert m, f"{lang} block not found in i18n.js"
-    return re.findall(r"^    ([A-Za-z_][A-Za-z0-9_]*):", m.group(1), re.M)
+    return re.findall(r"^    ([A-Za-z_][A-Za-z0-9_]*):", m.group(1), re.MULTILINE)
 
 
 def test_fr_en_identical_key_order() -> None:

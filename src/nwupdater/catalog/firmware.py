@@ -47,17 +47,17 @@ class FirmwareCatalog:
 
     # -- constructors --------------------------------------------------------------
     @classmethod
-    def from_json(cls, data) -> "FirmwareCatalog":
+    def from_json(cls, data) -> FirmwareCatalog:
         if isinstance(data, (str, bytes)):
             data = json.loads(data)
         return cls([FirmwareRelease(d["version"], d.get("patch_level", "")) for d in data])
 
     @classmethod
-    def load(cls, path: str | Path) -> "FirmwareCatalog":
+    def load(cls, path: str | Path) -> FirmwareCatalog:
         return cls.from_json(Path(path).read_text())
 
     @classmethod
-    def bundled(cls, name: str = "firmwares") -> "FirmwareCatalog":
+    def bundled(cls, name: str = "firmwares") -> FirmwareCatalog:
         """A snapshot shipped with the package (offline default).
 
         ``name`` selects the track: ``firmwares`` = the public Graphing catalog (N01xx),
@@ -71,7 +71,7 @@ class FirmwareCatalog:
         return cls.from_json(raw)
 
     @classmethod
-    def fetch(cls, url: str = CATALOG_URL, *, timeout: float = 10.0) -> "FirmwareCatalog":
+    def fetch(cls, url: str = CATALOG_URL, *, timeout: float = 10.0) -> FirmwareCatalog:
         """Live fetch. Only place in Lot 2 that touches the network; never used in tests."""
         import urllib.request
 

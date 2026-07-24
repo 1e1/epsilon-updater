@@ -159,7 +159,7 @@ class FirmwareCache:
             return {"version": None, "models": [], "total_size": 0, "expires_at": None}
         oldest = min(e.downloaded_at for e in entries)
         return {
-            "version": self.cached_version(dict((e.key(), e) for e in entries)),
+            "version": self.cached_version({e.key(): e for e in entries}),
             "models": sorted(e.model for e in entries),
             "entries": [
                 {"model": e.model, "version": e.version, "size": e.size, "real": e.real}

@@ -49,7 +49,7 @@ class Capabilities:
         return asdict(self)
 
     @classmethod
-    def structural(cls, model: Model | None) -> "Capabilities":
+    def structural(cls, model: Model | None) -> Capabilities:
         """What the hardware supports, from the registry alone — no connected device required.
 
         Returns the all-off default for an unknown model (assume nothing rather than guess)."""

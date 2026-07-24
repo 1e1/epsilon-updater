@@ -117,7 +117,7 @@ def test_scrubber_stable_tokens_and_structure():
 
 
 def test_scrubber_explicit_value_first():
-    scrubbed, mapping = scrub({"s": "serial NW-0200-XYZ here"}, extra_values=["NW-0200-XYZ"])
+    scrubbed, _mapping = scrub({"s": "serial NW-0200-XYZ here"}, extra_values=["NW-0200-XYZ"])
     assert "VALUE_1" in scrubbed["s"] and "NW-0200-XYZ" not in scrubbed["s"]
 
 

@@ -76,7 +76,7 @@ class DfuError(RuntimeError):
 
 
 class DfuStatus:
-    __slots__ = ("status", "poll_timeout_ms", "state", "istring")
+    __slots__ = ("istring", "poll_timeout_ms", "state", "status")
 
     def __init__(self, raw: bytes):
         if len(raw) < 6:

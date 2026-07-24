@@ -52,7 +52,7 @@ class FirmwareImage:
         internal: bytes | None = None,
         external: bytes | None = None,
         version: str = "?",
-    ) -> "FirmwareImage":
+    ) -> FirmwareImage:
         segs: list[FirmwareSegment] = []
         if internal:
             segs.append(FirmwareSegment(model.memory.internal_flash_origin, internal))
@@ -65,7 +65,7 @@ class FirmwareImage:
     @classmethod
     def synthetic(
         cls, model: Model, *, version: str = "99.9.9", commit: str = "synth00", filler: int = 0x00
-    ) -> "FirmwareImage":
+    ) -> FirmwareImage:
         """A minimal, structurally valid OS image targeting the model's primary slot/flash."""
         mem = model.memory
         if mem.external_flash_origin is not None:
@@ -96,7 +96,7 @@ class FirmwareImage:
         )
 
     @classmethod
-    def from_dfuse(cls, raw: bytes) -> "FirmwareImage":
+    def from_dfuse(cls, raw: bytes) -> FirmwareImage:
         """Parse a DfuSe (.dfu) container. See dfu.py / UM0391."""
         if raw[:5] != b"DfuSe":
             raise ValueError("not a DfuSe file (bad prefix)")
@@ -105,7 +105,7 @@ class FirmwareImage:
         _, _ver, _total, ntargets = struct.unpack("<5sBIB", raw[:11])
         # suffix (last 16 bytes) starts with 4x u16: bcdDevice, idProduct, idVendor, bcdDFU
         suffix = raw[-16:]
-        bcd_device, id_product, id_vendor, _bcd_dfu = struct.unpack("<HHHH", suffix[:8])
+        bcd_device, id_product, _id_vendor, _bcd_dfu = struct.unpack("<HHHH", suffix[:8])
 
         segments: list[FirmwareSegment] = []
         off = 11
