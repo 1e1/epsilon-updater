@@ -71,6 +71,23 @@ def test_cbc_same_key_common_prefix_detected():
     assert verdict.startswith("COMMON PREFIX")
 
 
+def test_diff_images_report_and_cli(tmp_path, capsys):
+    from nwupdater.install.image import FirmwareImage
+    from nwupdater.models import MODELS
+    from nwupdater.tools import dfudiff
+    m = MODELS[0x0110]
+    a = FirmwareImage.synthetic(m, version="24.3.0")
+    b = FirmwareImage.synthetic(m, version="25.2.0")
+    report = dfudiff.format_report(dfudiff.diff_images(a, b), "A.dfu", "B.dfu")
+    assert "dfu-diff" in report and "@0x" in report
+    pa, pb = tmp_path / "a.dfu", tmp_path / "b.dfu"
+    pa.write_bytes(a.to_dfuse())
+    pb.write_bytes(b.to_dfuse())
+    assert dfudiff.main([str(pa), str(pb)]) == 0
+    assert dfudiff.main([str(pa), str(pb), "--json"]) == 0
+    assert '"segments"' in capsys.readouterr().out  # the --json branch emitted the machine report
+
+
 # -- image-level + file round-trip -----------------------------------------------------
 def test_diff_reports_size_delta_and_unique_segments():
     a = FirmwareImage([FirmwareSegment(ADDR, rb(1, 2048)),

@@ -63,8 +63,9 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   `dynamic`) ; fichier `VERSION` orphelin supprimé ; version alignée sur `1.0.0rc2`.
 - Vérification de types **mypy** (gating) + marqueur `py.typed` : **100 % de `src`** typé et
   vérifié, plus aucun module différé.
-- **Couverture** : `pytest-cov` avec un seuil (`fail_under = 78 %`, branche) sur le job Linux ;
-  smoke tests HTTP ajoutés pour les routes du serveur.
+- **Couverture** : `pytest-cov` avec un seuil (`fail_under = 80 %`, branche) sur le job Linux ;
+  tests ajoutés pour les routes serveur, les wrappers auth de session, `apps.proxy`, `dfudiff`
+  et le registre de modèles (couverture ~81 %).
 - **Test UI headless** (Playwright + Chromium, job CI dédié, extra `test-ui`) : charge la page
   servie, vérifie qu'elle tourne sans erreur JS et que les fetch same-origin du navigateur
   atteignent l'API durcie CSRF — la couverture automatisée qui manquait à la couche JS/UI.

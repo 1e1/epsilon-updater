@@ -61,7 +61,7 @@ source = ["nwupdater"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 78
+fail_under = 80
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
