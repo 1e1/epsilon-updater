@@ -24,10 +24,18 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   (usure et lenteur inutiles).
 - **Serveur local** : confinement des fichiers statiques via `is_relative_to` (au lieu d'un
   test de préfixe contournable) et plafond de taille sur le corps des requêtes.
+- **Serveur local — CSRF** : les requêtes mutantes (POST) exigent désormais un `Origin`
+  same-origin ; un POST sans `Origin` ou d'origine étrangère est refusé (403). Les lectures
+  (GET) restent tolérantes.
+- **Serveur local — streaming** : plafond de taille aussi au téléchargement d'app en flux
+  (pas seulement bufferisé), contre un CDN devenu hostile derrière une URL du catalogue.
+- **Interface web** : les noms d'app/script passés aux handlers inline sont échappés en
+  contexte JS (`jsStr`), fermant une injection DOM via une apostrophe dans un nom.
+- **Cache « mode classe »** : `cached_version()` renvoie `None` pour un parc multi-versions ;
+  écritures **atomiques** (temp + `os.replace`), pas de réécriture d'index sur lecture, index
+  corrompu toléré (se reconstruit).
 - **Parsing robuste** : plus de plantage sur entrée tronquée — `IndexError` sur un blob ELF
   court (icône d'app), `struct.error` sur en-têtes, image DfuSe ou commandes DFU malformés.
-- **Cache « mode classe »** : `cached_version()` renvoie désormais `None` pour un parc
-  multi-versions, au lieu d'une version arbitraire.
 - Divers : suppression du flag `--real` mort, message clair quand aucune calculatrice n'est
   connectée, fermeture de fichier explicite, faux 403 sur loopback IPv6 avec port.
 
@@ -53,8 +61,9 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 - Version en **source unique** (`nwupdater.__version__`, relue par `pyproject` via
   `dynamic`) ; fichier `VERSION` orphelin supprimé ; version alignée sur `1.0.0rc2`.
-- Vérification de types **mypy** (gating) + marqueur `py.typed` : cœur, `server.session` et
-  `server.httpd` typés et vérifiés ; seuls les outils de capture et le harnais de test virtuel
-  restent différés.
+- Vérification de types **mypy** (gating) + marqueur `py.typed` : **100 % de `src`** typé et
+  vérifié, plus aucun module différé.
+- **Couverture** : `pytest-cov` avec un seuil (`fail_under = 78 %`, branche) sur le job Linux ;
+  smoke tests HTTP ajoutés pour les routes du serveur.
 - **bandit** rendu bloquant en CI ; matrice CI étendue à **macOS** et **Windows** (fumée) en
   plus de Linux (Python 3.10–3.12).

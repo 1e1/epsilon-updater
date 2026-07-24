@@ -35,7 +35,13 @@ jobs:
         run: python -m ruff check src tests
       - name: Type-check (mypy)
         run: python -m mypy src
+      # Coverage gate on Linux (full Python matrix); macOS/Windows just smoke-test the suite so
+      # platform-specific branch coverage can't make the threshold flaky.
+      - name: Tests + coverage (pytest)
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m pytest -q --cov=nwupdater --cov-report=term-missing
       - name: Tests (pytest)
+        if: matrix.os != 'ubuntu-latest'
         run: python -m pytest -q
       - name: Security scan (bandit)
         run: python -m bandit -r src -ll

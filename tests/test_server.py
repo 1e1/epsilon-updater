@@ -216,6 +216,52 @@ def test_guard_accepts_ipv6_loopback_host_with_port(server):
     assert "200" in status and "403" not in status
 
 
+def test_read_routes_smoke(server):
+    # Remaining GET routes — read-only, offline (httpd dispatch coverage).
+    assert isinstance(_get(server, "/api/device/demo-models"), list)
+    assert "installed" in _get(server, "/api/apps/installed")
+    assert _get(server, "/api/scripts")["has_scripts"] is True
+    assert "authenticated" in _get(server, "/api/auth")
+
+
+def test_device_and_channel_routes(server):
+    assert _post(server, "/api/channel", {"channel": "beta"})["channel"] == "beta"
+    assert _post(server, "/api/device/demo", {"model": "n0120"})["model"] == "n0120"
+    assert _post(server, "/api/device/rescan", {})["connected"] is False  # no real HW in tests
+    assert _post(server, "/api/device/detach", {})["connected"] is False
+
+
+def test_scripts_routes(server):
+    assert _post(server, "/api/scripts/push",
+                 {"name": "hi", "code": "print(1)\n", "auto_import": True})["ok"] is True
+    assert _post(server, "/api/scripts/set", {"scripts": [{"name": "a", "code": "x=1\n"}]})["ok"] is True
+    assert _post(server, "/api/scripts/delete", {"name": "a"})["ok"] is True
+
+
+def test_apps_routes(server):
+    import base64
+
+    from nwupdater.formats.nwa import build_nwa
+    b64 = base64.b64encode(build_nwa("Beta", api_level=0, code=b"\x02" * 128)).decode()
+    assert _post(server, "/api/apps/inspect", {"data_b64": b64})["size"] > 0
+    assert _post(server, "/api/apps/add", {"name": "Tetris"})["ok"] is True
+    assert _post(server, "/api/apps/push", {"filename": "b.nwa", "data_b64": b64})["ok"] is True
+    assert _post(server, "/api/apps/reorder", {"order": ["Tetris", "Beta"]})["ok"] is True
+    assert _post(server, "/api/apps/uninstall", {"name": "Tetris"})["ok"] is True
+
+
+def test_auth_routes_smoke(server):
+    assert "authenticated" in _post(server, "/api/auth/logout", {})
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        _post(server, "/api/auth/login", {"token": ""})  # empty token rejected
+    assert ei.value.code == 400
+
+
+def test_preload_all_route(server):
+    st = _post(server, "/api/cache/preload-all", {})
+    assert st["models"]  # cached the whole known fleet (synthetic, offline)
+
+
 def test_install_local_nwa(server):
     import base64
 

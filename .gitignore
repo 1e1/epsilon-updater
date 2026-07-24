@@ -24,3 +24,9 @@ nwupdater-diagnostic-*.json
 capture.json
 dump_capture/
 dumps/
+
+# coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
