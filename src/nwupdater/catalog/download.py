@@ -42,7 +42,7 @@ class DownloadError(Exception):
 
 def _check_model(model: str) -> str:
     if not _MODEL_RE.match(model or ""):
-        raise ValueError(f"modèle invalide : {model!r} (attendu : n + 4 chiffres hexa)")
+        raise ValueError(f"invalid model: {model!r} (expected: n + 4 hex digits)")
     return model
 
 
@@ -92,8 +92,8 @@ def _get(url: str, auth: Auth, *, transport=None):
     except TransportError as exc:
         raise DownloadError(str(exc)) from exc
     if resp.status == 401:
-        raise AuthRequired("401 — authentification requise ou expirée. "
-                           "Relancez `nwupdater login`.")
+        raise AuthRequired("401 — authentication required or expired. "
+                           "Re-run `nwupdater login`.")
     if resp.status != 200:
         raise DownloadError(f"HTTP {resp.status} sur {url}")
     return resp
@@ -117,7 +117,7 @@ def download_dfu(model: str, channel: str, auth: Auth, *, expected_size: int | N
     if blob[:5] != b"DfuSe":
         raise DownloadError(f"contenu inattendu pour {model}/{channel} : pas un fichier DfuSe")
     if expected_size is not None and len(blob) != expected_size:
-        raise DownloadError(f"taille incohérente : reçu {len(blob)} o, attendu {expected_size} o")
+        raise DownloadError(f"inconsistent size: got {len(blob)} B, expected {expected_size} B")
     return blob
 
 

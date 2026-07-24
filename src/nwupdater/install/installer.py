@@ -133,7 +133,7 @@ class Installer:
         # rejette donc que si l'image déclare un modèle précis, non nul, ET différent.
         if image.bcd_device not in (None, 0) and image.bcd_device != self.model.bcd_device:
             raise CompatibilityError(
-                f"image ciblée n{image.bcd_device:04x} != device {self.model.name}")
+                f"image targets n{image.bcd_device:04x} != device {self.model.name}")
         for s in image.segments:
             region_ok = (
                 self.model.memory.internal_flash_origin <= s.address

@@ -61,8 +61,8 @@ def pair_device(client, model, auth: Auth, *, transport=None) -> dict:
     """
     ident = read_device_identity(client, model)
     if not ident["serial"]:
-        raise ValueError("n° de série indisponible (descripteur USB iSerialNumber vide) — "
-                         "impossible d'appairer")
+        raise ValueError("serial number unavailable (empty USB iSerialNumber descriptor) — "
+                         "cannot pair")
     reg = register_device(auth, ident["serial"], device_model=ident["device_model"],
                           software_version=ident["software_version"],
                           software_patch_level=ident["software_patch_level"], transport=transport)
@@ -87,5 +87,5 @@ def register_device(auth: Auth, serial: str, *, device_model: str, software_vers
         "User-Agent": UA, "Content-Type": "application/json",
         "Accept": "application/json", "Cookie": auth.cookie_header()})
     if resp.status == 401:
-        raise TransportError("401 — authentification requise/expirée pour /devices")
+        raise TransportError("401 — authentication required/expired for /devices")
     return {"status": resp.status, "body": resp.body.decode("utf-8", "replace")[:4000]}

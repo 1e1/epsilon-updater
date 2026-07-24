@@ -37,8 +37,9 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   `formats.headers` (fin d'une seconde implémentation manuelle à offsets en dur). Tailles et
   magies centralisées dans `dfu.constants` (`SLOT_INFO_SIZE`, `KERNEL_HEADER_SIZE`,
   `EXTERNAL_APP_SECTOR`, magies `platform_info`) ; helpers `cstr`/`fixed` uniques.
-- **Couche Python en anglais** (serveur, session, dfudiff, usbio), conformément à la règle
-  « sortie CLI/Python en anglais » ; la localisation FR/EN reste gérée côté interface web.
+- **Sortie Python en anglais** sur toute la couche (CLI + serveur + catalogue/install/modèles +
+  outils de capture), conformément à la règle « sortie CLI/Python en anglais » ; la localisation
+  FR/EN reste gérée côté interface web. Les docstrings internes restent en français.
 - **Architecture** : point d'ouverture USB unique (`usbio.open_calculator`) éliminant
   l'inversion de couche `session → cli` ; bloc d'ouverture device factorisé dans le CLI
   (`_open_device`) ; primitives d'install d'app partagées (`validate_nwa`, `write_verified`) ;

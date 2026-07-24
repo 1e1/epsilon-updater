@@ -64,7 +64,7 @@ def run_capture(usb_device, *, auth, transport, interface: int = 0, bcd_device: 
             "sha256": hashlib.sha256(blob).hexdigest(),
             "device_type_id": manifest.device_type_id,
         }
-        web["note"] = "firmware téléchargé mais NON flashé (séquence rejouable)"
+        web["note"] = "firmware downloaded but NOT flashed (replayable sequence)"
     except D.AuthRequired as exc:
         web["outcome"] = "auth_required"
         web["error"] = str(exc)
@@ -92,6 +92,6 @@ def run_capture(usb_device, *, auth, transport, interface: int = 0, bcd_device: 
         "usb": usb_report,
         "web": web,
         "enrollment": enrollment,
-        "redaction": ("secrets caviardés (mot de passe, CSRF, cookies) ; "
-                      "firmware non versionné (taille + sha256 uniquement)"),
+        "redaction": ("secrets redacted (password, CSRF, cookies); "
+                      "firmware not stored (size + sha256 only)"),
     }

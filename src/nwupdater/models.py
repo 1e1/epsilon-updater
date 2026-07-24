@@ -99,6 +99,6 @@ def model_for_bcd(bcd: int) -> Model | None:
 def describe_bcd(bcd: int) -> str:
     m = MODELS.get(bcd)
     if m:
-        flag = "" if m.confirmed else " (carte mémoire inférée)"
+        flag = "" if m.confirmed else " (inferred memory map)"
         return f"{m.name} — {m.marketing_family} — {m.mcu}{flag}"
-    return f"n{bcd:04x} — famille {family_for_bcd(bcd)} — inconnu du registre"
+    return f"n{bcd:04x} — family {family_for_bcd(bcd)} — unknown to the registry"

@@ -122,7 +122,7 @@ class UrllibTransport:
             r = e
         except urllib.error.URLError as e:  # DNS, connexion, TLS…
             reason = getattr(e, "reason", e)
-            raise TransportError(f"connexion à {url} impossible : {reason}") from e
+            raise TransportError(f"cannot connect to {url}: {reason}") from e
         status = getattr(r, "status", None) or r.getcode()
         return Response(status, list(r.headers.items()), r.read())
 
@@ -189,8 +189,8 @@ class Auth:
     def summary(self) -> str:
         exp = self.expires_at
         when = exp.date().isoformat() if exp else "?"
-        state = "EXPIRÉ" if self.is_expired() else f"expire le {when}"
-        return f"jeton remember_user_token ({state})"
+        state = "EXPIRED" if self.is_expired() else f"expires on {when}"
+        return f"remember_user_token ({state})"
 
 
 # -- login Devise ----------------------------------------------------------------------
@@ -220,7 +220,7 @@ def login_with_password(email: str, password: str, *, transport=None) -> Auth:
     token = post.set_cookies().get(REMEMBER_COOKIE)
     if not token:
         # Devise ré-affiche la page (200/422) sans jeton quand les identifiants sont mauvais.
-        raise AuthError("identifiants refusés (aucun jeton renvoyé) — vérifiez email/mot de passe")
+        raise AuthError("credentials rejected (no token returned) — check email/password")
     return Auth(token)
 
 
