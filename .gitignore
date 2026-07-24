@@ -30,3 +30,6 @@ dumps/
 .coverage.*
 htmlcov/
 coverage.xml
+
+# GitHub Pages: assets are assembled by the pages workflow (copied from docs/screenshots + logo)
+site/assets/
