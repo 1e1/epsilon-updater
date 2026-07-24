@@ -137,7 +137,7 @@ def test_hook_js_is_packaged():
 
 def test_userscript_is_packaged_and_matches_numworks():
     assert capture_cli.USER_JS.is_file()
-    src = capture_cli.USER_JS.read_text()
+    src = capture_cli.USER_JS.read_text(encoding="utf-8")
     assert "==UserScript==" in src
     assert "*://*.numworks.com/*" in src and "document-start" in src
 

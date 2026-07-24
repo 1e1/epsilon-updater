@@ -6,6 +6,7 @@ appel réseau réel.
 
 import base64
 import json
+import sys
 
 import pytest
 
@@ -102,7 +103,9 @@ def test_save_load_clear_roundtrip(tmp_path):
     p = tmp_path / "creds.json"
     A.save_auth(Auth(make_token()), path=p)
     assert p.is_file()
-    assert (p.stat().st_mode & 0o777) == 0o600
+    # Windows n'a pas les permissions POSIX ; chmod(0o600) y est best-effort
+    if sys.platform != "win32":
+        assert (p.stat().st_mode & 0o777) == 0o600
     loaded = A.load_auth(path=p)
     assert loaded is not None and loaded.info()["looks_valid"]
     assert A.clear_auth(path=p) is True
