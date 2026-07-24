@@ -70,3 +70,6 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   atteignent l'API durcie CSRF — la couverture automatisée qui manquait à la couche JS/UI.
 - **bandit** rendu bloquant en CI ; matrice CI étendue à **macOS** et **Windows** (fumée) en
   plus de Linux (Python 3.10–3.12).
+- **Analyse de sécurité CodeQL** (Python + JavaScript de l'UI) et **Dependabot** (pip +
+  github-actions) ajoutés.
+- **Fichiers communautaires** : `CODE_OF_CONDUCT.md`, templates d'issue/PR, `CODEOWNERS`.

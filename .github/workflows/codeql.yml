@@ -1,0 +1,33 @@
+name: codeql
+
+# Static security analysis (CodeQL) for the Python core and the local web-UI JavaScript —
+# the JS especially, given the app renders device-provided app/script names into the DOM.
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python", "javascript"]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
