@@ -291,6 +291,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.uninstall_app(body.get("name", "")))
                 elif path == "/api/apps/reorder":
                     self._json(session.reorder_apps(body.get("order", [])))
+                elif path == "/api/apps/export":
+                    self._json(session.export_app(body.get("name", "")))
                 elif path == "/api/scripts/push":
                     self._json(
                         session.push_script(
@@ -299,6 +301,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                             bool(body.get("auto_import", True)),
                         )
                     )
+                elif path == "/api/scripts/export":
+                    self._json(session.export_script(body.get("name", "")))
                 elif path == "/api/scripts/delete":
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
@@ -360,6 +364,16 @@ def serve(
                 except Exception:
                     pass
             return
+
+    # Local libraries where exported apps/scripts land (and are matched against for the
+    # "already on the computer" state). Created empty on launch so both exist and can be browsed.
+    try:
+        from ..apps.sources import user_apps_dir, user_scripts_dir
+
+        user_apps_dir().mkdir(parents=True, exist_ok=True)
+        user_scripts_dir().mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
 
     control: dict = {"last": time.time()}
     httpd = make_server(session, host=host, port=port, control=control)

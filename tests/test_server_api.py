@@ -161,6 +161,43 @@ def test_apps_device_truth_push_uninstall_reorder():
     assert [x["name"] for x in s.installed_apps_on_device()["installed"]] == ["Gamma", "Beta"]
 
 
+def test_export_app_saves_to_local_library_and_flags_it(tmp_path, monkeypatch):
+    import base64
+
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    s.push_app("a.nwa", build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
+    # Nothing in the local library yet → not flagged.
+    assert s.installed_apps_on_device()["installed"][0]["local"] is False
+
+    r = s.export_app("Alpha")
+    assert r["ok"] and r["filename"] == "Alpha.nwa"
+    saved = tmp_path / "Alpha.nwa"
+    assert saved.is_file()
+    assert base64.b64decode(r["data_b64"]) == saved.read_bytes()
+    # Same name + same byte size now present locally → flagged so the UI shows "already there".
+    assert s.installed_apps_on_device()["installed"][0]["local"] is True
+
+
+def test_export_app_unknown_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    with pytest.raises(ValueError, match="not installed"):
+        s.export_app("Nope")
+
+
+def test_export_script_saves_to_local_library_and_flags_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(tmp_path))
+    s = Session(model_name="n0110")  # the demo device seeds mandelbrot.py
+    assert any(x["name"] == "mandelbrot.py" and x["local"] is False for x in s.scripts()["scripts"])
+
+    r = s.export_script("mandelbrot")
+    assert r["ok"] and r["filename"] == "mandelbrot.py"
+    saved = tmp_path / "mandelbrot.py"
+    assert saved.is_file() and saved.read_text(encoding="utf-8") == r["code"]
+    assert any(x["name"] == "mandelbrot.py" and x["local"] is True for x in s.scripts()["scripts"])
+
+
 def test_scientific_bundled_snapshot():
     cat = FirmwareCatalog.bundled("firmwares-n0200")
     assert cat.latest().version == "3.0.0"

@@ -47,10 +47,24 @@ class AppsMixin(SessionBase):
         i = self._identity()
         return AppManager(self._conn()[0], i.external_apps_flash, device_api_level=self.api_level)
 
+    @staticmethod
+    def _local_apps_index() -> dict[str, int]:
+        """``{name: size}`` for the ``.nwa`` files in the user apps library — used to flag an
+        installed app as already present on the computer (same name AND same byte size). Keyed by
+        filename stem, which is exactly what :meth:`export_app` writes (``<name>.nwa``)."""
+        from ..apps.sources import scan_local, user_apps_dir
+
+        idx: dict[str, int] = {}
+        for it in scan_local(user_apps_dir(), [".nwa"]):
+            if it.path is not None and it.size is not None:
+                idx[it.path.stem] = it.size
+        return idx
+
     def installed_apps_on_device(self) -> dict:
         from ..formats.appicon import decode_app_icon
 
         apps = self._appmgr().installed()
+        local = self._local_apps_index()
         return {
             "installed": [
                 {
@@ -58,9 +72,35 @@ class AppsMixin(SessionBase):
                     "api_level": m.api_level,
                     "size": len(m.blob),
                     "icon": decode_app_icon(m.blob),
+                    # True when a same-name, same-size .nwa already sits in the local library.
+                    "local": local.get(m.name) == len(m.blob),
                 }
                 for m in apps
             ]
+        }
+
+    def export_app(self, name: str) -> dict:
+        """Read an installed app's bytes off the device and save them into the local apps library
+        (``<apps_dir>/<name>.nwa``, created on demand), returning the blob (base64) so the browser
+        downloads it too. After this the app matches the library, so the UI flips to "already on
+        the computer"."""
+        import base64
+        from pathlib import Path
+
+        from ..apps.sources import user_apps_dir
+
+        m = next((a for a in self._appmgr().installed() if a.name == name), None)
+        if m is None:
+            raise ValueError(f"app not installed: {name}")
+        filename = Path(name if name.endswith(".nwa") else name + ".nwa").name
+        dest = user_apps_dir()
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / filename).write_bytes(m.blob)
+        return {
+            "ok": True,
+            "filename": filename,
+            "size": len(m.blob),
+            "data_b64": base64.b64encode(m.blob).decode("ascii"),
         }
 
     def push_app(self, filename: str, data: bytes) -> dict:

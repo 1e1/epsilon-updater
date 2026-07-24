@@ -94,6 +94,17 @@ def user_apps_dir() -> Path:
     return Path(base) / "nwupdater" / "apps"
 
 
+def user_scripts_dir() -> Path:
+    """Local library where exported Python scripts land: ``$NWUPDATER_SCRIPTS_DIR`` or
+    ``<config>/nwupdater/scripts`` (mirrors :func:`user_apps_dir`). Starts empty; the server
+    creates it on launch. A missing dir just yields no local matches."""
+    override = os.environ.get("NWUPDATER_SCRIPTS_DIR")
+    if override:
+        return Path(override)
+    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    return Path(base) / "nwupdater" / "scripts"
+
+
 def app_entries(directory: Path) -> list[AppEntry]:
     """Build catalogue entries from a user directory — the generic, self-hosted source behind the
     UI's "Available" list. Local ``.nwa`` files are parsed for their real name + API level (so

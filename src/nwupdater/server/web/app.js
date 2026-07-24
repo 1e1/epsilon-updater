@@ -472,6 +472,21 @@ function originIcon(a) {
   if (s.includes("cloud")) return ORIGIN_SVG.cloud;
   return ORIGIN_SVG.online;
 }
+// Export-to-computer glyphs (inline SVG, currentColor): save (down-arrow into a tray) shown when
+// the file is not yet local; have (drive + check) shown when a same-name, same-size copy already
+// sits in the local library. Both states export on click.
+const EXPORT_SVG = {
+  save: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4v6.6"/><path d="M5.2 6.3 8 9.1l2.8-2.8"/><path d="M2.8 11.3v1.1a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.1"/></svg>`,
+  have: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.4" width="12" height="7.4" rx="1"/><path d="M5.4 13.2h5.2M8 10.8v2.4"/><path d="M5.7 6.9 7.3 8.5 10.5 5.3"/></svg>`,
+};
+// The export button for an installed item. Two visuals via `s.local`, but the same click action —
+// even "already local" re-exports (spec: always clickable). Only on-device items can be pulled off.
+function exportBtn(kind, s) {
+  const have = !!s.local;
+  const tip = have ? t("export_pc_have") : t("export_pc");
+  return `<button class="ib dl${have ? " have" : ""}" title="${tip}" aria-label="${tip} ${esc(s.name)}"
+    onclick="exportItem('${kind}','${jsStr(s.name)}')">${have ? EXPORT_SVG.have : EXPORT_SVG.save}</button>`;
+}
 function slotIcon(kind, item) {
   const name = (typeof item === "string" ? item : item.name) || "?";
   const icon = typeof item === "object" && item ? item.icon : null;
@@ -485,9 +500,12 @@ function onCalcRow(kind, s, p, mov) {
     ? `${fmtBytes(s.size)}${s.auto_import ? " · " + t("auto_import") : ""}`
     : `${fmtBytes(s.size)} · API ${s.api_level ?? 0}`;
   const tagKey = { un: "st_unchanged", rw: "st_rw", new: "st_new", del: "st_erased" }[st];
+  // Export is a device→PC pull, so it is offered for every item actually on the calculator —
+  // including ones staged for erase — but not for not-yet-written additions.
+  const dl = s.onDevice ? exportBtn(kind, s) : "";
   let btns;
   if (st === "del") {
-    btns = `<button class="ib" title="${t("restore")}" aria-label="${t("restore")} ${esc(s.name)}"
+    btns = dl + `<button class="ib" title="${t("restore")}" aria-label="${t("restore")} ${esc(s.name)}"
       onclick="restoreSlot('${kind}','${jsStr(s.name)}')">↺</button>`;
   } else {
     let mv = "";
@@ -496,7 +514,7 @@ function onCalcRow(kind, s, p, mov) {
       mv = `<button class="ib" title="${t("up")}" ${mi <= 0 ? "disabled" : ""} onclick="moveSlot('${kind}','${jsStr(s.name)}',-1)">▲</button>
         <button class="ib" title="${t("down")}" ${mi >= mov.length - 1 ? "disabled" : ""} onclick="moveSlot('${kind}','${jsStr(s.name)}',1)">▼</button>`;
     }
-    btns = mv + `<button class="ib" title="${t("remove")}" aria-label="${t("remove")} ${esc(s.name)}"
+    btns = dl + mv + `<button class="ib" title="${t("remove")}" aria-label="${t("remove")} ${esc(s.name)}"
       onclick="stageRemove('${kind}','${jsStr(s.name)}')">✕</button>`;
   }
   // Writable items are draggable; the drop handler keeps them within the writable region.
@@ -631,6 +649,36 @@ async function stageAdd(kind, name) {
     ? { name: a.name, api_level: a.api_level || 0, size: a.size || 0, source: a.source, onDevice: false, deleted: false }
     : { name: a.name, size: a.size || 0, auto_import: true, source: a.source, url: a.url, code: a.code || "", onDevice: false, deleted: false });
   renderWorkbench(); toast(t("staged_add", { name }));
+}
+// Pull an installed app/script off the device onto the computer. The server also drops a copy into
+// the local library, so the button flips to "already on the computer" — flipped in place so an
+// in-progress plan (staged adds/removes/reorders) is never reset.
+async function exportItem(kind, name) {
+  if (STATE.busy[kind]) return;  // a write/download is in flight — the workshop is locked
+  try {
+    const r = await post(kind === "apps" ? "/api/apps/export" : "/api/scripts/export", { name });
+    let blob, filename;
+    if (kind === "apps") {
+      const bin = atob(r.data_b64 || "");
+      const buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      blob = new Blob([buf], { type: "application/octet-stream" });
+      filename = r.filename || (name.endsWith(".nwa") ? name : name + ".nwa");
+    } else {
+      blob = new Blob([r.code || ""], { type: "text/x-python" });
+      filename = r.filename || (name.endsWith(".py") ? name : name + ".py");
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    // It now sits in the local library → mark every copy of this item so the button turns green.
+    deviceList(kind).forEach(x => { if (x.name === name) x.local = true; });
+    STATE.stage[kind].forEach(x => { if (x.name === name) x.local = true; });
+    renderWorkbench();
+    toast(t("exported", { name }));
+  } catch (e) {
+    toast(t("fail", { msg: e.message }), true);
+  }
 }
 // Erase: an on-device item stays VISIBLE (greyed, restorable) so undo is trivial; a not-yet-
 // written staged item just drops out.
