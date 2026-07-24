@@ -142,4 +142,5 @@ garantie** — lisez [`DISCLAIMER.md`](DISCLAIMER.md) avant toute utilisation su
   pré-requis, non-altération des données, sécurisation du jeton, cadre juridique de l'interopérabilité.
 - [`SECURITY.md`](SECURITY.md) — signaler une vulnérabilité ou une objection d'ayant droit.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — mise en route dev, style, règle « jamais d'USB réel ».
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — code de conduite (Contributor Covenant).
 - [`CHANGELOG.md`](CHANGELOG.md) — journal des modifications notables.
