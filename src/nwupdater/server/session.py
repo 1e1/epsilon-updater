@@ -445,44 +445,15 @@ class Session:
 
     def fetch_app(self, url: str) -> dict:
         """Download a catalogue app's .nwa server-side (the browser can't, CORS) for temporary
-        in-memory staging. SSRF-guarded: only **https** URLs already listed in the catalogue are
-        allowed, and the payload is size-capped. Nothing is written to disk."""
-        import base64
-
-        from ..catalog import auth as A
-        from ..formats.appicon import decode_app_icon
-        allowed = {e.url for e in self.store.entries if e.url}
-        if url not in allowed or not url.startswith("https://"):
-            raise ValueError("URL not allowed (not in catalog or not https)")
-        # Reuse the catalogue transport: proper TLS (certifi) + follows the GitHub→CDN redirect.
-        tr = self._transport or A.UrllibTransport()
-        try:
-            resp = tr.open("GET", url, headers={"User-Agent": "nwupdater"},
-                           allow_redirects=True, timeout=30)
-        except A.TransportError as exc:
-            raise ValueError(str(exc)) from exc
-        if resp.status != 200:
-            raise ValueError(f"HTTP {resp.status} sur {url}")
-        if len(resp.body) > 9 * 1024 * 1024:
-            raise ValueError("file too large")
-        return {"ok": True, "size": len(resp.body), "icon": decode_app_icon(resp.body),
-                "data_b64": base64.b64encode(resp.body).decode("ascii")}
+        in-memory staging. SSRF-guarded + size-capped; see :mod:`nwupdater.apps.proxy`."""
+        from ..apps import proxy
+        return proxy.fetch(self.store, url, transport=self._transport)
 
     def open_app_stream(self, url: str):
-        """Open a catalogue app's URL for STREAMING to the browser (so it can show a real,
-        byte-accurate progress bar). Returns ``(content_length_or_None, response)`` — the caller
-        streams and closes. Same SSRF guard as :meth:`fetch_app` (catalogue allowlist, https)."""
-        import urllib.request
-
-        from ..catalog.auth import _ssl_context
-        allowed = {e.url for e in self.store.entries if e.url}
-        if url not in allowed or not url.startswith("https://"):
-            raise ValueError("URL not allowed (not in catalog or not https)")
-        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ssl_context()))
-        req = urllib.request.Request(url, headers={"User-Agent": "nwupdater"})
-        resp = opener.open(req, timeout=30)  # noqa: S310 - https + catalogue allowlist
-        cl = resp.headers.get("Content-Length")
-        return (int(cl) if cl and cl.isdigit() else None), resp
+        """Open a catalogue app's URL for STREAMING to the browser (byte-accurate progress bar).
+        Returns ``(content_length_or_None, response)``; see :mod:`nwupdater.apps.proxy`."""
+        from ..apps import proxy
+        return proxy.open_stream(self.store, url)
 
     def add_store_app(self, name: str) -> dict:
         """Append a catalogue app to the region via minimal-rewrite (does NOT overwrite the
