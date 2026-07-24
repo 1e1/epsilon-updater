@@ -21,10 +21,15 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-MAGIC_PLATFORM_INFO = 0xFACECAFE
-PLATFORM_INFO_SIZE = 32
-# DfuSe target the N0200 bootloader declares for this block (@FirmwareHeader/0x080040C0/01*64B).
-N0200_FIRMWARE_HEADER_ADDR = 0x080040C0
+from ..dfu.constants import (
+    MAGIC_PLATFORM_INFO,
+    N0200_FIRMWARE_HEADER_ADDR,
+    PLATFORM_INFO_SIZE,
+)
+
+# Re-exported for backward compatibility (tests + device.py import these from here).
+__all__ = ["MAGIC_PLATFORM_INFO", "PLATFORM_INFO_SIZE", "N0200_FIRMWARE_HEADER_ADDR",
+           "PlatformInfo", "parse", "pack"]
 
 
 def _cstr(raw: bytes) -> str:
