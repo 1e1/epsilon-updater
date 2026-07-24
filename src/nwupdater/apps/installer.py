@@ -32,6 +32,27 @@ class AppCompatibilityError(RuntimeError):
 DEFAULT_DEVICE_API_LEVEL = 0
 
 
+def validate_nwa(blob: bytes, device_api_level: int, *,
+                 error: type[Exception] = AppCompatibilityError) -> AppInfo:
+    """Parse a ``.nwa`` blob and confirm it is installable here: valid AppInfo magic and an API
+    level matching the device. Raises ``error(message)`` on any problem. Shared by
+    :class:`AppInstaller` and :class:`~nwupdater.apps.manage.AppManager` so the check can't drift."""
+    info = AppInfo.parse(blob)
+    if not info.valid:
+        raise error("invalid AppInfo magic (not a .nwa)")
+    if info.api_level != device_api_level:
+        raise error(f"API level {info.api_level} != device {device_api_level}")
+    return info
+
+
+def write_verified(client: DfuClient, address: int, blob: bytes, *, erase: bool) -> None:
+    """Write ``blob`` at ``address``, then read it back and raise :class:`VerificationError` on
+    mismatch. The single verified-write behind every app-install path."""
+    client.write(address, blob, erase=erase)
+    if client.read(address, len(blob)) != blob:
+        raise VerificationError(f"read-back mismatch @0x{address:08x}")
+
+
 @dataclass
 class AppInstallResult:
     name: str
@@ -53,14 +74,9 @@ class AppInstaller:
         return max(0, end - start)
 
     def check(self, blob: bytes, *, at_offset: int = 0) -> AppInfo:
-        info = AppInfo.parse(blob)
-        if not info.valid:
-            raise AppCompatibilityError("invalid AppInfo magic (not a .nwa)")
         if self.region_size == 0:
             raise AppCompatibilityError("this model has no external-apps region")
-        if info.api_level != self.device_api_level:
-            raise AppCompatibilityError(
-                f"API level {info.api_level} != device {self.device_api_level}")
+        info = validate_nwa(blob, self.device_api_level)
         if at_offset + len(blob) > self.region_size:
             raise AppCompatibilityError(
                 f"not enough space ({len(blob)} B at offset {at_offset}, "
@@ -70,7 +86,8 @@ class AppInstaller:
     def install(self, blob: bytes, *, at_offset: int = 0, verify: bool = True) -> AppInstallResult:
         info = self.check(blob, at_offset=at_offset)
         address = self.region[0] + at_offset
-        self.client.write(address, blob, erase=True)
-        if verify and self.client.read(address, len(blob)) != blob:
-            raise VerificationError(f"read-back mismatch app @0x{address:08x}")
+        if verify:
+            write_verified(self.client, address, blob, erase=True)
+        else:
+            self.client.write(address, blob, erase=True)
         return AppInstallResult(info.name or "?", address, len(blob), info.api_level)

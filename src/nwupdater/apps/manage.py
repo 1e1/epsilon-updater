@@ -14,9 +14,9 @@ from dataclasses import dataclass
 
 from ..dfu import constants as C
 from ..dfu.protocol import DfuClient
-from ..formats.nwa import AppInfo, iter_apps
-from ..install.installer import VerificationError
+from ..formats.nwa import iter_apps
 from ..regions import PlanItem, plan
+from .installer import validate_nwa, write_verified
 
 SECTOR = C.EXTERNAL_APP_SECTOR  # external-apps sector unit (Board::Config::ExternalAppsSectorUnit)
 
@@ -66,11 +66,7 @@ class AppManager:
         return apps
 
     def push(self, blob: bytes) -> ManagedApp:
-        info = AppInfo.parse(blob)
-        if not info.valid:
-            raise AppError("not a valid .nwa (bad AppInfo magic)")
-        if info.api_level != self.device_api_level:
-            raise AppError(f"API level {info.api_level} != device {self.device_api_level}")
+        info = validate_nwa(blob, self.device_api_level, error=AppError)
         target = [m.blob for m in self.installed()] + [blob]
         self._apply(target)
         return ManagedApp(info.name or "?", info.api_level, blob)
@@ -119,6 +115,4 @@ class AppManager:
 
         for i in range(p.first_changed, len(target)):
             at = self.start + offsets[i]
-            self.client.write(at, target[i], erase=False)
-            if self.client.read(at, len(target[i])) != target[i]:
-                raise VerificationError(f"read-back mismatch @0x{at:08x}")
+            write_verified(self.client, at, target[i], erase=False)
