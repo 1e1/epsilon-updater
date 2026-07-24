@@ -105,26 +105,26 @@ def diff_bytes(address: int, a: bytes, b: bytes) -> SegmentDiff:
 def classify(d: SegmentDiff) -> str:
     """Human verdict for one segment pair."""
     if d.len_a == d.len_b and d.compared and d.equal_bytes == d.compared:
-        return "IDENTIQUE — bit-à-bit identiques (aucun changement)."
+        return "IDENTICAL — byte-for-byte identical (no change)."
     if not d.encrypted:
         pct = 100 * (1 - d.equal_ratio)
-        return (f"PLAINTEXT diff — {pct:.1f}% des octets diffèrent "
-                f"(entropie {d.entropy_a:.2f}/{d.entropy_b:.2f} : non chiffré, diff firmware ordinaire).")
+        return (f"PLAINTEXT diff — {pct:.1f}% of bytes differ "
+                f"(entropy {d.entropy_a:.2f}/{d.entropy_b:.2f}: unencrypted, ordinary firmware diff).")
     # CBC same-key/IV: equality is CONCENTRATED in a shared prefix, then avalanches to ~1/256.
     # Check this before the scattered-equality (keystream) test so a big prefix isn't mistaken
     # for reuse.
     if d.common_prefix >= PREFIX_SIGNIFICANT and d.equal_ratio_after_prefix <= 2 * INDEPENDENT_RATIO:
-        return (f"PRÉFIXE COMMUN de {d.common_prefix} o puis divergence (~1/256 ensuite) ⇒ chiffrement "
-                "par blocs (CBC) à clé/IV identiques, ou en-tête plaintext partagé avant chiffrement.")
+        return (f"COMMON PREFIX of {d.common_prefix} B then divergence (~1/256 after) ⇒ block "
+                "cipher (CBC) with identical key/IV, or a shared plaintext header before encryption.")
     if d.equal_ratio_after_prefix >= KEYSTREAM_REUSE_RATIO:
-        return (f"RÉUTILISATION DE KEYSTREAM probable — {100 * d.equal_ratio:.1f}% d'octets égaux au "
-                f"même offset, dispersés (plus longue plage commune {d.longest_equal_run} o) ⇒ même "
-                "keystream (flux/CTR à nonce fixe) : C1⊕C2 expose la structure du plaintext.")
+        return (f"LIKELY KEYSTREAM REUSE — {100 * d.equal_ratio:.1f}% of bytes equal at the "
+                f"same offset, scattered (longest common run {d.longest_equal_run} B) ⇒ same "
+                "keystream (stream/CTR with a fixed nonce): C1⊕C2 exposes the plaintext structure.")
     if d.equal_ratio <= INDEPENDENT_RATIO and d.common_prefix < PREFIX_SIGNIFICANT:
-        return ("INDÉPENDANT — aucune corrélation (~1/256 d'octets égaux) : clé/nonce par build, "
-                "chiffrement correct. Le diff ne révèle rien.")
-    return (f"NON CONCLUANT — corrélation partielle ({100 * d.equal_ratio:.2f}% égaux, "
-            f"préfixe {d.common_prefix} o, après-préfixe {100 * d.equal_ratio_after_prefix:.2f}%).")
+        return ("INDEPENDENT — no correlation (~1/256 bytes equal): per-build key/nonce, "
+                "sound encryption. The diff reveals nothing.")
+    return (f"INCONCLUSIVE — partial correlation ({100 * d.equal_ratio:.2f}% equal, "
+            f"prefix {d.common_prefix} B, after-prefix {100 * d.equal_ratio_after_prefix:.2f}%).")
 
 
 @dataclass
@@ -164,19 +164,19 @@ def diff_files(path_a: str, path_b: str) -> DfuDiff:
 
 def format_report(diff: DfuDiff, path_a: str, path_b: str) -> str:
     lines = [f"dfu-diff  A={path_a}  B={path_b}",
-             f"  taille : A={diff.size_a} o  B={diff.size_b} o  (Δ {diff.size_b - diff.size_a:+d})"]
+             f"  size: A={diff.size_a} B  B={diff.size_b} B  (Δ {diff.size_b - diff.size_a:+d})"]
     if diff.only_in_a:
-        lines.append(f"  segments seulement dans A : {[hex(x) for x in diff.only_in_a]}")
+        lines.append(f"  segments only in A: {[hex(x) for x in diff.only_in_a]}")
     if diff.only_in_b:
-        lines.append(f"  segments seulement dans B : {[hex(x) for x in diff.only_in_b]}")
+        lines.append(f"  segments only in B: {[hex(x) for x in diff.only_in_b]}")
     if not diff.segments:
-        lines.append("  aucun segment à la même adresse — rien à comparer.")
+        lines.append("  no segment at a shared address — nothing to compare.")
     for s in diff.segments:
-        lines.append(f"\n  @0x{s.address:08x}  ({s.len_a}→{s.len_b} o, comparé {s.compared} o)")
-        lines.append(f"    égaux {s.equal_bytes}/{s.compared} ({100 * s.equal_ratio:.2f}%) · "
-                     f"préfixe {s.common_prefix} o · plage commune max {s.longest_equal_run} o · "
-                     f"blocs16 {s.equal_blocks16}/{s.total_blocks16}")
-        lines.append(f"    entropie A={s.entropy_a:.3f} B={s.entropy_b:.3f}")
+        lines.append(f"\n  @0x{s.address:08x}  ({s.len_a}→{s.len_b} B, compared {s.compared} B)")
+        lines.append(f"    equal {s.equal_bytes}/{s.compared} ({100 * s.equal_ratio:.2f}%) · "
+                     f"prefix {s.common_prefix} B · max common run {s.longest_equal_run} B · "
+                     f"blocks16 {s.equal_blocks16}/{s.total_blocks16}")
+        lines.append(f"    entropy A={s.entropy_a:.3f} B={s.entropy_b:.3f}")
         lines.append(f"    → {classify(s)}")
     return "\n".join(lines)
 
@@ -187,10 +187,10 @@ def main(argv=None) -> int:
 
     p = argparse.ArgumentParser(
         prog="python -m nwupdater.tools.dfudiff",
-        description="Compare deux firmwares DfuSe pour caractériser le chiffrement (projet non officiel).")
-    p.add_argument("old", help="chemin du .dfu ancien (A)")
-    p.add_argument("new", help="chemin du .dfu récent (B)")
-    p.add_argument("--json", action="store_true", help="sortie JSON machine")
+        description="Compare two DfuSe firmwares to characterise the encryption (unofficial project).")
+    p.add_argument("old", help="path to the older .dfu (A)")
+    p.add_argument("new", help="path to the newer .dfu (B)")
+    p.add_argument("--json", action="store_true", help="machine-readable JSON output")
     args = p.parse_args(argv)
 
     diff = diff_files(args.old, args.new)

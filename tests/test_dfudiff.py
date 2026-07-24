@@ -46,12 +46,12 @@ def test_plaintext_diff_is_not_a_cipher_claim():
 
 def test_identical_files_are_reported_as_identical():
     blob = rb(1, 8192)
-    assert _verdict(blob, blob).startswith("IDENTIQUE")
+    assert _verdict(blob, blob).startswith("IDENTICAL")
 
 
 def test_independent_encryption_yields_nothing():
     verdict = _verdict(rb(7, 8192), rb(8, 8192))        # two unrelated high-entropy blobs
-    assert verdict.startswith("INDÉPENDANT")
+    assert verdict.startswith("INDEPENDENT")
 
 
 def test_keystream_reuse_detected():
@@ -68,7 +68,7 @@ def test_cbc_same_key_common_prefix_detected():
     c1 = prefix + rb(5, 4096)
     c2 = prefix + rb(6, 4096)                            # diverges after the prefix
     verdict = _verdict(c1, c2)
-    assert verdict.startswith("PRÉFIXE COMMUN")
+    assert verdict.startswith("COMMON PREFIX")
 
 
 # -- image-level + file round-trip -----------------------------------------------------

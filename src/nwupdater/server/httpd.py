@@ -269,7 +269,7 @@ def _idle_watcher(control: dict, timeout: float, interval: float = 20.0):
         if control.get("stopping"):
             return
         if time.time() - control.get("last", 0) > timeout:
-            print(f"\ninactivité > {int(timeout)}s — arrêt automatique.")
+            print(f"\ninactive > {int(timeout)}s — auto-shutdown.")
             if control.get("shutdown"):
                 control["shutdown"]()
             return
@@ -282,7 +282,7 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
     if single_instance:
         existing = instance.existing_url()
         if existing:
-            print(f"Déjà en cours d'exécution : {existing}")
+            print(f"Already running: {existing}")
             if open_browser:
                 try:
                     webbrowser.open(existing)
@@ -304,9 +304,9 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
     where = "no calculator — connect one or explore a demo from the page" if not ident.get("connected") \
         else f"{ident['model']}{' (demo)' if session.virtual else ''}"
     print(f"nwupdater UI : {url}  (device: {where})")
-    print("Fermez l'onglet et cliquez « Quitter », ou Ctrl+C pour arrêter.")
+    print('Close the tab and click "Quit", or press Ctrl+C to stop.')
     if idle_timeout and idle_timeout > 0:
-        print(f"Arrêt auto après {int(idle_timeout)}s sans activité.")
+        print(f"Auto-shutdown after {int(idle_timeout)}s of inactivity.")
         threading.Thread(target=_idle_watcher, args=(control, idle_timeout), daemon=True).start()
     if open_browser:
         try:
@@ -316,7 +316,7 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\narrêt.")
+        print("\nstopped.")
     finally:
         control["stopping"] = True
         httpd.server_close()

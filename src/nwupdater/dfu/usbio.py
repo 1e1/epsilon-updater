@@ -115,11 +115,11 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
             break
     if dev is None:
         raise NoCalculatorFound(
-            "Aucune calculatrice NumWorks détectée en USB.\n"
-            "  • Branchez la calculatrice et mettez-la en mode DFU/bootloader\n"
-            "    (ex. N0110 : RESET en maintenant la touche 6 ; écran noir, LED),\n"
-            "  • vérifiez le câble (données, pas seulement charge),\n"
-            f"  • VID 0x{vid:04x}, PID attendus : {', '.join(f'0x{p:04x}' for p in pids)}.")
+            "No NumWorks calculator detected over USB.\n"
+            "  • Plug in the calculator and put it in DFU/bootloader mode\n"
+            "    (e.g. N0110: RESET while holding the 6 key; black screen, LED),\n"
+            "  • check the cable (data, not charge-only),\n"
+            f"  • VID 0x{vid:04x}, expected PIDs: {', '.join(f'0x{p:04x}' for p in pids)}.")
     assert matched_pid is not None  # set alongside dev in the scan loop above
 
     # 2. activate configuration (idempotent; ignore if already configured)
@@ -132,12 +132,12 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
     try:
         cfg = dev.get_active_configuration()
     except Exception as exc:  # pragma: no cover - hardware-specific
-        raise UsbError(f"configuration USB illisible : {exc}") from exc
+        raise UsbError(f"unreadable USB configuration: {exc}") from exc
     intf = _find_dfu_interface(cfg)
     if intf is None:
         raise DfuInterfaceNotFound(
-            "Interface DFU introuvable (classe 0xFE/0x01). L'appareil n'est probablement pas "
-            "en mode DFU — repassez-le en bootloader et réessayez.")
+            "DFU interface not found (class 0xFE/0x01). The device is probably not in "
+            "DFU mode — put it back in bootloader and retry.")
     interface = getattr(intf, "bInterfaceNumber", C.DFU_INTERFACE)
     alt = getattr(intf, "bAlternateSetting", C.ALT_FLASH)
 
@@ -146,9 +146,9 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
         util.claim_interface(dev, interface)
     except Exception as exc:
         raise InterfaceClaimError(
-            f"impossible de réserver l'interface DFU {interface} : {exc}\n"
-            "  • macOS/Linux : droits USB insuffisants (libusb / règle udev),\n"
-            "  • un autre logiciel (navigateur en WebUSB ?) l'utilise peut-être déjà.") from exc
+            f"cannot claim DFU interface {interface}: {exc}\n"
+            "  • macOS/Linux: insufficient USB permissions (libusb / udev rule),\n"
+            "  • another program (a WebUSB browser?) may already be using it.") from exc
 
     # 5. select the Flash alt-setting (best effort — NumWorks alt 0 reads/writes any address)
     try:

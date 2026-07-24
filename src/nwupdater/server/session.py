@@ -223,16 +223,16 @@ class Session:
         }
 
     def login_token(self, token: str) -> dict:
-        """Enregistre un remember_user_token collé par l'utilisateur (façon Mi Unlock)."""
+        """Store a remember_user_token pasted by the user (Mi Unlock style)."""
         from ..catalog import auth as A
         a = A.Auth((token or "").strip())
         if not a.remember_token:
-            raise ValueError("jeton vide")
+            raise ValueError("empty token")
         A.save_auth(a)
         return self.auth_status()
 
     def login_password(self, email: str, password: str) -> dict:
-        """Login Devise intégré ; on ne conserve que le jeton, jamais le mot de passe."""
+        """Built-in Devise login; only the token is kept, never the password."""
         from ..catalog import auth as A
         a = A.login_with_password(email, password)
         A.save_auth(a)
@@ -260,7 +260,7 @@ class Session:
         from ..catalog import auth as A
         a = A.load_auth()
         if a is None or a.is_expired():
-            raise ValueError("authentification requise — connectez-vous d'abord")
+            raise ValueError("authentication required — sign in first")
         tr = transport if transport is not None else A.UrllibTransport()
         return run_capture(
             self.device, auth=a, transport=tr,
@@ -345,7 +345,7 @@ class Session:
             from ..catalog import download as D
             a = A.load_auth()
             if a is None or a.is_expired():
-                raise ValueError("authentification requise — connectez-vous d'abord (login)")
+                raise ValueError("authentication required — sign in first (login)")
             manifest, blob = D.fetch_firmware(self.model.name, channel, a)
             image = FirmwareImage.from_dfuse(blob)
             to_version = manifest.version
@@ -383,14 +383,14 @@ class Session:
         prior install in this session."""
         addr = self._last_boot_address
         if not addr:
-            raise ValueError("aucun firmware fraîchement installé à démarrer")
+            raise ValueError("no freshly installed firmware to boot")
         self.client.leave(addr)
         return {"ok": True, "jumped_to": f"0x{addr:08x}"}
 
     def install_app(self, name: str) -> dict:
         entry = self.store.get(name)
         if entry is None:
-            raise ValueError(f"app inconnue: {name}")
+            raise ValueError(f"unknown app: {name}")
         i = self._identity()
         blob = build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
         inst = AppInstaller(self.client, external_apps_flash=i.external_apps_flash or (0, 0),
@@ -444,7 +444,7 @@ class Session:
         from ..formats.appicon import decode_app_icon
         allowed = {e.url for e in self.store.entries if e.url}
         if url not in allowed or not url.startswith("https://"):
-            raise ValueError("URL non autorisée (absente du catalogue ou non https)")
+            raise ValueError("URL not allowed (not in catalog or not https)")
         # Reuse the catalogue transport: proper TLS (certifi) + follows the GitHub→CDN redirect.
         tr = self._transport or A.UrllibTransport()
         try:
@@ -455,7 +455,7 @@ class Session:
         if resp.status != 200:
             raise ValueError(f"HTTP {resp.status} sur {url}")
         if len(resp.body) > 9 * 1024 * 1024:
-            raise ValueError("fichier trop volumineux")
+            raise ValueError("file too large")
         return {"ok": True, "size": len(resp.body), "icon": decode_app_icon(resp.body),
                 "data_b64": base64.b64encode(resp.body).decode("ascii")}
 
@@ -468,7 +468,7 @@ class Session:
         from ..catalog.auth import _ssl_context
         allowed = {e.url for e in self.store.entries if e.url}
         if url not in allowed or not url.startswith("https://"):
-            raise ValueError("URL non autorisée (absente du catalogue ou non https)")
+            raise ValueError("URL not allowed (not in catalog or not https)")
         opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ssl_context()))
         req = urllib.request.Request(url, headers={"User-Agent": "nwupdater"})
         resp = opener.open(req, timeout=30)  # noqa: S310 - https + catalogue allowlist
@@ -480,7 +480,7 @@ class Session:
         others, unlike the legacy single-slot install_app)."""
         entry = self.store.get(name)
         if entry is None:
-            raise ValueError(f"app inconnue: {name}")
+            raise ValueError(f"unknown app: {name}")
         # Synthesize at the catalogue's declared size so demo region usage is realistic (a real
         # .nwa carries its own app_size; here we pad the body to match — header is 0x20 bytes,
         # plus the NUL-terminated name and the real, decodable demo icon).
