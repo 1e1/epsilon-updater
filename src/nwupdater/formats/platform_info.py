@@ -26,14 +26,12 @@ from ..dfu.constants import (
     N0200_FIRMWARE_HEADER_ADDR,
     PLATFORM_INFO_SIZE,
 )
+from ._bytes import cstr as _cstr
+from ._bytes import fixed as _fixed
 
 # Re-exported for backward compatibility (tests + device.py import these from here).
 __all__ = ["MAGIC_PLATFORM_INFO", "PLATFORM_INFO_SIZE", "N0200_FIRMWARE_HEADER_ADDR",
            "PlatformInfo", "parse", "pack"]
-
-
-def _cstr(raw: bytes) -> str:
-    return raw.split(b"\x00", 1)[0].decode("ascii", "replace").strip()
 
 
 @dataclass
@@ -65,6 +63,4 @@ def pack(software_version: str, patch_level: str, *, field1: int = 0, field2: in
     """Build a structurally valid block (for tests / virtual device)."""
     return struct.pack(
         "<III8s8sI", MAGIC_PLATFORM_INFO, field1, field2,
-        software_version.encode("ascii", "replace")[:8].ljust(8, b"\x00"),
-        patch_level.encode("ascii", "replace")[:8].ljust(8, b"\x00"),
-        MAGIC_PLATFORM_INFO)
+        _fixed(software_version, 8), _fixed(patch_level, 8), MAGIC_PLATFORM_INFO)

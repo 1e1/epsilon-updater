@@ -11,6 +11,8 @@ import struct
 from dataclasses import dataclass
 
 from ..dfu import constants as C
+from ._bytes import cstr as _cstr
+from ._bytes import fixed as _fixed
 
 # struct layouts (single source of truth for the byte formats); sizes are derived from these
 # via struct.calcsize rather than repeating literals. calcsize("<IIII")==16, "<I8s8sI"==24,
@@ -18,14 +20,6 @@ from ..dfu import constants as C
 _SLOT_INFO_FMT = "<IIII"
 _KERNEL_HEADER_FMT = "<I8s8sI"
 _USERLAND_HEADER_FMT = "<I8sIIIIIIIII"
-
-
-def _fixed(s: str, n: int) -> bytes:
-    return s.encode("ascii", "replace")[:n].ljust(n, b"\x00")
-
-
-def _cstr(raw: bytes) -> str:
-    return raw.split(b"\x00", 1)[0].decode("ascii", "replace").strip()
 
 
 # -- SlotInfo (16 B, at SRAM base) --------------------------------------------------
