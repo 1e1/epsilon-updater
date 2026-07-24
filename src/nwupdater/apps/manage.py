@@ -47,8 +47,9 @@ def _digest(b: bytes) -> str:
 class AppManager:
     """Read/modify/write the external-apps region with minimal rewrites."""
 
-    def __init__(self, client: DfuClient, region: tuple[int, int] | None,
-                 *, device_api_level: int = 0):
+    def __init__(
+        self, client: DfuClient, region: tuple[int, int] | None, *, device_api_level: int = 0
+    ):
         self.client = client
         self.start, self.end = region or (0, 0)
         self.capacity = max(0, self.end - self.start)
@@ -61,8 +62,9 @@ class AppManager:
         apps = []
         for a in iter_apps(blob):
             size = a.info.app_size or 0
-            apps.append(ManagedApp(a.info.name or "?", a.info.api_level,
-                                   blob[a.offset:a.offset + size]))
+            apps.append(
+                ManagedApp(a.info.name or "?", a.info.api_level, blob[a.offset : a.offset + size])
+            )
         return apps
 
     def push(self, blob: bytes) -> ManagedApp:

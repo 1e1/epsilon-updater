@@ -22,11 +22,11 @@ from urllib.parse import urlparse
 
 @dataclass
 class SourceItem:
-    name: str                    # display name, e.g. "game.nwa"
-    origin: str                  # "local" | "remote"
-    path: Path | None = None     # local file (origin == "local")
-    url: str | None = None       # remote URL (origin == "remote")
-    size: int | None = None      # bytes, when known
+    name: str  # display name, e.g. "game.nwa"
+    origin: str  # "local" | "remote"
+    path: Path | None = None  # local file (origin == "local")
+    url: str | None = None  # remote URL (origin == "remote")
+    size: int | None = None  # bytes, when known
 
 
 def _matches(name: str, exts: list[str]) -> bool:
@@ -87,8 +87,11 @@ class RemoteCache:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self, url: str) -> Path:
-        return self.dir / (hashlib.sha1(url.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
-                           + "_" + (Path(urlparse(url).path).name or "blob"))
+        return self.dir / (
+            hashlib.sha1(url.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+            + "_"
+            + (Path(urlparse(url).path).name or "blob")
+        )
 
     def get(self, url: str, fetcher) -> bytes:
         """Return the cached bytes for ``url``, fetching via ``fetcher(url) -> bytes`` once."""

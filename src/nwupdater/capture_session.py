@@ -34,8 +34,12 @@ def inspect_enrollment(auth, transport, *, serial: str | None = None) -> dict:
     only to correlate with the field the page would submit; it is never sent anywhere."""
     out: dict = {"url": ENROLL_PORTAL_URL, "read_only": True, "serial_available": bool(serial)}
     try:
-        r = transport.open("GET", ENROLL_PORTAL_URL, allow_redirects=True, headers={
-            "User-Agent": UA, "Accept": "text/html", "Cookie": auth.cookie_header()})
+        r = transport.open(
+            "GET",
+            ENROLL_PORTAL_URL,
+            allow_redirects=True,
+            headers={"User-Agent": UA, "Accept": "text/html", "Cookie": auth.cookie_header()},
+        )
         out["status"] = r.status
         html = r.body.decode("utf-8", "replace")
         out["forms"] = inspect_forms(html)
@@ -45,13 +49,24 @@ def inspect_enrollment(auth, transport, *, serial: str | None = None) -> dict:
     return out
 
 
-def run_capture(usb_device, *, auth, transport, interface: int = 0, bcd_device: int | None = None,
-                model: str = "n0200", channel: str = "stable", sleep=time.sleep,
-                timestamp: str | None = None, serial: str | None = None) -> dict:
+def run_capture(
+    usb_device,
+    *,
+    auth,
+    transport,
+    interface: int = 0,
+    bcd_device: int | None = None,
+    model: str = "n0200",
+    channel: str = "stable",
+    sleep=time.sleep,
+    timestamp: str | None = None,
+    serial: str | None = None,
+) -> dict:
     """Capture the USB + WEB dialogue for the scenario. Never flashes; read-only on the calc."""
     # --- USB side (read-only identity + transfer capture) ---
-    usb_report = diagnose(usb_device, interface=interface, bcd_device=bcd_device,
-                          sleep=sleep, timestamp=timestamp)
+    usb_report = diagnose(
+        usb_device, interface=interface, bcd_device=bcd_device, sleep=sleep, timestamp=timestamp
+    )
 
     # --- WEB side (attempt the official download; capture request/response, redacted) ---
     rt = RecordingTransport(transport)
@@ -60,7 +75,8 @@ def run_capture(usb_device, *, auth, transport, interface: int = 0, bcd_device: 
         manifest, blob = D.fetch_firmware(model, channel, auth, transport=rt)
         web["outcome"] = "downloaded"
         web["firmware"] = {
-            "version": manifest.version, "size": manifest.size,
+            "version": manifest.version,
+            "size": manifest.size,
             "sha256": hashlib.sha256(blob).hexdigest(),
             "device_type_id": manifest.device_type_id,
         }
@@ -92,6 +108,7 @@ def run_capture(usb_device, *, auth, transport, interface: int = 0, bcd_device: 
         "usb": usb_report,
         "web": web,
         "enrollment": enrollment,
-        "redaction": ("secrets redacted (password, CSRF, cookies); "
-                      "firmware not stored (size + sha256 only)"),
+        "redaction": (
+            "secrets redacted (password, CSRF, cookies); firmware not stored (size + sha256 only)"
+        ),
     }

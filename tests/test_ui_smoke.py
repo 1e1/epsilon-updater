@@ -59,5 +59,5 @@ def test_ui_loads_and_renders_identity(tmp_path):
         httpd.shutdown()
         httpd.server_close()
     assert "n0110" in body.lower()  # model rendered from /api/identity
-    assert "16.4.4" in body          # installed OS version rendered
+    assert "16.4.4" in body  # installed OS version rendered
     assert not errors, f"UI console/page errors: {errors}"

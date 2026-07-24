@@ -19,6 +19,7 @@ def test_install_and_preload_when_disconnected_raise_valueerror():
 
 def test_ui_parser_rejects_removed_real_flag():
     from nwupdater import cli
+
     with pytest.raises(SystemExit):  # --real was never read and is removed from the ui subparser
         cli.main(["ui", "--real", "--no-browser"])
 
@@ -83,6 +84,7 @@ def _make_token(exp="2099-01-01T00:00:00Z"):
     import json as _j
 
     from nwupdater.catalog import auth as A
+
     payload = {"_rails": {"message": "W1td", "exp": exp, "pur": A.REMEMBER_PURPOSE}}
     return base64.b64encode(_j.dumps(payload).encode()).decode() + "--sig"
 
@@ -100,13 +102,22 @@ def test_catalog_live_official_when_signed_in():
 
     from nwupdater.catalog import download as D
     from nwupdater.catalog.auth import Auth, Response
+
     # live_catalog on + a valid (fake) token + a fake transport → the REAL per-model manifest.
     s = Session(connect=False, live_catalog=True)
     s.attach_demo("n0200")  # installed 3.0.0 (bundled family default)
     s._auth_override = Auth(_make_token())
-    manifest = _j.dumps({"version": "3.4.0", "patch_level": "abc1234",
-                         "device_model": {"device_type_id": 6}, "size": 100}).encode()
-    s._transport = _FakeTransport({("GET", D.manifest_url("n0200", "stable")): Response(200, [], manifest)})
+    manifest = _j.dumps(
+        {
+            "version": "3.4.0",
+            "patch_level": "abc1234",
+            "device_model": {"device_type_id": 6},
+            "size": 100,
+        }
+    ).encode()
+    s._transport = _FakeTransport(
+        {("GET", D.manifest_url("n0200", "stable")): Response(200, [], manifest)}
+    )
     c = s.catalog_updates()
     assert c["source"] == "official"
     assert c["latest"] == "3.4.0"
@@ -129,20 +140,34 @@ def test_preload_caches_real_firmware_when_signed_in(tmp_path, monkeypatch):
     from nwupdater.catalog.auth import Auth, Response
     from nwupdater.install.image import FirmwareImage
     from nwupdater.models import MODELS
+
     monkeypatch.setattr(D, "record_download", lambda *a, **k: None)  # no disk provenance in tests
     dfu = FirmwareImage.synthetic(MODELS[0x0110], version="25.2.0").to_dfuse()
-    manifest = _j.dumps({"version": "25.2.0", "patch_level": "43f67db",
-                         "device_model": {"device_type_id": 1}, "size": len(dfu)}).encode()
+    manifest = _j.dumps(
+        {
+            "version": "25.2.0",
+            "patch_level": "43f67db",
+            "device_model": {"device_type_id": 1},
+            "size": len(dfu),
+        }
+    ).encode()
     s = Session(connect=False, live_catalog=True, cache_dir=tmp_path)
     s.attach_demo("n0110")
     s._auth_override = Auth(_make_token())
-    s._transport = _FakeTransport({
-        ("GET", D.manifest_url("n0110", "stable")): Response(200, [], manifest),
-        ("GET", D.dfu_url("n0110", "stable")): Response(200, [], dfu),
-    })
+    s._transport = _FakeTransport(
+        {
+            ("GET", D.manifest_url("n0110", "stable")): Response(200, [], manifest),
+            ("GET", D.dfu_url("n0110", "stable")): Response(200, [], dfu),
+        }
+    )
     r = s.preload("25.2.0")
     assert r["real"] is True
-    assert r["entries"][0] == {"model": "n0110", "version": "25.2.0", "size": len(dfu), "real": True}
+    assert r["entries"][0] == {
+        "model": "n0110",
+        "version": "25.2.0",
+        "size": len(dfu),
+        "real": True,
+    }
 
 
 def test_preload_synthetic_when_offline(tmp_path):
@@ -158,6 +183,7 @@ def test_fetch_app_allowlist_and_download():
 
     from nwupdater.catalog.auth import Response
     from nwupdater.formats.appicon import demo_icon_lz4
+
     s = Session(connect=False)
     s.attach_demo("n0120")
     url = next(e.url for e in s.store.entries if e.name == "RPN")
@@ -171,16 +197,18 @@ def test_fetch_app_allowlist_and_download():
 
 def test_open_app_stream_ssrf_guard():
     import pytest
+
     s = Session(connect=False)
     s.attach_demo("n0120")
     with pytest.raises(ValueError):
-        s.open_app_stream("https://evil.example/x.nwa")   # not in the catalogue
+        s.open_app_stream("https://evil.example/x.nwa")  # not in the catalogue
     with pytest.raises(ValueError):
         s.open_app_stream("http://example.invalid/x.nwa")  # not https
 
 
 def test_preload_all_caches_every_model(tmp_path):
     from nwupdater.models import MODELS
+
     s = Session(connect=False, cache_dir=tmp_path)  # live off → synthetic, offline
     s.attach_demo("n0110")
     r = s.preload_all()
@@ -190,10 +218,12 @@ def test_preload_all_caches_every_model(tmp_path):
 
 def test_set_scripts_rewrites_store_in_order():
     s = Session(model_name="n0110")
-    s.set_scripts([
-        {"name": "alpha", "code": "print(1)\n", "auto_import": True},
-        {"name": "beta.py", "code": "print(2)\n", "auto_import": False},
-    ])
+    s.set_scripts(
+        [
+            {"name": "alpha", "code": "print(1)\n", "auto_import": True},
+            {"name": "beta.py", "code": "print(2)\n", "auto_import": False},
+        ]
+    )
     got = s.scripts()["scripts"]
     assert [x["name"] for x in got] == ["alpha.py", "beta.py"]
     assert got[0]["auto_import"] is True and got[1]["auto_import"] is False

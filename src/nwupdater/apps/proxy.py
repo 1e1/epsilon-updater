@@ -30,19 +30,25 @@ def fetch(store: AppStore, url: str, *, transport=None) -> dict:
 
     from ..catalog import auth as A
     from ..formats.appicon import decode_app_icon
+
     _require_allowed(store, url)
     tr = transport or A.UrllibTransport()
     try:
-        resp = tr.open("GET", url, headers={"User-Agent": "nwupdater"},
-                       allow_redirects=True, timeout=30)
+        resp = tr.open(
+            "GET", url, headers={"User-Agent": "nwupdater"}, allow_redirects=True, timeout=30
+        )
     except A.TransportError as exc:
         raise ValueError(str(exc)) from exc
     if resp.status != 200:
         raise ValueError(f"HTTP {resp.status} for {url}")
     if len(resp.body) > MAX_APP_BYTES:
         raise ValueError("file too large")
-    return {"ok": True, "size": len(resp.body), "icon": decode_app_icon(resp.body),
-            "data_b64": base64.b64encode(resp.body).decode("ascii")}
+    return {
+        "ok": True,
+        "size": len(resp.body),
+        "icon": decode_app_icon(resp.body),
+        "data_b64": base64.b64encode(resp.body).decode("ascii"),
+    }
 
 
 def open_stream(store: AppStore, url: str):
@@ -51,6 +57,7 @@ def open_stream(store: AppStore, url: str):
     import urllib.request
 
     from ..catalog.auth import _ssl_context
+
     _require_allowed(store, url)
     opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ssl_context()))
     req = urllib.request.Request(url, headers={"User-Agent": "nwupdater"})

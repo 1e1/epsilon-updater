@@ -23,6 +23,7 @@ def _auth():
 
 class _Replay:
     """Transport rejouant une réponse enregistrée pour une URL donnée."""
+
     def __init__(self, url, body, status=200):
         self._url, self._body, self._status = url, body, status
 
@@ -51,9 +52,9 @@ def test_real_manifest_n0110_graphing():
 def test_real_manifest_n0200_scientific():
     raw = (FIX / "manifest_n0200_stable.json").read_bytes()
     m = D.FirmwareManifest.from_json("n0200", "stable", raw)
-    assert m.version == "3.0.0"          # Scientifique « Version 3 »
+    assert m.version == "3.0.0"  # Scientifique « Version 3 »
     assert m.size == 237606
-    assert m.device_type_id == 6         # 6 = scientifique
+    assert m.device_type_id == 6  # 6 = scientifique
 
 
 def test_fetch_manifest_over_replayed_transport():
@@ -64,8 +65,10 @@ def test_fetch_manifest_over_replayed_transport():
 
 
 def test_device_type_ids_are_distinct_per_family():
-    g = D.FirmwareManifest.from_json("n0110", "stable",
-                                     (FIX / "manifest_n0110_stable.json").read_bytes())
-    s = D.FirmwareManifest.from_json("n0200", "stable",
-                                     (FIX / "manifest_n0200_stable.json").read_bytes())
+    g = D.FirmwareManifest.from_json(
+        "n0110", "stable", (FIX / "manifest_n0110_stable.json").read_bytes()
+    )
+    s = D.FirmwareManifest.from_json(
+        "n0200", "stable", (FIX / "manifest_n0200_stable.json").read_bytes()
+    )
     assert g.device_type_id != s.device_type_id

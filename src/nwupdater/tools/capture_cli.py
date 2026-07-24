@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import cast
 
 WEB_DIR = Path(__file__).parent / "web"
-HOOK_JS = WEB_DIR / "capture-hook.js"          # bookmarklet fallback (single page)
-USER_JS = WEB_DIR / "capture.user.js"          # userscript: continuous, persistent capture
+HOOK_JS = WEB_DIR / "capture-hook.js"  # bookmarklet fallback (single page)
+USER_JS = WEB_DIR / "capture.user.js"  # userscript: continuous, persistent capture
 
 
 def _web_source(path: Path) -> str:
@@ -110,17 +110,27 @@ def _make_handler(store: dict, control: dict):
             control["last"] = time.time()
             path = self.path.split("?", 1)[0]
             if path == "/capture.user.js":
-                self._send(_web_source(USER_JS).encode("utf-8"), "application/javascript; charset=utf-8")
+                self._send(
+                    _web_source(USER_JS).encode("utf-8"), "application/javascript; charset=utf-8"
+                )
             elif path == "/capture-hook.js":
-                self._send(_web_source(HOOK_JS).encode("utf-8"), "application/javascript; charset=utf-8")
+                self._send(
+                    _web_source(HOOK_JS).encode("utf-8"), "application/javascript; charset=utf-8"
+                )
             elif path == "/state":
-                st = {"scenario": control.get("scenario", "idle"),
-                      "web": len(store["web"]), "usb": len(store["usb"])}
+                st = {
+                    "scenario": control.get("scenario", "idle"),
+                    "web": len(store["web"]),
+                    "usb": len(store["usb"]),
+                }
                 self._send(json.dumps(st).encode("utf-8"), "application/json; charset=utf-8")
             else:
                 self._send(
-                    _LAUNCH_HTML.format(port=cast(tuple, self.server.server_address)[1]).encode("utf-8"),
-                    "text/html; charset=utf-8")
+                    _LAUNCH_HTML.format(port=cast(tuple, self.server.server_address)[1]).encode(
+                        "utf-8"
+                    ),
+                    "text/html; charset=utf-8",
+                )
 
         def do_POST(self):
             control["last"] = time.time()
@@ -148,8 +158,14 @@ def _make_handler(store: dict, control: dict):
 
 
 def _cmd_serve(args) -> int:
-    store: dict = {"tool": "nwupdater-capture-hook", "version": 1, "started": int(time.time() * 1000),
-                   "markers": [], "web": [], "usb": []}
+    store: dict = {
+        "tool": "nwupdater-capture-hook",
+        "version": 1,
+        "started": int(time.time() * 1000),
+        "markers": [],
+        "web": [],
+        "usb": [],
+    }
     control = {"last": time.time(), "scenario": "idle"}
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), _make_handler(store, control))
     port = httpd.server_address[1]
@@ -177,6 +193,7 @@ def _cmd_serve(args) -> int:
 
 def _cmd_analyze(args) -> int:
     from . import capture_analyze as CA
+
     rep = CA.analyze(args.capture)
     print(json.dumps(rep, ensure_ascii=False, indent=2) if args.json else CA.format_report(rep))
     return 0
@@ -184,13 +201,19 @@ def _cmd_analyze(args) -> int:
 
 def _cmd_scrub(args) -> int:
     from . import scrub as S
-    return S.main([args.capture] + (["-o", args.out] if args.out else [])
-                  + sum((["--value", v] for v in args.value), []))
+
+    return S.main(
+        [args.capture]
+        + (["-o", args.out] if args.out else [])
+        + sum((["--value", v] for v in args.value), [])
+    )
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="nwupdater-capture",
-                                description="Capture/analyse des fonctions web NumWorks (non officiel).")
+    p = argparse.ArgumentParser(
+        prog="nwupdater-capture",
+        description="Capture/analyse des fonctions web NumWorks (non officiel).",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("serve", help="local page: bookmarklet + checklist + live reception")

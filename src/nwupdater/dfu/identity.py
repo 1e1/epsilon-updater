@@ -35,13 +35,19 @@ class CalculatorIdentity:
 
     def __str__(self) -> str:
         v = self.os_version or "?"
-        return f"{self.model_name} [{self.family}] OS {v}" + (
-            f" ({self.commit})" if self.commit else "") + (
-            f" SN {self.serial_number}" if self.serial_number else "")
+        return (
+            f"{self.model_name} [{self.family}] OS {v}"
+            + (f" ({self.commit})" if self.commit else "")
+            + (f" SN {self.serial_number}" if self.serial_number else "")
+        )
 
 
-def read_identity(client: DfuClient, bcd_device: int, sram_origin: int | None = None,
-                  serial_index: int = C.SERIAL_STRING_INDEX) -> CalculatorIdentity:
+def read_identity(
+    client: DfuClient,
+    bcd_device: int,
+    sram_origin: int | None = None,
+    serial_index: int = C.SERIAL_STRING_INDEX,
+) -> CalculatorIdentity:
     model = model_for_bcd(bcd_device)
     ident = CalculatorIdentity(
         bcd_device=bcd_device,
@@ -57,7 +63,11 @@ def read_identity(client: DfuClient, bcd_device: int, sram_origin: int | None = 
 
     client.make_idle()
 
-    base = sram_origin if sram_origin is not None else (model.memory.sram_origin if model else 0x20000000)
+    base = (
+        sram_origin
+        if sram_origin is not None
+        else (model.memory.sram_origin if model else 0x20000000)
+    )
     slot = SlotInfo.unpack(client.read(base, C.SLOT_INFO_SIZE))
     if slot.valid:
         ident.slot_info_valid = True

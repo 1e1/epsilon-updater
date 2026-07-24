@@ -24,8 +24,13 @@ _USERLAND_HEADER_FMT = "<I8sIIIIIIIII"
 
 # -- SlotInfo (16 B, at SRAM base) --------------------------------------------------
 def pack_slot_info(kernel_header_addr: int, userland_header_addr: int) -> bytes:
-    return struct.pack(_SLOT_INFO_FMT, C.MAGIC_SLOT_INFO, kernel_header_addr,
-                       userland_header_addr, C.MAGIC_SLOT_INFO)
+    return struct.pack(
+        _SLOT_INFO_FMT,
+        C.MAGIC_SLOT_INFO,
+        kernel_header_addr,
+        userland_header_addr,
+        C.MAGIC_SLOT_INFO,
+    )
 
 
 @dataclass
@@ -45,10 +50,13 @@ class SlotInfo:
 
 # -- KernelHeader (24 B) ------------------------------------------------------------
 def pack_kernel_header(software_version: str, commit_hash: str) -> bytes:
-    return struct.pack(_KERNEL_HEADER_FMT, C.MAGIC_KERNEL_HEADER,
-                       _fixed(software_version, C.SOFTWARE_VERSION_SIZE),
-                       _fixed(commit_hash, C.COMMIT_HASH_SIZE),
-                       C.MAGIC_KERNEL_HEADER)
+    return struct.pack(
+        _KERNEL_HEADER_FMT,
+        C.MAGIC_KERNEL_HEADER,
+        _fixed(software_version, C.SOFTWARE_VERSION_SIZE),
+        _fixed(commit_hash, C.COMMIT_HASH_SIZE),
+        C.MAGIC_KERNEL_HEADER,
+    )
 
 
 @dataclass
@@ -63,8 +71,11 @@ class KernelHeader:
         if len(raw) < size:
             return cls("", "", valid=False)  # truncated buffer -> invalid
         magic, ver, commit, footer = struct.unpack(_KERNEL_HEADER_FMT, raw[:size])
-        return cls(_cstr(ver), _cstr(commit),
-                   magic == C.MAGIC_KERNEL_HEADER and footer == C.MAGIC_KERNEL_HEADER)
+        return cls(
+            _cstr(ver),
+            _cstr(commit),
+            magic == C.MAGIC_KERNEL_HEADER and footer == C.MAGIC_KERNEL_HEADER,
+        )
 
 
 # -- UserlandHeader (48 B) ----------------------------------------------------------
@@ -78,13 +89,19 @@ def pack_userland_header(
     device_name_flash: tuple[int, int] = (0, 0),
 ) -> bytes:
     return struct.pack(
-        _USERLAND_HEADER_FMT, C.MAGIC_USERLAND_HEADER,
+        _USERLAND_HEADER_FMT,
+        C.MAGIC_USERLAND_HEADER,
         _fixed(expected_software_version, C.SOFTWARE_VERSION_SIZE),
-        storage_addr_ram, storage_size_ram,
-        external_apps_flash[0], external_apps_flash[1],
-        external_apps_ram[0], external_apps_ram[1],
-        device_name_flash[0], device_name_flash[1],
-        C.MAGIC_USERLAND_HEADER)
+        storage_addr_ram,
+        storage_size_ram,
+        external_apps_flash[0],
+        external_apps_flash[1],
+        external_apps_ram[0],
+        external_apps_ram[1],
+        device_name_flash[0],
+        device_name_flash[1],
+        C.MAGIC_USERLAND_HEADER,
+    )
 
 
 @dataclass
@@ -99,8 +116,13 @@ class UserlandHeader:
     def unpack(cls, raw: bytes) -> "UserlandHeader":
         if len(raw) < C.USERLAND_HEADER_SIZE:
             return cls("", 0, 0, (0, 0), valid=False)  # truncated buffer -> invalid
-        fields = struct.unpack(_USERLAND_HEADER_FMT, raw[:C.USERLAND_HEADER_SIZE])
+        fields = struct.unpack(_USERLAND_HEADER_FMT, raw[: C.USERLAND_HEADER_SIZE])
         magic, ver, st_addr, st_size, apps_s, apps_e = fields[0:6]
         footer = fields[10]
-        return cls(_cstr(ver), st_addr, st_size, (apps_s, apps_e),
-                   magic == C.MAGIC_USERLAND_HEADER and footer == C.MAGIC_USERLAND_HEADER)
+        return cls(
+            _cstr(ver),
+            st_addr,
+            st_size,
+            (apps_s, apps_e),
+            magic == C.MAGIC_USERLAND_HEADER and footer == C.MAGIC_USERLAND_HEADER,
+        )

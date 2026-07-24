@@ -32,8 +32,9 @@ class AppCompatibilityError(RuntimeError):
 DEFAULT_DEVICE_API_LEVEL = 0
 
 
-def validate_nwa(blob: bytes, device_api_level: int, *,
-                 error: type[Exception] = AppCompatibilityError) -> AppInfo:
+def validate_nwa(
+    blob: bytes, device_api_level: int, *, error: type[Exception] = AppCompatibilityError
+) -> AppInfo:
     """Parse a ``.nwa`` blob and confirm it is installable here: valid AppInfo magic and an API
     level matching the device. Raises ``error(message)`` on any problem. Shared by
     :class:`AppInstaller` and :class:`~nwupdater.apps.manage.AppManager` so the check can't drift."""
@@ -62,8 +63,13 @@ class AppInstallResult:
 
 
 class AppInstaller:
-    def __init__(self, client: DfuClient, *, external_apps_flash: tuple[int, int],
-                 device_api_level: int = DEFAULT_DEVICE_API_LEVEL):
+    def __init__(
+        self,
+        client: DfuClient,
+        *,
+        external_apps_flash: tuple[int, int],
+        device_api_level: int = DEFAULT_DEVICE_API_LEVEL,
+    ):
         self.client = client
         self.region = external_apps_flash
         self.device_api_level = device_api_level
@@ -80,7 +86,8 @@ class AppInstaller:
         if at_offset + len(blob) > self.region_size:
             raise AppCompatibilityError(
                 f"not enough space ({len(blob)} B at offset {at_offset}, "
-                f"region {self.region_size} B)")
+                f"region {self.region_size} B)"
+            )
         return info
 
     def install(self, blob: bytes, *, at_offset: int = 0, verify: bool = True) -> AppInstallResult:

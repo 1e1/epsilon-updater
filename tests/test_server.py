@@ -30,9 +30,12 @@ def _get(base, path):
 
 def _post(base, path, payload):
     # A real browser's fetch() sends Origin on a same-origin POST; the CSRF guard requires it.
-    req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json", "Origin": base},
-                                 method="POST")
+    req = urllib.request.Request(
+        base + path,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "Origin": base},
+        method="POST",
+    )
     with urllib.request.urlopen(req, timeout=5) as r:
         return json.loads(r.read())
 
@@ -112,6 +115,7 @@ def test_boot_without_install_errors(server):
 def test_capture_requires_auth(server, monkeypatch):
     # No token → the /api/capture endpoint must refuse (400), never hit the network.
     from nwupdater.catalog import auth as A
+
     monkeypatch.setattr(A, "load_auth", lambda **k: None)
     with pytest.raises(urllib.error.HTTPError) as ei:
         _post(server, "/api/capture", {})
@@ -126,12 +130,13 @@ def test_ping_endpoint(server):
 
 def test_single_instance_detection(server, tmp_path, monkeypatch):
     from nwupdater.server import instance
+
     monkeypatch.setattr(instance, "INSTANCE_FILE", tmp_path / "inst.json")
-    assert instance.existing_url() is None            # no file yet
-    instance.write(server + "/", 0)                   # point at the live test server
-    assert instance.existing_url() == server + "/"    # probe /api/ping succeeds
-    instance.write("http://127.0.0.1:1/", 0)          # dead url
-    assert instance.existing_url() is None            # stale -> cleared
+    assert instance.existing_url() is None  # no file yet
+    instance.write(server + "/", 0)  # point at the live test server
+    assert instance.existing_url() == server + "/"  # probe /api/ping succeeds
+    instance.write("http://127.0.0.1:1/", 0)  # dead url
+    assert instance.existing_url() is None  # stale -> cleared
     assert not (tmp_path / "inst.json").exists()
 
 
@@ -139,6 +144,7 @@ def _raw(port, request: str) -> str:
     """Send a verbatim HTTP request over a raw socket (so literal '..' path segments and a
     lying Content-Length reach the server unmodified) and return the full response text."""
     import socket
+
     with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
         s.sendall(request.encode())
         s.shutdown(socket.SHUT_WR)
@@ -153,6 +159,7 @@ def _raw(port, request: str) -> str:
 
 def test_static_path_traversal_is_404(tmp_path):
     from nwupdater.server.httpd import make_server
+
     web = tmp_path / "web"
     web.mkdir()
     (web / "index.html").write_text("<html>nwupdater</html>")
@@ -177,17 +184,23 @@ def test_static_path_traversal_is_404(tmp_path):
 def test_oversized_body_returns_413(server):
     port = int(server.rsplit(":", 1)[1])
     # Content-Length way above MAX_BODY (16 MiB): rejected with 413 before any body is read.
-    resp = _raw(port, f"POST /api/quit HTTP/1.0\r\nHost: 127.0.0.1\r\n"
-                      f"Origin: http://127.0.0.1:{port}\r\n"
-                      "Content-Length: 20000000\r\n\r\n")
+    resp = _raw(
+        port,
+        f"POST /api/quit HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+        f"Origin: http://127.0.0.1:{port}\r\n"
+        "Content-Length: 20000000\r\n\r\n",
+    )
     assert "413" in resp.split("\r\n", 1)[0]
 
 
 def test_non_numeric_content_length_does_not_500(server):
     port = int(server.rsplit(":", 1)[1])
-    resp = _raw(port, f"POST /api/channel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
-                      f"Origin: http://127.0.0.1:{port}\r\n"
-                      "Content-Length: not-a-number\r\n\r\n")
+    resp = _raw(
+        port,
+        f"POST /api/channel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+        f"Origin: http://127.0.0.1:{port}\r\n"
+        "Content-Length: not-a-number\r\n\r\n",
+    )
     status = resp.split("\r\n", 1)[0]
     assert "500" not in status  # garbage Content-Length is tolerated, treated as empty body
 
@@ -195,16 +208,22 @@ def test_non_numeric_content_length_does_not_500(server):
 def test_post_without_origin_is_forbidden(server):
     port = int(server.rsplit(":", 1)[1])
     # A state-changing POST with no Origin (CSRF / non-browser client) is rejected up front.
-    resp = _raw(port, "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
-                      "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
+    resp = _raw(
+        port,
+        "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+        "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}",
+    )
     assert "403" in resp.split("\r\n", 1)[0]
 
 
 def test_post_with_foreign_origin_is_forbidden(server):
     port = int(server.rsplit(":", 1)[1])
-    resp = _raw(port, "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
-                      "Origin: http://evil.example\r\n"
-                      "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
+    resp = _raw(
+        port,
+        "POST /api/install/firmware HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+        "Origin: http://evil.example\r\n"
+        "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}",
+    )
     assert "403" in resp.split("\r\n", 1)[0]
 
 
@@ -232,9 +251,16 @@ def test_device_and_channel_routes(server):
 
 
 def test_scripts_routes(server):
-    assert _post(server, "/api/scripts/push",
-                 {"name": "hi", "code": "print(1)\n", "auto_import": True})["ok"] is True
-    assert _post(server, "/api/scripts/set", {"scripts": [{"name": "a", "code": "x=1\n"}]})["ok"] is True
+    assert (
+        _post(
+            server, "/api/scripts/push", {"name": "hi", "code": "print(1)\n", "auto_import": True}
+        )["ok"]
+        is True
+    )
+    assert (
+        _post(server, "/api/scripts/set", {"scripts": [{"name": "a", "code": "x=1\n"}]})["ok"]
+        is True
+    )
     assert _post(server, "/api/scripts/delete", {"name": "a"})["ok"] is True
 
 
@@ -242,6 +268,7 @@ def test_apps_routes(server):
     import base64
 
     from nwupdater.formats.nwa import build_nwa
+
     b64 = base64.b64encode(build_nwa("Beta", api_level=0, code=b"\x02" * 128)).decode()
     assert _post(server, "/api/apps/inspect", {"data_b64": b64})["size"] > 0
     assert _post(server, "/api/apps/add", {"name": "Tetris"})["ok"] is True
@@ -266,8 +293,11 @@ def test_install_local_nwa(server):
     import base64
 
     from nwupdater.formats.nwa import build_nwa
-    blob = build_nwa("MyApp", api_level=0, code=b"\x00" * 256)
-    r = _post(server, "/api/install/app-local",
-              {"filename": "MyApp.nwa", "data_b64": base64.b64encode(blob).decode()})
-    assert r["ok"] is True and r["name"] == "MyApp"
 
+    blob = build_nwa("MyApp", api_level=0, code=b"\x00" * 256)
+    r = _post(
+        server,
+        "/api/install/app-local",
+        {"filename": "MyApp.nwa", "data_b64": base64.b64encode(blob).decode()},
+    )
+    assert r["ok"] is True and r["name"] == "MyApp"

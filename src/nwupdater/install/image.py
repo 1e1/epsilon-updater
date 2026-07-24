@@ -45,8 +45,14 @@ class FirmwareImage:
 
     # -- constructors --------------------------------------------------------------
     @classmethod
-    def from_raw_bins(cls, model: Model, *, internal: bytes | None = None,
-                      external: bytes | None = None, version: str = "?") -> "FirmwareImage":
+    def from_raw_bins(
+        cls,
+        model: Model,
+        *,
+        internal: bytes | None = None,
+        external: bytes | None = None,
+        version: str = "?",
+    ) -> "FirmwareImage":
         segs: list[FirmwareSegment] = []
         if internal:
             segs.append(FirmwareSegment(model.memory.internal_flash_origin, internal))
@@ -57,8 +63,9 @@ class FirmwareImage:
         return cls(segs, version=version, model_name=model.name, bcd_device=model.bcd_device)
 
     @classmethod
-    def synthetic(cls, model: Model, *, version: str = "99.9.9", commit: str = "synth00",
-                  filler: int = 0x00) -> "FirmwareImage":
+    def synthetic(
+        cls, model: Model, *, version: str = "99.9.9", commit: str = "synth00", filler: int = 0x00
+    ) -> "FirmwareImage":
         """A minimal, structurally valid OS image targeting the model's primary slot/flash."""
         mem = model.memory
         if mem.external_flash_origin is not None:
@@ -73,13 +80,20 @@ class FirmwareImage:
             apps = (0, 0)
 
         buf = bytearray([filler]) * size
-        buf[kernel_off:kernel_off + 24] = headers.pack_kernel_header(version, commit)
-        buf[userland_off:userland_off + C.USERLAND_HEADER_SIZE] = headers.pack_userland_header(
-            version, storage_addr_ram=mem.sram_origin + 0x1000, storage_size_ram=0x10000,
-            external_apps_flash=apps)
-        return cls([FirmwareSegment(base, bytes(buf))], version=version,
-                   model_name=model.name, bcd_device=model.bcd_device,
-                   note="synthetic")
+        buf[kernel_off : kernel_off + 24] = headers.pack_kernel_header(version, commit)
+        buf[userland_off : userland_off + C.USERLAND_HEADER_SIZE] = headers.pack_userland_header(
+            version,
+            storage_addr_ram=mem.sram_origin + 0x1000,
+            storage_size_ram=0x10000,
+            external_apps_flash=apps,
+        )
+        return cls(
+            [FirmwareSegment(base, bytes(buf))],
+            version=version,
+            model_name=model.name,
+            bcd_device=model.bcd_device,
+            note="synthetic",
+        )
 
     @classmethod
     def from_dfuse(cls, raw: bytes) -> "FirmwareImage":
@@ -100,32 +114,46 @@ class FirmwareImage:
             if off + 274 > len(raw):
                 raise ValueError("DfuSe file truncated (target prefix)")
             _sig, _alt, _named, _name, _tsize, nelem = struct.unpack(
-                "<6sBI255sII", raw[off:off + 274])
+                "<6sBI255sII", raw[off : off + 274]
+            )
             off += 274
             for _ in range(nelem):
                 if off + 8 > len(raw):
                     raise ValueError("DfuSe file truncated (element header)")
-                addr, esize = struct.unpack("<II", raw[off:off + 8])
+                addr, esize = struct.unpack("<II", raw[off : off + 8])
                 off += 8
                 if off + esize > len(raw):
                     raise ValueError("DfuSe file truncated (element data)")
-                segments.append(FirmwareSegment(addr, raw[off:off + esize]))
+                segments.append(FirmwareSegment(addr, raw[off : off + esize]))
                 off += esize
-        return cls(segments, id_product=id_product, bcd_device=bcd_device,
-                   model_name=f"n{bcd_device:04x}", note="dfuse")
+        return cls(
+            segments,
+            id_product=id_product,
+            bcd_device=bcd_device,
+            model_name=f"n{bcd_device:04x}",
+            note="dfuse",
+        )
 
     # -- serialization (build a .dfu we could feed back / archive) -----------------
-    def to_dfuse(self, *, id_vendor: int = C.USB_VID, id_product: int = C.PID_EPSILON,
-                 bcd_device: int | None = None) -> bytes:
+    def to_dfuse(
+        self,
+        *,
+        id_vendor: int = C.USB_VID,
+        id_product: int = C.PID_EPSILON,
+        bcd_device: int | None = None,
+    ) -> bytes:
         bcd_device = bcd_device if bcd_device is not None else (self.bcd_device or 0x0000)
         target = bytearray()
         for s in self.segments:
             target += struct.pack("<II", s.address, len(s.data)) + s.data
         name = b"NumWorks".ljust(255, b"\x00")
-        target_block = struct.pack("<6sBI255sII", b"Target", 0, 1, name,
-                                   len(target), len(self.segments)) + target
+        target_block = (
+            struct.pack("<6sBI255sII", b"Target", 0, 1, name, len(target), len(self.segments))
+            + target
+        )
         body = struct.pack("<5sBIB", b"DfuSe", 1, 11 + len(target_block) + 16, 1) + target_block
-        suffix_wo_crc = body + struct.pack("<HHHH3sB", bcd_device, id_product, id_vendor,
-                                           0x011A, b"UFD", 16)
+        suffix_wo_crc = body + struct.pack(
+            "<HHHH3sB", bcd_device, id_product, id_vendor, 0x011A, b"UFD", 16
+        )
         crc = 0xFFFFFFFF ^ zlib.crc32(suffix_wo_crc)
         return suffix_wo_crc + struct.pack("<I", crc)

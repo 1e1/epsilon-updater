@@ -8,8 +8,13 @@ from nwupdater.server.session import Session
 
 def _ident(model, *, region=None, storage=None):
     return CalculatorIdentity(
-        bcd_device=model.bcd_device, model=model, model_name=model.name,
-        family=model.family, external_apps_flash=region, storage_ram=storage)
+        bcd_device=model.bcd_device,
+        model=model,
+        model_name=model.name,
+        family=model.family,
+        external_apps_flash=region,
+        storage_ram=storage,
+    )
 
 
 # -- structural (hardware only) ---------------------------------------------------
@@ -40,7 +45,9 @@ def test_unknown_model_is_all_off():
 def test_observed_gates_structural_capabilities():
     m = MODELS[0x0110]
     bare = resolve(m, _ident(m, region=(0, 0), storage=None))
-    assert not bare.external_apps and not bare.scripts  # hardware-capable but device exposes neither
+    assert (
+        not bare.external_apps and not bare.scripts
+    )  # hardware-capable but device exposes neither
     full = resolve(m, _ident(m, region=(0x90400000, 0x90800000), storage=(0x20000000, 0x10000)))
     assert full.external_apps and full.scripts
 

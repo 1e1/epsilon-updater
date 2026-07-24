@@ -15,13 +15,16 @@ class FirmwareMixin(SessionBase):
         if self._cache is None:
             self._cache = FirmwareCache(self._cache_dir)
         return self._cache
+
     def cache_status(self) -> dict:
         import time
+
         st = self.cache.status()
         expires_in_days = None
         if st.get("expires_at"):
             expires_in_days = max(0, round((st["expires_at"] - time.time()) / 86400))
         return {**st, "expires_in_days": expires_in_days}
+
     def preload(self, version: str) -> dict:
         if not self.connected:
             raise ValueError("no calculator connected")
@@ -30,6 +33,7 @@ class FirmwareMixin(SessionBase):
         v, blob, real = self._fetch_or_synth(self.model, version)
         self.cache.put(self.model.name, v, blob, real=real)
         return {"ok": True, "real": real, **self.cache_status()}
+
     def preload_all(self) -> dict:
         """Classroom: cache the latest firmware for EVERY known model (real ``.dfu`` when
         signed in, else a synthetic demo image) so a whole mixed fleet is ready offline."""
@@ -40,6 +44,7 @@ class FirmwareMixin(SessionBase):
             v, blob, real = self._fetch_or_synth(m, fallback)
             self.cache.put(m.name, v, blob, real=real)
         return {"ok": True, **self.cache_status()}
+
     def _fetch_or_synth(self, model, fallback_version: str) -> tuple[str, bytes, bool]:
         """``(version, blob, is_real)`` for a model: the REAL official ``.dfu`` when signed in
         (live mode), else a synthetic demo image. Real downloads are journalled for provenance,
@@ -49,24 +54,38 @@ class FirmwareMixin(SessionBase):
 
             from ..catalog import auth as A
             from ..catalog import download as D
+
             a = self._auth_override or A.load_auth()
             if a is not None and not a.is_expired():
                 try:
-                    manifest, blob = D.fetch_firmware(model.name, self.channel, a,
-                                                      transport=self._transport)
-                    D.record_download(manifest, D.sha256_hex(blob),
-                                      when=datetime.now(timezone.utc).isoformat())
+                    manifest, blob = D.fetch_firmware(
+                        model.name, self.channel, a, transport=self._transport
+                    )
+                    D.record_download(
+                        manifest, D.sha256_hex(blob), when=datetime.now(timezone.utc).isoformat()
+                    )
                     return manifest.version, blob, True
                 except Exception:  # offline / auth / integrity error → synthetic fallback
                     pass
-        return fallback_version, FirmwareImage.synthetic(model, version=fallback_version).to_dfuse(), False
+        return (
+            fallback_version,
+            FirmwareImage.synthetic(model, version=fallback_version).to_dfuse(),
+            False,
+        )
+
     def cache_clear(self) -> dict:
         self.cache.clear()
         return {"ok": True, **self.cache_status()}
 
     # -- writes (against the virtual device) ---------------------------------------
-    def install_firmware(self, to_version: str, *, from_cache: bool = False,
-                         download: bool = False, channel: str = "stable") -> dict:
+    def install_firmware(
+        self,
+        to_version: str,
+        *,
+        from_cache: bool = False,
+        download: bool = False,
+        channel: str = "stable",
+    ) -> dict:
         if not self.connected:
             raise ValueError("no calculator connected")
         if self.model is None:
@@ -79,6 +98,7 @@ class FirmwareMixin(SessionBase):
 
             from ..catalog import auth as A
             from ..catalog import download as D
+
             a = A.load_auth()
             if a is None or a.is_expired():
                 raise ValueError("authentication required — sign in first (login)")
@@ -111,6 +131,7 @@ class FirmwareMixin(SessionBase):
             "bytes": plan.total_bytes,
             "sha256": sha256,
         }
+
     def boot(self) -> dict:
         """Send DFU detach + jump so the calculator reboots on the freshly-flashed slot.
 

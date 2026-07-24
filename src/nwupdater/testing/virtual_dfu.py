@@ -31,13 +31,15 @@ def _layout_descriptor(mem) -> str:
     both far larger than a 2048-byte transfer chunk) and erases at that granularity, exactly
     like the on-device bootloader (docs §6.4). Modelling this is what makes a per-chunk erase
     observably destructive in tests."""
+
     def run(sector: int, total: int) -> str:
         return f"{max(1, total // sector)}*{sector // 1024:03d}Kg"
 
     groups = [(mem.internal_flash_origin, run(0x4000, mem.internal_flash_size))]  # 16 KiB
     if mem.external_flash_origin is not None:
-        groups.append((mem.external_flash_origin,
-                       run(C.EXTERNAL_APP_SECTOR, mem.external_flash_size)))  # 64 KiB
+        groups.append(
+            (mem.external_flash_origin, run(C.EXTERNAL_APP_SECTOR, mem.external_flash_size))
+        )  # 64 KiB
     return "@Flash" + "".join(f"/0x{base:08X}/{seg}" for base, seg in groups)
 
 
@@ -86,7 +88,7 @@ class _SparseMemory:
         while len(out) < length:
             page_index, off = divmod(addr, self.PAGE)
             take = min(self.PAGE - off, length - len(out))
-            out += self._page(page_index)[off:off + take]
+            out += self._page(page_index)[off : off + take]
             addr += take
         return bytes(out)
 
@@ -96,7 +98,7 @@ class _SparseMemory:
         while pos < len(data):
             page_index, off = divmod(addr, self.PAGE)
             take = min(self.PAGE - off, len(data) - pos)
-            self._page(page_index)[off:off + take] = data[pos:pos + take]
+            self._page(page_index)[off : off + take] = data[pos : pos + take]
             addr += take
             pos += take
 
@@ -117,8 +119,15 @@ class _SparseMemory:
 class VirtualDfuDevice:
     """A software NumWorks calculator speaking DFU/DfuSe over a mocked control endpoint."""
 
-    def __init__(self, model: Model, *, os_version: str, commit: str,
-                 product_string: str = "NumWorks Calculator", serial: str | None = None):
+    def __init__(
+        self,
+        model: Model,
+        *,
+        os_version: str,
+        commit: str,
+        product_string: str = "NumWorks Calculator",
+        serial: str | None = None,
+    ):
         self.idVendor = C.USB_VID
         self.idProduct = C.PID_EPSILON
         self.bcdDevice = model.bcd_device
@@ -133,8 +142,12 @@ class VirtualDfuDevice:
         self.iInterface = C.LAYOUT_STRING_INDEX
         # USB string descriptor table (index -> value); see calculator.h. Only #3 is
         # asserted from source; #1/#2 are faithful conveniences for the mock.
-        self._strings = {1: "NumWorks", 2: product_string, C.SERIAL_STRING_INDEX: self.serial_number,
-                         C.LAYOUT_STRING_INDEX: self._layout_string}
+        self._strings = {
+            1: "NumWorks",
+            2: product_string,
+            C.SERIAL_STRING_INDEX: self.serial_number,
+            C.LAYOUT_STRING_INDEX: self._layout_string,
+        }
 
         self.state = C.STATE_DFU_IDLE
         self.status = C.STATUS_OK
@@ -149,7 +162,9 @@ class VirtualDfuDevice:
             (mem.sram_origin, mem.sram_origin + mem.sram_size),
         ]
         if mem.external_flash_origin is not None:
-            writable.append((mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size))
+            writable.append(
+                (mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size)
+            )
         self.memory = _SparseMemory(writable, self.memory_layout)
         self._install_platform_info(os_version, commit)
 
@@ -168,26 +183,39 @@ class VirtualDfuDevice:
             userland_hdr_addr = slot_origin + 0x8000
             apps_start = apps_end = 0  # no external-apps region
 
-        self.memory.write(mem.sram_origin, headers.pack_slot_info(kernel_hdr_addr, userland_hdr_addr))
+        self.memory.write(
+            mem.sram_origin, headers.pack_slot_info(kernel_hdr_addr, userland_hdr_addr)
+        )
         self.memory.write(kernel_hdr_addr, headers.pack_kernel_header(os_version, commit))
         graphing = self.model.family == "graphique"  # scientific N02xx has no Python -> no storage
-        self.memory.write(userland_hdr_addr, headers.pack_userland_header(
-            os_version,
-            storage_addr_ram=(mem.sram_origin + 0x1000) if graphing else 0,
-            storage_size_ram=0x10000 if graphing else 0,
-            external_apps_flash=(apps_start, apps_end),
-            external_apps_ram=(mem.sram_origin + 0x2000, mem.sram_origin + 0x3000),
-            device_name_flash=(slot_origin + 0x100, slot_origin + 0x500)))
+        self.memory.write(
+            userland_hdr_addr,
+            headers.pack_userland_header(
+                os_version,
+                storage_addr_ram=(mem.sram_origin + 0x1000) if graphing else 0,
+                storage_size_ram=0x10000 if graphing else 0,
+                external_apps_flash=(apps_start, apps_end),
+                external_apps_ram=(mem.sram_origin + 0x2000, mem.sram_origin + 0x3000),
+                device_name_flash=(slot_origin + 0x100, slot_origin + 0x500),
+            ),
+        )
         # Graphing models embed a Python scripts store; preload a small sample so reads/CLI
         # demo have content (scientific N02xx has no Python -> left zeroed).
         if self.model.family == "graphique":
-            self.memory.write(mem.sram_origin + 0x1000, _storage.encode_storage([
-                _storage.make_python("mandelbrot", "from math import *\n", True),
-                _storage.make_python("suites", "def u(n):\n  return 2 * n\n", False)]))
+            self.memory.write(
+                mem.sram_origin + 0x1000,
+                _storage.encode_storage(
+                    [
+                        _storage.make_python("mandelbrot", "from math import *\n", True),
+                        _storage.make_python("suites", "def u(n):\n  return 2 * n\n", False),
+                    ]
+                ),
+            )
 
     # -- pyusb-compatible control endpoint ----------------------------------------
-    def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0,
-                      data_or_wLength=None, timeout=None):
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
         if bmRequestType == C.REQ_IN:
             length = data_or_wLength if isinstance(data_or_wLength, int) else 0
             return self._handle_in(bRequest, wValue, length)
@@ -208,8 +236,9 @@ class VirtualDfuDevice:
         if desc_type != C.DESC_TYPE_STRING:
             raise UsbStall(f"unsupported descriptor type 0x{desc_type:02x}")
         if index == 0:  # LANGID table (English/US)
-            desc = bytes([4, C.DESC_TYPE_STRING,
-                          C.USB_LANGID_EN_US & 0xFF, C.USB_LANGID_EN_US >> 8])
+            desc = bytes(
+                [4, C.DESC_TYPE_STRING, C.USB_LANGID_EN_US & 0xFF, C.USB_LANGID_EN_US >> 8]
+            )
         else:
             value = self._strings.get(index)
             if value is None:
@@ -242,7 +271,7 @@ class VirtualDfuDevice:
             if cmd == C.DFUSE_SET_ADDRESS:
                 if len(data) < 5:  # real hardware STALLs EP0 on a malformed command
                     raise UsbStall("truncated SET_ADDRESS (need 4-byte address)")
-                addr, = struct.unpack("<I", data[1:5])
+                (addr,) = struct.unpack("<I", data[1:5])
                 self._pending = ("setaddr", addr)
             elif cmd == C.DFUSE_ERASE:
                 if len(data) == 1:
@@ -250,7 +279,7 @@ class VirtualDfuDevice:
                 elif len(data) < 5:  # sector erase needs a 4-byte address; STALL otherwise
                     raise UsbStall("truncated ERASE (need 4-byte address)")
                 else:
-                    addr, = struct.unpack("<I", data[1:5])
+                    (addr,) = struct.unpack("<I", data[1:5])
                     self._pending = ("erase", addr)
             else:
                 raise UsbStall(f"unsupported DfuSe cmd 0x{cmd:02x}")
@@ -292,8 +321,9 @@ class VirtualDfuDevice:
         elif self.state == C.STATE_MANIFEST:
             self.state = C.STATE_MANIFEST_WAIT_RESET
         poll = 1  # ms
-        return bytes([self.status, poll & 0xFF, (poll >> 8) & 0xFF, (poll >> 16) & 0xFF,
-                      self.state, 0])
+        return bytes(
+            [self.status, poll & 0xFF, (poll >> 8) & 0xFF, (poll >> 16) & 0xFF, self.state, 0]
+        )
 
     def _apply_pending(self):
         action = self._pending
@@ -321,10 +351,17 @@ class VirtualDfuDevice:
             self.jump_address = self.address_pointer + C.USERLAND_HEADER_SIZE
 
 
-def virtual_calculator(model_name: str = "n0110", *, os_version: str = "23.2.4",
-                       commit: str = "abc1234", serial: str | None = None) -> VirtualDfuDevice:
+def virtual_calculator(
+    model_name: str = "n0110",
+    *,
+    os_version: str = "23.2.4",
+    commit: str = "abc1234",
+    serial: str | None = None,
+) -> VirtualDfuDevice:
     """Convenience factory. ``model_name`` is e.g. 'n0110', 'n0120', 'n0200'."""
     bcd = next((b for b, m in MODELS.items() if m.name == model_name), None)
     if bcd is None:
-        raise ValueError(f"unknown model {model_name!r}; known: {[m.name for m in MODELS.values()]}")
+        raise ValueError(
+            f"unknown model {model_name!r}; known: {[m.name for m in MODELS.values()]}"
+        )
     return VirtualDfuDevice(MODELS[bcd], os_version=os_version, commit=commit, serial=serial)

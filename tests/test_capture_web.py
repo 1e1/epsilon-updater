@@ -13,25 +13,69 @@ from nwupdater.tools.scrub import scrub
 
 def _hook_capture():
     return {
-        "tool": "nwupdater-capture-hook", "version": 1, "started": 0,
+        "tool": "nwupdater-capture-hook",
+        "version": 1,
+        "started": 0,
         "markers": [{"t": 10, "scenario": "pair"}],
         "web": [
-            {"t": 11, "scenario": "pair", "method": "POST", "url": "https://my.numworks.com/devices",
-             "status": 201, "resp_len": 30, "resp_sha256": "aa",
-             "resp_body": "{\"id\":7}", "req_body": "{\"serial\":\"ABCD1234EFGH\"}"},
-            {"t": 20, "scenario": "scripts-list", "method": "GET",
-             "url": "https://my.numworks.com/scripts.json?foo=1", "status": 200,
-             "resp_len": 12, "resp_body": "[{\"name\":\"a\"}]"},
-            {"t": 21, "scenario": "scripts-list", "method": "GET",
-             "url": "https://my.numworks.com/scripts.json?foo=2", "status": 200, "resp_len": 12},
+            {
+                "t": 11,
+                "scenario": "pair",
+                "method": "POST",
+                "url": "https://my.numworks.com/devices",
+                "status": 201,
+                "resp_len": 30,
+                "resp_sha256": "aa",
+                "resp_body": '{"id":7}',
+                "req_body": '{"serial":"ABCD1234EFGH"}',
+            },
+            {
+                "t": 20,
+                "scenario": "scripts-list",
+                "method": "GET",
+                "url": "https://my.numworks.com/scripts.json?foo=1",
+                "status": 200,
+                "resp_len": 12,
+                "resp_body": '[{"name":"a"}]',
+            },
+            {
+                "t": 21,
+                "scenario": "scripts-list",
+                "method": "GET",
+                "url": "https://my.numworks.com/scripts.json?foo=2",
+                "status": 200,
+                "resp_len": 12,
+            },
         ],
         "usb": [
-            {"t": 12, "scenario": "pair", "via": "control", "dir": "out",
-             "request": 1, "value": 0, "index": 0, "data": "2100000020"},   # SET_ADDRESS 0x20000000
-            {"t": 13, "scenario": "pair", "via": "control", "dir": "in",
-             "request": 2, "value": 2, "index": 0, "data": b"ABCD1234EFGH".hex()},  # identity read
-            {"t": 30, "scenario": "scripts-list", "via": "bulk", "dir": "in",
-             "endpoint": 1, "data": "deadbeef"},                            # bulk → ignored for DFU
+            {
+                "t": 12,
+                "scenario": "pair",
+                "via": "control",
+                "dir": "out",
+                "request": 1,
+                "value": 0,
+                "index": 0,
+                "data": "2100000020",
+            },  # SET_ADDRESS 0x20000000
+            {
+                "t": 13,
+                "scenario": "pair",
+                "via": "control",
+                "dir": "in",
+                "request": 2,
+                "value": 2,
+                "index": 0,
+                "data": b"ABCD1234EFGH".hex(),
+            },  # identity read
+            {
+                "t": 30,
+                "scenario": "scripts-list",
+                "via": "bulk",
+                "dir": "in",
+                "endpoint": 1,
+                "data": "deadbeef",
+            },  # bulk → ignored for DFU
         ],
     }
 
@@ -43,12 +87,14 @@ def test_hook_ingestion_and_api_map_by_scenario():
 
     pair_eps = {(e["method"], e["endpoint"]): e for e in by["pair"]["web"]}
     assert pair_eps[("POST", "my.numworks.com/devices")]["statuses"] == [201]
-    assert by["pair"]["usb_transfers"] == 2         # SET_ADDRESS + identity read (both control)
+    assert by["pair"]["usb_transfers"] == 2  # SET_ADDRESS + identity read (both control)
     assert by["scripts-list"]["usb_transfers"] == 0  # the lone bulk transfer is excluded
 
     # query strings collapse → one endpoint counted twice
     sl = by["scripts-list"]["web"]
-    assert len(sl) == 1 and sl[0]["endpoint"] == "my.numworks.com/scripts.json" and sl[0]["count"] == 2
+    assert (
+        len(sl) == 1 and sl[0]["endpoint"] == "my.numworks.com/scripts.json" and sl[0]["count"] == 2
+    )
 
     # control USB decoded (bulk ignored); SET_ADDRESS then identity read
     assert rep["usb"]["reads"] == [["0x20000000", 12]]
@@ -65,7 +111,7 @@ def test_scrubber_stable_tokens_and_structure():
     obj = {"email": "me@x.com", "dup": ["me@x.com", "other@y.org"], "tok": "A" * 50}
     scrubbed, mapping = scrub(obj)
     assert scrubbed["email"] == "EMAIL_1"
-    assert scrubbed["dup"] == ["EMAIL_1", "EMAIL_2"]   # same value → same token
+    assert scrubbed["dup"] == ["EMAIL_1", "EMAIL_2"]  # same value → same token
     assert scrubbed["tok"] == "TOKEN_1"
     assert len(mapping) == 3
 
@@ -102,8 +148,14 @@ def test_capture_server_marks_stamps_and_serves_userscript():
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    store = {"tool": "nwupdater-capture-hook", "version": 1, "started": 0,
-             "markers": [], "web": [], "usb": []}
+    store = {
+        "tool": "nwupdater-capture-hook",
+        "version": 1,
+        "started": 0,
+        "markers": [],
+        "web": [],
+        "usb": [],
+    }
     control = {"last": 0.0, "scenario": "idle"}
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), capture_cli._make_handler(store, control))
     port = httpd.server_address[1]
@@ -111,13 +163,27 @@ def test_capture_server_marks_stamps_and_serves_userscript():
     base = f"http://127.0.0.1:{port}"
 
     def post(path, obj):
-        urllib.request.urlopen(urllib.request.Request(
-            base + path, data=_j.dumps(obj).encode(), headers={"Content-Type": "application/json"}))
+        urllib.request.urlopen(
+            urllib.request.Request(
+                base + path,
+                data=_j.dumps(obj).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+        )
 
     try:
         post("/mark", {"scenario": "pair"})
-        post("/rec", {"kind": "web", "rec": {"method": "GET",
-                      "url": "https://my.numworks.com/scripts.json", "status": 200}})
+        post(
+            "/rec",
+            {
+                "kind": "web",
+                "rec": {
+                    "method": "GET",
+                    "url": "https://my.numworks.com/scripts.json",
+                    "status": 200,
+                },
+            },
+        )
         # the server holds the current scenario and stamps incoming frames with it
         assert control["scenario"] == "pair"
         assert store["web"] and store["web"][0]["scenario"] == "pair"

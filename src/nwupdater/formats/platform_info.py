@@ -30,8 +30,14 @@ from ._bytes import cstr as _cstr
 from ._bytes import fixed as _fixed
 
 # Re-exported for backward compatibility (tests + device.py import these from here).
-__all__ = ["MAGIC_PLATFORM_INFO", "PLATFORM_INFO_SIZE", "N0200_FIRMWARE_HEADER_ADDR",
-           "PlatformInfo", "parse", "pack"]
+__all__ = [
+    "MAGIC_PLATFORM_INFO",
+    "PLATFORM_INFO_SIZE",
+    "N0200_FIRMWARE_HEADER_ADDR",
+    "PlatformInfo",
+    "parse",
+    "pack",
+]
 
 
 @dataclass
@@ -62,5 +68,11 @@ def parse(raw: bytes) -> PlatformInfo:
 def pack(software_version: str, patch_level: str, *, field1: int = 0, field2: int = 0) -> bytes:
     """Build a structurally valid block (for tests / virtual device)."""
     return struct.pack(
-        "<III8s8sI", MAGIC_PLATFORM_INFO, field1, field2,
-        _fixed(software_version, 8), _fixed(patch_level, 8), MAGIC_PLATFORM_INFO)
+        "<III8s8sI",
+        MAGIC_PLATFORM_INFO,
+        field1,
+        field2,
+        _fixed(software_version, 8),
+        _fixed(patch_level, 8),
+        MAGIC_PLATFORM_INFO,
+    )

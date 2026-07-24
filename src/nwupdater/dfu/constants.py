@@ -74,9 +74,17 @@ STATE_UPLOAD_IDLE = 9
 STATE_ERROR = 10
 
 STATE_NAMES = {
-    0: "appIDLE", 1: "appDETACH", 2: "dfuIDLE", 3: "dfuDNLOAD_SYNC", 4: "dfuDNBUSY",
-    5: "dfuDNLOAD_IDLE", 6: "dfuMANIFEST_SYNC", 7: "dfuMANIFEST",
-    8: "dfuMANIFEST_WAIT_RESET", 9: "dfuUPLOAD_IDLE", 10: "dfuERROR",
+    0: "appIDLE",
+    1: "appDETACH",
+    2: "dfuIDLE",
+    3: "dfuDNLOAD_SYNC",
+    4: "dfuDNBUSY",
+    5: "dfuDNLOAD_IDLE",
+    6: "dfuMANIFEST_SYNC",
+    7: "dfuMANIFEST",
+    8: "dfuMANIFEST_WAIT_RESET",
+    9: "dfuUPLOAD_IDLE",
+    10: "dfuERROR",
 }
 
 # --- DFU status codes (bStatus, byte 0 of GETSTATUS) ------------------------------
@@ -89,10 +97,22 @@ STATUS_errADDRESS = 0x08
 STATUS_errUNKNOWN = 0x0E
 
 STATUS_NAMES = {
-    0x00: "OK", 0x01: "errTARGET", 0x02: "errFILE", 0x03: "errWRITE", 0x04: "errERASE",
-    0x05: "errCHECK_ERASED", 0x06: "errPROG", 0x07: "errVERIFY", 0x08: "errADDRESS",
-    0x09: "errNOTDONE", 0x0A: "errFIRMWARE", 0x0B: "errVENDOR", 0x0C: "errUSBR",
-    0x0D: "errPOR", 0x0E: "errUNKNOWN", 0x0F: "errSTALLEDPKT",
+    0x00: "OK",
+    0x01: "errTARGET",
+    0x02: "errFILE",
+    0x03: "errWRITE",
+    0x04: "errERASE",
+    0x05: "errCHECK_ERASED",
+    0x06: "errPROG",
+    0x07: "errVERIFY",
+    0x08: "errADDRESS",
+    0x09: "errNOTDONE",
+    0x0A: "errFIRMWARE",
+    0x0B: "errVENDOR",
+    0x0C: "errUSBR",
+    0x0D: "errPOR",
+    0x0E: "errUNKNOWN",
+    0x0F: "errSTALLEDPKT",
 }
 
 # --- platforminfo magics ----------------------------------------------------------

@@ -30,15 +30,21 @@ class _EraseRecorder:
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
-    def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0,
-                      data_or_wLength=None, timeout=None):
-        if (bmRequestType == C.REQ_OUT and bRequest == C.DFU_DNLOAD and wValue == 0
-                and data_or_wLength):
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
+        if (
+            bmRequestType == C.REQ_OUT
+            and bRequest == C.DFU_DNLOAD
+            and wValue == 0
+            and data_or_wLength
+        ):
             data = bytes(data_or_wLength)
             if data and data[0] == C.DFUSE_ERASE and len(data) >= 5:
                 self.erases.append(struct.unpack("<I", data[1:5])[0])
-        return self._inner.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex,
-                                         data_or_wLength, timeout)
+        return self._inner.ctrl_transfer(
+            bmRequestType, bRequest, wValue, wIndex, data_or_wLength, timeout
+        )
 
 
 def _recording_mgr(model="n0110"):

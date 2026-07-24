@@ -69,8 +69,9 @@ class FakeUtil:
 
 
 def _dfu_intf(number=0, iInterface=0):
-    return FakeInterface(C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS,
-                         number=number, iInterface=iInterface)
+    return FakeInterface(
+        C.DFU_INTERFACE_CLASS, C.DFU_INTERFACE_SUBCLASS, number=number, iInterface=iInterface
+    )
 
 
 # -- find_calculator -------------------------------------------------------------------
@@ -129,7 +130,9 @@ class RecordingDev:
     def __init__(self):
         self.calls = []
 
-    def ctrl_transfer(self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None):
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
         self.calls.append((bmRequestType, bRequest, wValue, wIndex))
         if bmRequestType == C.REQ_IN and bRequest == C.DFU_GETSTATE:
             return bytes([C.STATE_DFU_IDLE])
@@ -175,6 +178,7 @@ class _VirtualUsbAdapter:
 def _install_fake_usb(monkeypatch, adapter):
     import sys
     import types
+
     usb = types.ModuleType("usb")
     core = types.ModuleType("usb.core")
     util = types.ModuleType("usb.util")
@@ -213,8 +217,8 @@ def test_real_install_requires_confirmation(monkeypatch, capsys):
     from nwupdater.testing.virtual_dfu import virtual_calculator
 
     _install_fake_usb(monkeypatch, _VirtualUsbAdapter(virtual_calculator("n0110")))
-    monkeypatch.setattr("builtins.input", lambda *a: "no")   # user declines
-    rc = cli.main(["install", "--to-version", "25.2.0"])     # real path, no --yes
+    monkeypatch.setattr("builtins.input", lambda *a: "no")  # user declines
+    rc = cli.main(["install", "--to-version", "25.2.0"])  # real path, no --yes
     assert rc == 1
     assert "cancelled" in capsys.readouterr().err
 
@@ -223,9 +227,10 @@ def test_real_install_with_yes_flashes_virtual_device(monkeypatch, capsys):
     from nwupdater import cli
     from nwupdater.testing.virtual_dfu import virtual_calculator
 
-    _install_fake_usb(monkeypatch, _VirtualUsbAdapter(virtual_calculator("n0110", os_version="23.2.4")))
+    _install_fake_usb(
+        monkeypatch, _VirtualUsbAdapter(virtual_calculator("n0110", os_version="23.2.4"))
+    )
     rc = cli.main(["install", "--yes", "--to-version", "25.2.0"])  # real path, confirmation skipped
     out = capsys.readouterr().out
     assert rc == 0
     assert "25.2.0" in out  # synthetic image flashed to the inactive slot and read back
-

@@ -43,7 +43,9 @@ def _cmd_catalog(args) -> int:
             catalog = FirmwareCatalog.fetch()
             src = "live (my.numworks.com)"
         except Exception as exc:  # network issues -> fall back to snapshot
-            print(f"live fetch failed ({exc}); falling back to the bundled snapshot", file=sys.stderr)
+            print(
+                f"live fetch failed ({exc}); falling back to the bundled snapshot", file=sys.stderr
+            )
             catalog = FirmwareCatalog.bundled()
             src = "bundled snapshot"
     elif args.catalog_file:
@@ -92,6 +94,7 @@ def _cmd_login(args) -> int:
     if args.email:
         # Option B: built-in login (the password is never stored, only the token).
         import getpass
+
         pwd = args.password or getpass.getpass("NumWorks password: ")
         try:
             a = A.login_with_password(args.email, pwd)
@@ -103,7 +106,9 @@ def _cmd_login(args) -> int:
         if not args.token:
             print("Open https://my.numworks.com/users/sign_in in your browser and sign in")
             print("(tick \u201cRemember me\u201d), then copy the value of the cookie")
-            print("\u201cremember_user_token\u201d (DevTools \u2192 Application \u2192 Cookies \u2192 my.numworks.com).\n")
+            print(
+                "\u201cremember_user_token\u201d (DevTools \u2192 Application \u2192 Cookies \u2192 my.numworks.com).\n"
+            )
         token = (args.token or input("remember_user_token > ")).strip()
         if not token:
             print("no token provided.", file=sys.stderr)
@@ -111,8 +116,10 @@ def _cmd_login(args) -> int:
         a = A.Auth(token)
 
     if not a.info().get("looks_valid"):
-        print("\u26a0\ufe0f  this token does not look like a NumWorks remember_user_token — saved anyway.",
-              file=sys.stderr)
+        print(
+            "\u26a0\ufe0f  this token does not look like a NumWorks remember_user_token — saved anyway.",
+            file=sys.stderr,
+        )
     path = A.save_auth(a)
     print(f"✓ {a.summary()} — saved to {path}")
     return 0
@@ -121,6 +128,7 @@ def _cmd_login(args) -> int:
 def _require_auth():
     """Load the stored token, or None + a help message."""
     from .catalog import auth as A
+
     a = A.load_auth()
     if a is None:
         print("not signed in — run: nwupdater login", file=sys.stderr)
@@ -149,24 +157,33 @@ def _cmd_install(args) -> int:
 
     # Safety: flashing REAL hardware is destructive and irreversible if interrupted.
     if not args.virtual and not args.yes:
-        print(f"\n\u26a0\ufe0f  You are about to FLASH a REAL calculator ({ident.model_name}). A "
-              "power loss\n   or a wrong image can damage it or brick it.")
+        print(
+            f"\n\u26a0\ufe0f  You are about to FLASH a REAL calculator ({ident.model_name}). A "
+            "power loss\n   or a wrong image can damage it or brick it."
+        )
         print("   Classroom use: if the user is a minor, operate under adult supervision.")
-        if input("   Type 'yes' to confirm (counts as acknowledgment): ").strip().lower() not in ("y", "yes"):
+        if input("   Type 'yes' to confirm (counts as acknowledgment): ").strip().lower() not in (
+            "y",
+            "yes",
+        ):
             print("cancelled.", file=sys.stderr)
             return 1
 
     if args.from_cache:
         from .cache.store import FirmwareCache
+
         blob = FirmwareCache(args.cache_dir).get(model.name, args.to_version)
         if blob is None:
-            print(f"not in cache: {model.name} v{args.to_version} — run 'preload' first",
-                  file=sys.stderr)
+            print(
+                f"not in cache: {model.name} v{args.to_version} — run 'preload' first",
+                file=sys.stderr,
+            )
             return 1
         image = FirmwareImage.from_dfuse(blob)
         print(f"image     : from cache — {model.name} v{args.to_version} ({image.total_size} B)")
     elif args.download:
         from .catalog import download as D
+
         a = _require_auth()
         if a is None:
             return 1
@@ -177,11 +194,13 @@ def _cmd_install(args) -> int:
             return 1
         image = FirmwareImage.from_dfuse(blob)
         from datetime import datetime, timezone
+
         sha256 = D.sha256_hex(blob)
-        log_path = D.record_download(manifest, sha256,
-                                     when=datetime.now(timezone.utc).isoformat())
-        print(f"image     : downloaded {model.name} [{args.channel}] v{manifest.version} "
-              f"(patch {manifest.patch_level}, {image.total_size} B)")
+        log_path = D.record_download(manifest, sha256, when=datetime.now(timezone.utc).isoformat())
+        print(
+            f"image     : downloaded {model.name} [{args.channel}] v{manifest.version} "
+            f"(patch {manifest.patch_level}, {image.total_size} B)"
+        )
         print(f"sha256    : {sha256}")
         print(f"provenance: logged to {log_path}")
     elif args.dfuse:
@@ -198,7 +217,9 @@ def _cmd_install(args) -> int:
 
     inst = Installer(client, model, progress=progress)
     try:
-        plan = inst.install(image, active_slot=args.active_slot, verify=not args.no_verify, boot=args.boot)
+        plan = inst.install(
+            image, active_slot=args.active_slot, verify=not args.no_verify, boot=args.boot
+        )
     except Exception as exc:
         print(f"\ninstall failed: {exc}", file=sys.stderr)
         return 1
@@ -209,8 +230,10 @@ def _cmd_install(args) -> int:
         print(f"target    : slot {plan.target_slot} (inactive) — flashed + verified")
     installed = inst.read_installed_version(plan)
     if installed is None and model.opaque_firmware:
-        print("verify    : N02xx firmware is encrypted/opaque — version not readable from the binary "
-              "(source = manifest; see docs/01-specs/n02xx-firmware-format.md)")
+        print(
+            "verify    : N02xx firmware is encrypted/opaque — version not readable from the binary "
+            "(source = manifest; see docs/01-specs/n02xx-firmware-format.md)"
+        )
     else:
         print(f"verify    : installed version read back = {installed}")
     if args.boot:
@@ -231,8 +254,11 @@ def _cmd_apps(args) -> int:
     mgr = AppManager(client, ident.external_apps_flash, device_api_level=args.api_level)
 
     def confirm(prompt: str) -> bool:
-        return args.virtual or getattr(args, "yes", False) or \
-            input(prompt).strip().lower() in ("y", "yes")
+        return (
+            args.virtual
+            or getattr(args, "yes", False)
+            or input(prompt).strip().lower() in ("y", "yes")
+        )
 
     # write actions (mutate the device) — install / uninstall / reorder
     if args.push or args.uninstall or args.reorder:
@@ -270,8 +296,9 @@ def _cmd_apps(args) -> int:
 
     # list the catalog + client-side compatibility
     store = AppStore.load(args.store_file) if args.store_file else AppStore.bundled()
-    compat = store.compatible(family=ident.family, device_api_level=args.api_level,
-                              has_external_apps=has_region)
+    compat = store.compatible(
+        family=ident.family, device_api_level=args.api_level, has_external_apps=has_region
+    )
     print(f"calc      : {ident.model_name} ({ident.family}) OS {ident.os_version or '?'}")
     print(f"catalog   : {len(store)} apps — {len(compat)} compatible (API level {args.api_level})")
     for e in compat:
@@ -281,6 +308,7 @@ def _cmd_apps(args) -> int:
 
     if args.install:
         from .formats.nwa import build_nwa
+
         entry = store.get(args.install)
         if entry is None:
             print(f"unknown app: {args.install}", file=sys.stderr)
@@ -330,10 +358,14 @@ def _cmd_scripts(args) -> int:
         src = Path(args.push)
         name = src.stem
         target = [r for r in records if r.fullname != name + ".py"]  # read-modify-write
-        target.append(make_python(name, src.read_text(encoding="utf-8"),
-                                   auto_import=not args.no_auto_import))
+        target.append(
+            make_python(name, src.read_text(encoding="utf-8"), auto_import=not args.no_auto_import)
+        )
         if not args.virtual and not args.yes:
-            if input(f"Write {name}.py to storage (RAM)? [y/N] ").strip().lower() not in ("y", "yes"):
+            if input(f"Write {name}.py to storage (RAM)? [y/N] ").strip().lower() not in (
+                "y",
+                "yes",
+            ):
                 print("cancelled.", file=sys.stderr)
                 return 1
         n = write_storage(client, addr, target, capacity=size)
@@ -343,7 +375,9 @@ def _cmd_scripts(args) -> int:
     print(f"calc      : {ident.model_name} ({ident.family}) — storage {size} B")
     print(f"scripts   : {len(pys)}")
     for r in pys:
-        print(f"    {r.fullname:20s} {len(r.code):5d} B  [{'auto-import' if r.auto_import else '—'}]")
+        print(
+            f"    {r.fullname:20s} {len(r.code):5d} B  [{'auto-import' if r.auto_import else '—'}]"
+        )
     return 0
 
 
@@ -367,6 +401,7 @@ def _cmd_preload(args) -> int:
         return 1
     if args.download:
         from .catalog import download as D
+
         a = _require_auth()
         if a is None:
             return 1
@@ -378,8 +413,10 @@ def _cmd_preload(args) -> int:
         version = manifest.version
     else:
         if not args.version:
-            print("give a version, or use --download to fetch the latest official one",
-                  file=sys.stderr)
+            print(
+                "give a version, or use --download to fetch the latest official one",
+                file=sys.stderr,
+            )
             return 1
         blob = FirmwareImage.synthetic(model, version=args.version).to_dfuse()
         version = args.version
@@ -387,7 +424,9 @@ def _cmd_preload(args) -> int:
     entry = cache.put(model.name, version, blob)
     st = cache.status()
     print(f"pre-downloaded: {model.name} v{version} ({_human(entry.size)})")
-    print(f"cache         : version {st['version']} · models {st['models']} · {_human(st['total_size'])}")
+    print(
+        f"cache         : version {st['version']} · models {st['models']} · {_human(st['total_size'])}"
+    )
     print("→ ready to flash a whole class offline (one version kept, purged at 30 days).")
     return 0
 
@@ -396,6 +435,7 @@ def _cmd_cache(args) -> int:
     import time as _t
 
     from .cache.store import FirmwareCache
+
     cache = FirmwareCache(args.cache_dir)
     if args.clear:
         cache.clear()
@@ -423,19 +463,31 @@ def _cmd_ui(args) -> int:
     # Real-first: the shipped app starts DISCONNECTED and attaches a real calculator only if
     # one is actually plugged in. --virtual forces a demo device; otherwise the UI offers a
     # "rescan" and an explicit "explore a demo" button. It never fakes a detection.
-    session = Session(os_version=args.os_version, commit=args.commit,
-                      api_level=args.api_level, connect=False, live_catalog=True)
+    session = Session(
+        os_version=args.os_version,
+        commit=args.commit,
+        api_level=args.api_level,
+        connect=False,
+        live_catalog=True,
+    )
     if args.virtual:
         session.attach_demo(args.virtual, os_version=args.os_version, commit=args.commit)
     else:
         try:
             session.attach_real()
         except Exception as exc:  # no hardware → stay disconnected; the browser UI handles it
-            print(f"no calculator detected ({exc}); connect one or use demo from the browser.",
-                  file=sys.stderr)
-    serve(session, host=args.host, port=args.port, open_browser=not args.no_browser,
-          single_instance=args.single_instance,
-          idle_timeout=args.idle_timeout if args.idle_timeout > 0 else None)
+            print(
+                f"no calculator detected ({exc}); connect one or use demo from the browser.",
+                file=sys.stderr,
+            )
+    serve(
+        session,
+        host=args.host,
+        port=args.port,
+        open_browser=not args.no_browser,
+        single_instance=args.single_instance,
+        idle_timeout=args.idle_timeout if args.idle_timeout > 0 else None,
+    )
     return 0
 
 
@@ -445,10 +497,12 @@ def _cmd_diagnose(args) -> int:
     import json
 
     from .diagnose import diagnose
+
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     opened = _open_device(args)
-    report = diagnose(opened.dev, interface=opened.iface, bcd_device=opened.bcd,
-                      sleep=opened.sleep, timestamp=ts)
+    report = diagnose(
+        opened.dev, interface=opened.iface, bcd_device=opened.bcd, sleep=opened.sleep, timestamp=ts
+    )
 
     out = args.out or f"nwupdater-diagnostic-{ts.replace(':', '').replace('-', '')}.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -456,8 +510,10 @@ def _cmd_diagnose(args) -> int:
 
     print(f"model     : {report['model']} ({report['family']})")
     print(f"serial    : {report['serial_number'] or '?'}")
-    print(f"OS        : {report['os_version'] or '?'}  kernel={report['kernel_version'] or '?'}"
-          f"  commit={report['commit'] or '?'}")
+    print(
+        f"OS        : {report['os_version'] or '?'}  kernel={report['kernel_version'] or '?'}"
+        f"  commit={report['commit'] or '?'}"
+    )
     print(f"transfers : {report['transfer_count']} captured")
     if report["error"]:
         print(f"error     : {report['error']}", file=sys.stderr)
@@ -473,6 +529,7 @@ def _cmd_capture(args) -> int:
 
     from .capture_session import run_capture
     from .catalog import auth as A
+
     a = A.load_auth()
     if a is None or a.is_expired():
         print("authentication required: run `nwupdater login` first", file=sys.stderr)
@@ -483,25 +540,40 @@ def _cmd_capture(args) -> int:
     dev, bcd, iface, sleep = opened.dev, opened.bcd, opened.iface, opened.sleep
     # Serial number via the transport-agnostic client (works virtual + real).
     from .dfu import constants as C
+
     serial = opened.client.get_string_descriptor(C.SERIAL_STRING_INDEX)
 
     model = args.model or f"n{bcd:04x}"
-    dump = run_capture(dev, auth=a, transport=A.UrllibTransport(), interface=iface,
-                       bcd_device=bcd, model=model, channel=args.channel, sleep=sleep,
-                       timestamp=ts, serial=serial)
+    dump = run_capture(
+        dev,
+        auth=a,
+        transport=A.UrllibTransport(),
+        interface=iface,
+        bcd_device=bcd,
+        model=model,
+        channel=args.channel,
+        sleep=sleep,
+        timestamp=ts,
+        serial=serial,
+    )
     out = args.out or f"nwupdater-capture-{ts.replace(':', '').replace('-', '')}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(dump, f, ensure_ascii=False, indent=2)
 
-    print(f"calc      : {dump['usb']['model']} ({dump['usb']['family']}) OS {dump['usb']['os_version'] or '?'}")
+    print(
+        f"calc      : {dump['usb']['model']} ({dump['usb']['family']}) OS {dump['usb']['os_version'] or '?'}"
+    )
     print(f"USB       : {dump['usb']['transfer_count']} transfers (read-only)")
-    print(f"WEB       : {model}/{args.channel} → {dump['web']['outcome']}"
-          + (f" — {dump['web'].get('error')}" if dump['web'].get('error') else ""))
+    print(
+        f"WEB       : {model}/{args.channel} → {dump['web']['outcome']}"
+        + (f" — {dump['web'].get('error')}" if dump["web"].get("error") else "")
+    )
     enr = dump.get("enrollment", {})
     nforms = len(enr.get("forms") or [])
-    print(f"enroll    : portal read (HTTP {enr.get('status', '?')}), {nforms} form(s) "
-          f"— READ-ONLY, nothing enrolled"
-          + (f" — {enr['error']}" if enr.get("error") else ""))
+    print(
+        f"enroll    : portal read (HTTP {enr.get('status', '?')}), {nforms} form(s) "
+        f"— READ-ONLY, nothing enrolled" + (f" — {enr['error']}" if enr.get("error") else "")
+    )
     print(f"flashed   : {dump['flashed']}  (replayable sequence)")
     print(f"→ dump written: {out}  — send this file (secrets redacted, firmware not included).")
     return 0
@@ -522,13 +594,21 @@ def _cmd_pair(args) -> int:
         return 1
 
     ident = DEV.read_device_identity(client, model)
-    body = {"device": {"device_model": ident["device_model"]},
-            "firmware": {"software_version": ident["software_version"],
-                         "software_patch_level": ident["software_patch_level"]}}
+    body = {
+        "device": {"device_model": ident["device_model"]},
+        "firmware": {
+            "software_version": ident["software_version"],
+            "software_patch_level": ident["software_patch_level"],
+        },
+    }
     print(f"calc      : {ident['device_model']}  serial {ident['serial'] or '?'}")
-    print(f"firmware  : {ident['software_version'] or '?'} (patch {ident['software_patch_level'] or '?'})")
-    print(f"heartbeat : POST /devices/{ident['serial'] or '{serial}'}  "
-          f"{_json.dumps(body, ensure_ascii=False)}")
+    print(
+        f"firmware  : {ident['software_version'] or '?'} (patch {ident['software_patch_level'] or '?'})"
+    )
+    print(
+        f"heartbeat : POST /devices/{ident['serial'] or '{serial}'}  "
+        f"{_json.dumps(body, ensure_ascii=False)}"
+    )
 
     if args.dry_run:
         print("→ dry-run: nothing sent.")
@@ -540,6 +620,7 @@ def _cmd_pair(args) -> int:
     if a is None:
         return 1
     from .catalog import auth as A
+
     try:
         res = DEV.pair_device(client, model, a, transport=A.UrllibTransport())
     except (A.TransportError, ValueError) as exc:

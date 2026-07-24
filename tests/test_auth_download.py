@@ -62,25 +62,29 @@ def test_decode_bad_token_raises():
 # -- redirect handler: cross-host secret stripping -------------------------------------
 def _redirect(from_url, to_url, cookie="remember_user_token=SECRET"):
     import urllib.request
+
     h = A._StripCrossHostAuth()
-    req = urllib.request.Request(from_url, headers={"Cookie": cookie,
-                                                    "Authorization": "Bearer SECRET",
-                                                    "User-Agent": "x"})
+    req = urllib.request.Request(
+        from_url, headers={"Cookie": cookie, "Authorization": "Bearer SECRET", "User-Agent": "x"}
+    )
     new = h.redirect_request(req, None, 302, "Found", {}, to_url)
     return {k.lower(): v for k, v in new.headers.items()}
 
 
 def test_redirect_strips_cookie_and_auth_cross_host():
-    hdrs = _redirect("https://my.numworks.com/firmwares/n0110/stable.dfu",
-                     "https://cdn.evil.example.com/leak")
-    assert "cookie" not in hdrs         # the token must NOT follow to a foreign host
+    hdrs = _redirect(
+        "https://my.numworks.com/firmwares/n0110/stable.dfu", "https://cdn.evil.example.com/leak"
+    )
+    assert "cookie" not in hdrs  # the token must NOT follow to a foreign host
     assert "authorization" not in hdrs
     assert hdrs.get("user-agent") == "x"  # non-sensitive headers are preserved
 
 
 def test_redirect_keeps_cookie_same_host():
-    hdrs = _redirect("https://my.numworks.com/firmwares/n0110/stable.dfu",
-                     "https://my.numworks.com/firmwares/n0110/blob")
+    hdrs = _redirect(
+        "https://my.numworks.com/firmwares/n0110/stable.dfu",
+        "https://my.numworks.com/firmwares/n0110/blob",
+    )
     assert hdrs.get("cookie") == "remember_user_token=SECRET"  # same host -> token kept
 
 
@@ -110,9 +114,17 @@ def test_login_with_password_success():
     token = make_token()
     html = '<input name="authenticity_token" value="CSRF">'.encode()
     routes = {
-        ("GET", A.SIGNIN_URL): Response(200, [("Set-Cookie", "_workshop_session=s3ss; path=/; httponly")], html),
-        ("POST", A.SIGNIN_URL): Response(302, [("Location", "https://my.numworks.com/"),
-                                               ("Set-Cookie", f"remember_user_token={token}; path=/; httponly")], b""),
+        ("GET", A.SIGNIN_URL): Response(
+            200, [("Set-Cookie", "_workshop_session=s3ss; path=/; httponly")], html
+        ),
+        ("POST", A.SIGNIN_URL): Response(
+            302,
+            [
+                ("Location", "https://my.numworks.com/"),
+                ("Set-Cookie", f"remember_user_token={token}; path=/; httponly"),
+            ],
+            b"",
+        ),
     }
     tr = FakeTransport(routes)
     auth = A.login_with_password("me@example.com", "pw", transport=tr)
@@ -133,10 +145,15 @@ def test_login_with_password_bad_credentials():
 
 
 # -- manifest + download ---------------------------------------------------------------
-MANIFEST_JSON = json.dumps({
-    "id": 314, "version": "25.2.0", "patch_level": "43f67db",
-    "device_model": {"id": 2, "name": "N0110", "device_type_id": 1}, "size": None,
-}).encode()
+MANIFEST_JSON = json.dumps(
+    {
+        "id": 314,
+        "version": "25.2.0",
+        "patch_level": "43f67db",
+        "device_model": {"id": 2, "name": "N0110", "device_type_id": 1},
+        "size": None,
+    }
+).encode()
 
 
 def _auth():
@@ -145,10 +162,15 @@ def _auth():
 
 def test_fetch_manifest():
     blob = dfuse_blob()
-    manifest_json = json.dumps({
-        "id": 314, "version": "25.2.0", "patch_level": "43f67db",
-        "device_model": {"id": 2, "name": "N0110", "device_type_id": 1}, "size": len(blob),
-    }).encode()
+    manifest_json = json.dumps(
+        {
+            "id": 314,
+            "version": "25.2.0",
+            "patch_level": "43f67db",
+            "device_model": {"id": 2, "name": "N0110", "device_type_id": 1},
+            "size": len(blob),
+        }
+    ).encode()
     routes = {("GET", D.manifest_url("n0110", "stable")): Response(200, [], manifest_json)}
     m = D.fetch_manifest("n0110", "stable", _auth(), transport=FakeTransport(routes))
     assert m.version == "25.2.0" and m.patch_level == "43f67db"
@@ -158,13 +180,15 @@ def test_fetch_manifest():
 def test_download_dfu_ok_and_size_check():
     blob = dfuse_blob()
     routes = {("GET", D.dfu_url("n0110", "stable")): Response(200, [], blob)}
-    got = D.download_dfu("n0110", "stable", _auth(), expected_size=len(blob),
-                         transport=FakeTransport(routes))
+    got = D.download_dfu(
+        "n0110", "stable", _auth(), expected_size=len(blob), transport=FakeTransport(routes)
+    )
     assert got[:5] == b"DfuSe"
     # wrong expected size -> error
     with pytest.raises(D.DownloadError):
-        D.download_dfu("n0110", "stable", _auth(), expected_size=len(blob) + 1,
-                       transport=FakeTransport(routes))
+        D.download_dfu(
+            "n0110", "stable", _auth(), expected_size=len(blob) + 1, transport=FakeTransport(routes)
+        )
 
 
 def test_download_dfu_rejects_non_dfuse():
@@ -181,10 +205,14 @@ def test_download_401_raises_auth_required():
 
 def test_fetch_firmware_end_to_end():
     blob = dfuse_blob()
-    manifest_json = json.dumps({
-        "version": "25.2.0", "patch_level": "43f67db",
-        "device_model": {"id": 2, "device_type_id": 1}, "size": len(blob),
-    }).encode()
+    manifest_json = json.dumps(
+        {
+            "version": "25.2.0",
+            "patch_level": "43f67db",
+            "device_model": {"id": 2, "device_type_id": 1},
+            "size": len(blob),
+        }
+    ).encode()
     routes = {
         ("GET", D.manifest_url("n0110", "stable")): Response(200, [], manifest_json),
         ("GET", D.dfu_url("n0110", "stable")): Response(200, [], blob),
@@ -203,6 +231,7 @@ def test_bad_channel_rejected():
 # -- provenance : empreinte SHA-256 + journal ------------------------------------------
 def test_sha256_hex_matches_hashlib():
     import hashlib
+
     blob = dfuse_blob()
     assert D.sha256_hex(blob) == hashlib.sha256(blob).hexdigest()
     # déterministe : mêmes octets → même empreinte
@@ -211,27 +240,44 @@ def test_sha256_hex_matches_hashlib():
 
 def test_record_download_appends_jsonl(tmp_path):
     p = tmp_path / "downloads.log"
-    m = D.FirmwareManifest(model="n0110", channel="stable", version="25.2.0",
-                           patch_level="43f67db", size=3191133)
+    m = D.FirmwareManifest(
+        model="n0110", channel="stable", version="25.2.0", patch_level="43f67db", size=3191133
+    )
     D.record_download(m, "abc123", when="2026-07-12T10:00:00+00:00", path=p)
     D.record_download(m, "def456", when="2026-07-12T11:00:00+00:00", path=p)
     lines = p.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2  # append, pas écrasement
     first = json.loads(lines[0])
-    assert first == {"when": "2026-07-12T10:00:00+00:00", "model": "n0110",
-                     "channel": "stable", "version": "25.2.0", "patch_level": "43f67db",
-                     "size": 3191133, "sha256": "abc123"}
+    assert first == {
+        "when": "2026-07-12T10:00:00+00:00",
+        "model": "n0110",
+        "channel": "stable",
+        "version": "25.2.0",
+        "patch_level": "43f67db",
+        "size": 3191133,
+        "sha256": "abc123",
+    }
 
 
 def test_register_device_posts_expected_body():
     from nwupdater.catalog import device as DV
-    routes = {("POST", DV.device_url("SER123")):
-              Response(200, [], b'{"id":"SER123","serial_number":"SER123","software_version":"3.0.0"}')}
+
+    routes = {
+        ("POST", DV.device_url("SER123")): Response(
+            200, [], b'{"id":"SER123","serial_number":"SER123","software_version":"3.0.0"}'
+        )
+    }
     tr = FakeTransport(routes)
-    out = DV.register_device(Auth(make_token()), "SER123", device_model="N0200",
-                             software_version="3.0.0", software_patch_level="8059a46", transport=tr)
+    out = DV.register_device(
+        Auth(make_token()),
+        "SER123",
+        device_model="N0200",
+        software_version="3.0.0",
+        software_patch_level="8059a46",
+        transport=tr,
+    )
     assert out["status"] == 200 and "3.0.0" in out["body"]
-    sent = json.loads(tr.calls[0][3].decode())          # the POST body
+    sent = json.loads(tr.calls[0][3].decode())  # the POST body
     assert sent["device"]["device_model"] == "N0200"
     assert sent["firmware"]["software_version"] == "3.0.0"
     assert sent["firmware"]["software_patch_level"] == "8059a46"
@@ -239,6 +285,7 @@ def test_register_device_posts_expected_body():
 
 class _FakeClient:
     """DfuClient stand-in for pairing: serves a serial descriptor + a memory read."""
+
     def __init__(self, serial, header_at):
         self._serial = serial
         self._mem = header_at  # {addr: bytes}
@@ -255,7 +302,7 @@ def test_pair_device_reads_n0200_identity_and_posts():
     from nwupdater.formats import platform_info as PI
     from nwupdater.models import MODELS
 
-    header = PI.pack("3.0.0", "8059a46")                 # @0x080040C0 FirmwareHeader block
+    header = PI.pack("3.0.0", "8059a46")  # @0x080040C0 FirmwareHeader block
     client = _FakeClient("SER-XYZ-123", {PI.N0200_FIRMWARE_HEADER_ADDR: header})
     routes = {("POST", DV.device_url("SER-XYZ-123")): Response(200, [], b'{"id":"SER-XYZ-123"}')}
     tr = FakeTransport(routes)
@@ -272,7 +319,8 @@ def test_pair_device_reads_n0200_identity_and_posts():
 def test_pair_device_requires_serial():
     from nwupdater.catalog import device as DV
     from nwupdater.models import MODELS
-    client = _FakeClient(None, {})                        # no iSerialNumber
+
+    client = _FakeClient(None, {})  # no iSerialNumber
     with pytest.raises(ValueError):
         DV.pair_device(client, MODELS[0x0200], Auth(make_token()), transport=FakeTransport({}))
 
@@ -309,15 +357,20 @@ def test_full_multislot_image_verbatim_and_version_readback():
 
     def slot_bytes():
         buf = bytearray(b"\x00" * (0x10000 + 48))
-        buf[8:8 + 24] = headers.pack_kernel_header("25.2.0", "43f67db")
-        buf[0x10000:0x10000 + 48] = headers.pack_userland_header(
-            "25.2.0", storage_addr_ram=model.memory.sram_origin + 0x1000,
-            storage_size_ram=0x1000, external_apps_flash=(0, 0))
+        buf[8 : 8 + 24] = headers.pack_kernel_header("25.2.0", "43f67db")
+        buf[0x10000 : 0x10000 + 48] = headers.pack_userland_header(
+            "25.2.0",
+            storage_addr_ram=model.memory.sram_origin + 0x1000,
+            storage_size_ram=0x1000,
+            external_apps_flash=(0, 0),
+        )
         return bytes(buf)
 
-    segs = [FirmwareSegment(0x08000000, b"\x00" * 1024),
-            FirmwareSegment(slot_a, slot_bytes()),   # slot A
-            FirmwareSegment(slot_b, slot_bytes())]   # slot B (both pre-populated)
+    segs = [
+        FirmwareSegment(0x08000000, b"\x00" * 1024),
+        FirmwareSegment(slot_a, slot_bytes()),  # slot A
+        FirmwareSegment(slot_b, slot_bytes()),
+    ]  # slot B (both pre-populated)
     image = FirmwareImage(segs, version="25.2.0", bcd_device=0x0000)
 
     plan = plan_install(model, image, active_slot="A")

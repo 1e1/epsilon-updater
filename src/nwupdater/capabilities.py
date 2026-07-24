@@ -38,10 +38,12 @@ class Capabilities:
     """Effective feature set for a device. All flags default off (the safe unknown-device value)."""
 
     firmware_update: bool = False
-    firmware_readable: bool = False  # plaintext SlotInfo/Kernel/Userland headers (False on opaque N02xx)
-    ab_slots: bool = False           # A/B slot layout for atomic updates
-    external_apps: bool = False      # third-party ``.nwa`` apps (needs external QSPI flash)
-    scripts: bool = False            # Python scripts in RAM storage
+    firmware_readable: bool = (
+        False  # plaintext SlotInfo/Kernel/Userland headers (False on opaque N02xx)
+    )
+    ab_slots: bool = False  # A/B slot layout for atomic updates
+    external_apps: bool = False  # third-party ``.nwa`` apps (needs external QSPI flash)
+    scripts: bool = False  # Python scripts in RAM storage
 
     def to_dict(self) -> dict:
         return asdict(self)

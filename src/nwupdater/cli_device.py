@@ -15,6 +15,7 @@ def _open_real_device():
     Returns ``(device, bcdDevice, interface)``. Exits with a helpful message if pyusb is
     missing or no calculator/DFU interface is available."""
     from .dfu import usbio
+
     try:
         od = usbio.open_calculator()
     except usbio.PyusbMissing as exc:
@@ -49,6 +50,7 @@ def _open_device(args) -> _Opened:
     device with their own timing."""
     if args.virtual:
         from .testing.virtual_dfu import virtual_calculator
+
         kw: dict[str, str] = {}
         if getattr(args, "os_version", None) is not None:
             kw["os_version"] = args.os_version

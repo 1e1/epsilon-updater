@@ -46,9 +46,9 @@ class InterfaceClaimError(UsbError):
 
 @dataclass
 class OpenDevice:
-    dev: UsbDeviceLike   # the pyusb usb.core.Device or the virtual device (structural contract)
+    dev: UsbDeviceLike  # the pyusb usb.core.Device or the virtual device (structural contract)
     bcd_device: int
-    interface: int       # DFU interface number (wIndex for control transfers)
+    interface: int  # DFU interface number (wIndex for control transfers)
     alt_setting: int
     id_product: int
     memory_layout: object | None = None  # parsed DfuSe flash layout (§6.4), if advertised
@@ -75,8 +75,10 @@ def _find_dfu_interface(cfg):
     Matches by class like webdfu_numworks (robust to interface renumbering). An active pyusb
     configuration is directly iterable over its interface descriptors."""
     for intf in cfg:
-        if (getattr(intf, "bInterfaceClass", None) == C.DFU_INTERFACE_CLASS
-                and getattr(intf, "bInterfaceSubClass", None) == C.DFU_INTERFACE_SUBCLASS):
+        if (
+            getattr(intf, "bInterfaceClass", None) == C.DFU_INTERFACE_CLASS
+            and getattr(intf, "bInterfaceSubClass", None) == C.DFU_INTERFACE_SUBCLASS
+        ):
             return intf
     return None
 
@@ -88,13 +90,15 @@ def _resolve_backend(backend):
         return backend
     try:
         import libusb_package
+
         return libusb_package.get_libusb1_backend()
     except Exception:
         return None
 
 
-def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
-                    backend=None) -> OpenDevice:
+def find_calculator(
+    core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS, backend=None
+) -> OpenDevice:
     """Find, configure and claim a NumWorks calculator's DFU interface.
 
     ``core``/``util`` are the ``usb.core``/``usb.util`` modules (injected for testability).
@@ -119,7 +123,8 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
             "  • Plug in the calculator and put it in DFU/bootloader mode\n"
             "    (e.g. N0110: RESET while holding the 6 key; black screen, LED),\n"
             "  • check the cable (data, not charge-only),\n"
-            f"  • VID 0x{vid:04x}, expected PIDs: {', '.join(f'0x{p:04x}' for p in pids)}.")
+            f"  • VID 0x{vid:04x}, expected PIDs: {', '.join(f'0x{p:04x}' for p in pids)}."
+        )
     assert matched_pid is not None  # set alongside dev in the scan loop above
 
     # 2. activate configuration (idempotent; ignore if already configured)
@@ -137,7 +142,8 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
     if intf is None:
         raise DfuInterfaceNotFound(
             "DFU interface not found (class 0xFE/0x01). The device is probably not in "
-            "DFU mode — put it back in bootloader and retry.")
+            "DFU mode — put it back in bootloader and retry."
+        )
     interface = getattr(intf, "bInterfaceNumber", C.DFU_INTERFACE)
     alt = getattr(intf, "bAlternateSetting", C.ALT_FLASH)
 
@@ -148,7 +154,8 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
         raise InterfaceClaimError(
             f"cannot claim DFU interface {interface}: {exc}\n"
             "  • macOS/Linux: insufficient USB permissions (libusb / udev rule),\n"
-            "  • another program (a WebUSB browser?) may already be using it.") from exc
+            "  • another program (a WebUSB browser?) may already be using it."
+        ) from exc
 
     # 5. select the Flash alt-setting (best effort — NumWorks alt 0 reads/writes any address)
     try:
@@ -166,8 +173,14 @@ def find_calculator(core, util, *, vid: int = C.USB_VID, pids=C.KNOWN_PIDS,
         except Exception:
             pass
 
-    return OpenDevice(dev=dev, bcd_device=dev.bcdDevice, interface=interface,
-                      alt_setting=alt, id_product=matched_pid, memory_layout=layout)
+    return OpenDevice(
+        dev=dev,
+        bcd_device=dev.bcdDevice,
+        interface=interface,
+        alt_setting=alt,
+        id_product=matched_pid,
+        memory_layout=layout,
+    )
 
 
 def open_calculator(core=None, util=None, *, backend=None) -> OpenDevice:
@@ -184,6 +197,7 @@ def open_calculator(core=None, util=None, *, backend=None) -> OpenDevice:
             import usb.util
         except ImportError as exc:
             raise PyusbMissing(
-                "pyusb required for real mode: pip install 'nwupdater[usb]'") from exc
+                "pyusb required for real mode: pip install 'nwupdater[usb]'"
+            ) from exc
         core, util = usb.core, usb.util
     return find_calculator(core, util, backend=backend)

@@ -43,7 +43,9 @@ class CacheEntry:
 
 
 class FirmwareCache:
-    def __init__(self, root: Path | None = None, *, ttl_days: int = DEFAULT_TTL_DAYS, now=time.time):
+    def __init__(
+        self, root: Path | None = None, *, ttl_days: int = DEFAULT_TTL_DAYS, now=time.time
+    ):
         self.root = Path(root) if root else default_cache_dir()
         self.ttl = ttl_days * 86400
         self._now = now
@@ -108,8 +110,9 @@ class FirmwareCache:
             self._unlink(entries.pop(k))
         filename = f"{model}-{version}.bin".replace("/", "_").replace(" ", "_")
         self._atomic_write(self.root / filename, data)
-        entry = CacheEntry(model, version, filename, len(data),
-                           hashlib.sha256(data).hexdigest(), self._now(), real)
+        entry = CacheEntry(
+            model, version, filename, len(data), hashlib.sha256(data).hexdigest(), self._now(), real
+        )
         entries[entry.key()] = entry
         self._save(entries)
         return entry
@@ -158,8 +161,10 @@ class FirmwareCache:
         return {
             "version": self.cached_version(dict((e.key(), e) for e in entries)),
             "models": sorted(e.model for e in entries),
-            "entries": [{"model": e.model, "version": e.version, "size": e.size, "real": e.real}
-                        for e in sorted(entries, key=lambda e: e.model)],
+            "entries": [
+                {"model": e.model, "version": e.version, "size": e.size, "real": e.real}
+                for e in sorted(entries, key=lambda e: e.model)
+            ],
             "total_size": sum(e.size for e in entries),
             "expires_at": oldest + self.ttl,
             "ttl_days": self.ttl // 86400,

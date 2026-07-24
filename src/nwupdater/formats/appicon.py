@@ -35,7 +35,7 @@ def lz4_block_decompress(src: bytes, max_out: int) -> bytes:
                 lit += b
                 if b != 255:
                     break
-        out += src[i:i + lit]
+        out += src[i : i + lit]
         i += lit
         if i >= n:
             break  # last sequence is literals-only
@@ -108,14 +108,14 @@ def _elf_section(blob: bytes, want: str) -> bytes | None:
 
         def sh(i):
             o = e_shoff + i * e_shentsize
-            return struct.unpack(end + "IIIIIIIIII", blob[o:o + 40])
+            return struct.unpack(end + "IIIIIIIIII", blob[o : o + 40])
 
         stroff = sh(e_shstrndx)[4]
         for i in range(e_shnum):
             h = sh(i)
             j = blob.index(b"\x00", stroff + h[0])
-            if blob[stroff + h[0]:j].decode("ascii", "replace") == want:
-                return blob[h[4]:h[4] + h[5]]
+            if blob[stroff + h[0] : j].decode("ascii", "replace") == want:
+                return blob[h[4] : h[4] + h[5]]
     except (struct.error, IndexError, ValueError):
         return None
     return None
@@ -130,7 +130,7 @@ def decode_app_icon(blob: bytes) -> str | None:
     if comp is None:  # flat synthetic fallback
         info = AppInfo.parse(blob)
         if info.valid and info.icon_size and info.icon_address:
-            comp = blob[info.icon_address: info.icon_address + info.icon_size]
+            comp = blob[info.icon_address : info.icon_address + info.icon_size]
     if not comp:
         return None
     try:
@@ -141,8 +141,15 @@ def decode_app_icon(blob: bytes) -> str | None:
 
 
 # -- demo icon generation (so the synthetic demo apps carry a real, decodable icon) -----
-_PALETTE = [(0x5a, 0x8f, 0xef), (0xf0, 0xa6, 0x3a), (0x38, 0xb2, 0xac), (0xef, 0x6f, 0x6c),
-            (0x9b, 0x7e, 0xde), (0x4b, 0xb7, 0x6a), (0xe0, 0x60, 0x7e)]
+_PALETTE = [
+    (0x5A, 0x8F, 0xEF),
+    (0xF0, 0xA6, 0x3A),
+    (0x38, 0xB2, 0xAC),
+    (0xEF, 0x6F, 0x6C),
+    (0x9B, 0x7E, 0xDE),
+    (0x4B, 0xB7, 0x6A),
+    (0xE0, 0x60, 0x7E),
+]
 
 
 def _rgb565(r: int, g: int, b: int) -> int:
@@ -152,7 +159,7 @@ def _rgb565(r: int, g: int, b: int) -> int:
 def demo_icon_lz4(seed: str) -> bytes:
     """A recognisable framed-square icon (colour from ``seed``), LZ4-encoded like a real .nwi."""
     r, g, b = _PALETTE[(ord(seed[0]) if seed else 0) % len(_PALETTE)]
-    bg, fg = _rgb565(r, g, b), _rgb565(0xff, 0xff, 0xff)
+    bg, fg = _rgb565(r, g, b), _rgb565(0xFF, 0xFF, 0xFF)
     px = bytearray()
     for y in range(ICON_H):
         for x in range(ICON_W):

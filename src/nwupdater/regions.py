@@ -24,11 +24,11 @@ class PlanItem:
 
 @dataclass(frozen=True)
 class WritePlan:
-    first_changed: int      # index in target of the first divergence (= unchanged prefix length)
-    rewrite: list[str]      # ids rewritten = target[first_changed:]
-    write_bytes: int        # bytes written (sector-rounded for flash)
-    erase_bytes: int        # bytes erased (flash only; 0 for packed SRAM)
-    fits: bool              # does the target fit within capacity?
+    first_changed: int  # index in target of the first divergence (= unchanged prefix length)
+    rewrite: list[str]  # ids rewritten = target[first_changed:]
+    write_bytes: int  # bytes written (sector-rounded for flash)
+    erase_bytes: int  # bytes erased (flash only; 0 for packed SRAM)
+    fits: bool  # does the target fit within capacity?
 
     @property
     def unchanged(self) -> int:
@@ -39,8 +39,9 @@ def _footprint(size: int, sector: int | None) -> int:
     return ceil(size / sector) * sector if sector else size
 
 
-def plan(current: list[PlanItem], target: list[PlanItem], *, capacity: int,
-         sector: int | None = None) -> WritePlan:
+def plan(
+    current: list[PlanItem], target: list[PlanItem], *, capacity: int, sector: int | None = None
+) -> WritePlan:
     """Compute the minimal-rewrite plan turning ``current`` (on device) into ``target``.
 
     ``first_changed`` is the first index where the ids differ (a missing item counts as a
@@ -67,5 +68,6 @@ def plan(current: list[PlanItem], target: list[PlanItem], *, capacity: int,
     else:
         erase_bytes = 0
 
-    return WritePlan(first_changed, [it.id for it in rewrite], write_bytes, erase_bytes,
-                     total <= capacity)
+    return WritePlan(
+        first_changed, [it.id for it in rewrite], write_bytes, erase_bytes, total <= capacity
+    )

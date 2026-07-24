@@ -75,8 +75,11 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 return False
             origin = self.headers.get("Origin")
             if origin:
-                allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}",
-                           f"http://[::1]:{port}"}
+                allowed = {
+                    f"http://127.0.0.1:{port}",
+                    f"http://localhost:{port}",
+                    f"http://[::1]:{port}",
+                }
                 return origin.strip().lower() in allowed
             return not require_origin
 
@@ -116,6 +119,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
             progress bar (Content-Length forwarded from upstream). Validation happens BEFORE any
             header is sent so failures still return clean JSON."""
             from urllib.parse import parse_qs, urlparse
+
             url = (parse_qs(urlparse(self.path).query).get("url") or [""])[0]
             try:
                 length, up = session.open_app_stream(url)
@@ -156,7 +160,12 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 return
             try:
                 if path == "/api/ping":
-                    self._json({"app": instance.APP_MARKER, "model": session.model.name if session.model else None})
+                    self._json(
+                        {
+                            "app": instance.APP_MARKER,
+                            "model": session.model.name if session.model else None,
+                        }
+                    )
                     return
                 if path == "/api/identity":
                     self._json(session.identity())
@@ -195,10 +204,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 return  # 413 already sent
             try:
                 if path == "/api/install/firmware":
-                    self._json(session.install_firmware(body.get("version", ""),
-                                                        from_cache=bool(body.get("from_cache")),
-                                                        download=bool(body.get("download")),
-                                                        channel=body.get("channel") or session.channel))
+                    self._json(
+                        session.install_firmware(
+                            body.get("version", ""),
+                            from_cache=bool(body.get("from_cache")),
+                            download=bool(body.get("download")),
+                            channel=body.get("channel") or session.channel,
+                        )
+                    )
                 elif path == "/api/device/rescan":
                     # Try to attach a real calculator; a clean "not connected" is not an error.
                     try:
@@ -213,13 +226,16 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.set_channel(body.get("channel", "stable")))
                 elif path == "/api/auth/login":
                     if body.get("email"):
-                        self._json(session.login_password(body.get("email", ""), body.get("password", "")))
+                        self._json(
+                            session.login_password(body.get("email", ""), body.get("password", ""))
+                        )
                     else:
                         self._json(session.login_token(body.get("token", "")))
                 elif path == "/api/boot":
                     self._json(session.boot())
                 elif path == "/api/capture":
                     import datetime
+
                     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
                     self._json(session.capture_sequence(timestamp=ts))
                 elif path == "/api/auth/logout":
@@ -228,6 +244,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.install_app(body.get("name", "")))
                 elif path == "/api/install/app-local":
                     import base64
+
                     data = base64.b64decode(body.get("data_b64", ""))
                     self._json(session.install_local_app(body.get("filename", "app.nwa"), data))
                 elif path == "/api/cache/preload":
@@ -238,12 +255,18 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.cache_clear())
                 elif path == "/api/apps/push":
                     import base64
-                    self._json(session.push_app(body.get("filename", "app.nwa"),
-                                                base64.b64decode(body.get("data_b64", ""))))
+
+                    self._json(
+                        session.push_app(
+                            body.get("filename", "app.nwa"),
+                            base64.b64decode(body.get("data_b64", "")),
+                        )
+                    )
                 elif path == "/api/apps/add":
                     self._json(session.add_store_app(body.get("name", "")))
                 elif path == "/api/apps/inspect":
                     import base64
+
                     self._json(session.inspect_app(base64.b64decode(body.get("data_b64", ""))))
                 elif path == "/api/apps/fetch":
                     self._json(session.fetch_app(body.get("url", "")))
@@ -252,8 +275,13 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 elif path == "/api/apps/reorder":
                     self._json(session.reorder_apps(body.get("order", [])))
                 elif path == "/api/scripts/push":
-                    self._json(session.push_script(body.get("name", ""), body.get("code", ""),
-                                                   bool(body.get("auto_import", True))))
+                    self._json(
+                        session.push_script(
+                            body.get("name", ""),
+                            body.get("code", ""),
+                            bool(body.get("auto_import", True)),
+                        )
+                    )
                 elif path == "/api/scripts/delete":
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
@@ -270,8 +298,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
     return Handler
 
 
-def make_server(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
-                web_dir: Path = WEB_DIR, control: dict | None = None) -> ThreadingHTTPServer:
+def make_server(
+    session: Session,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    web_dir: Path = WEB_DIR,
+    control: dict | None = None,
+) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), _handler(session, web_dir, control))
 
 
@@ -287,9 +321,15 @@ def _idle_watcher(control: dict, timeout: float, interval: float = 20.0):
             return
 
 
-def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
-          open_browser: bool = True, single_instance: bool = False,
-          idle_timeout: float | None = None) -> None:
+def serve(
+    session: Session,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+    single_instance: bool = False,
+    idle_timeout: float | None = None,
+) -> None:
     # Single instance: if one is already running, just reopen the browser there.
     if single_instance:
         existing = instance.existing_url()
@@ -313,8 +353,11 @@ def serve(session: Session, *, host: str = "127.0.0.1", port: int = 8765,
         instance.write(url, actual_port)
 
     ident = session.identity()
-    where = "no calculator — connect one or explore a demo from the page" if not ident.get("connected") \
+    where = (
+        "no calculator — connect one or explore a demo from the page"
+        if not ident.get("connected")
         else f"{ident['model']}{' (demo)' if session.virtual else ''}"
+    )
     print(f"nwupdater UI : {url}  (device: {where})")
     print('Close the tab and click "Quit", or press Ctrl+C to stop.')
     if idle_timeout and idle_timeout > 0:

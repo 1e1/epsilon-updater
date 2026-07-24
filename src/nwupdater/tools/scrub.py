@@ -39,7 +39,7 @@ class Scrubber:
     def text(self, s: str) -> str:
         if not isinstance(s, str) or not s:
             return s
-        for v, tok in list(self._map.items()):    # explicit values first
+        for v, tok in list(self._map.items()):  # explicit values first
             s = s.replace(v, tok)
         s = _EMAIL.sub(lambda m: self._token(m.group(), "EMAIL"), s)
         s = _LONGTOK.sub(lambda m: self._token(m.group(), "TOKEN"), s)
@@ -67,13 +67,19 @@ def scrub(obj, extra_values=()):
 
 def main(argv=None) -> int:
     import argparse
+
     p = argparse.ArgumentParser(
         prog="python -m nwupdater.tools.scrub",
-        description="Redact personal data from a capture (unofficial project).")
+        description="Redact personal data from a capture (unofficial project).",
+    )
     p.add_argument("capture", help="capture.json to clean")
     p.add_argument("-o", "--out", help="output file (default: <capture>.scrubbed.json)")
-    p.add_argument("--value", action="append", default=[],
-                   help="exact value to redact (email, serial number); repeatable")
+    p.add_argument(
+        "--value",
+        action="append",
+        default=[],
+        help="exact value to redact (email, serial number); repeatable",
+    )
     p.add_argument("--mapping", action="store_true", help="print the value→token table")
     args = p.parse_args(argv)
 

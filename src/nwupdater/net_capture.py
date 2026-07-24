@@ -37,13 +37,15 @@ def inspect_forms(html: str) -> list[dict]:
     submit anything; this only reads what the page already exposes."""
     forms = []
     for attrs, inner in _FORM_RE.findall(html or ""):
-        forms.append({
-            "action": _attr(attrs, "action"),
-            "method": (_attr(attrs, "method") or "GET").upper(),
-            "fields": sorted(set(_FIELD_RE.findall(inner))),
-            "captcha": bool(_CAPTCHA_RE.search(inner) or _CAPTCHA_RE.search(attrs)),
-            "file_input": bool(re.search(r'type\s*=\s*"file"', inner, re.I)),
-        })
+        forms.append(
+            {
+                "action": _attr(attrs, "action"),
+                "method": (_attr(attrs, "method") or "GET").upper(),
+                "fields": sorted(set(_FIELD_RE.findall(inner))),
+                "captcha": bool(_CAPTCHA_RE.search(inner) or _CAPTCHA_RE.search(attrs)),
+                "file_input": bool(re.search(r'type\s*=\s*"file"', inner, re.I)),
+            }
+        )
     return forms
 
 
@@ -93,24 +95,34 @@ class RecordingTransport:
         self._inner = inner
         self.transfers: list[dict] = []
 
-    def open(self, method, url, *, headers=None, data=None, timeout=20.0,
-             allow_redirects=False) -> Response:
-        resp = self._inner.open(method, url, headers=headers, data=data, timeout=timeout,
-                                allow_redirects=allow_redirects)
+    def open(
+        self, method, url, *, headers=None, data=None, timeout=20.0, allow_redirects=False
+    ) -> Response:
+        resp = self._inner.open(
+            method,
+            url,
+            headers=headers,
+            data=data,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+        )
         ct = resp.header("Content-Type")
-        self.transfers.append({
-            "seq": len(self.transfers),
-            "request": {
-                "method": method,
-                "url": url,
-                "headers": _redact_headers(headers),
-                "body": _summarize_request_body(data),
-            },
-            "response": {
-                "status": resp.status,
-                "headers": {k: (_REDACT if k.lower() in _SECRET_HEADERS else v)
-                            for k, v in resp.headers},
-                "body": _summarize_response_body(resp.body, ct),
-            },
-        })
+        self.transfers.append(
+            {
+                "seq": len(self.transfers),
+                "request": {
+                    "method": method,
+                    "url": url,
+                    "headers": _redact_headers(headers),
+                    "body": _summarize_request_body(data),
+                },
+                "response": {
+                    "status": resp.status,
+                    "headers": {
+                        k: (_REDACT if k.lower() in _SECRET_HEADERS else v) for k, v in resp.headers
+                    },
+                    "body": _summarize_response_body(resp.body, ct),
+                },
+            }
+        )
         return resp
