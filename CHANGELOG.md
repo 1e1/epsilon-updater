@@ -65,5 +65,8 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   vérifié, plus aucun module différé.
 - **Couverture** : `pytest-cov` avec un seuil (`fail_under = 78 %`, branche) sur le job Linux ;
   smoke tests HTTP ajoutés pour les routes du serveur.
+- **Test UI headless** (Playwright + Chromium, job CI dédié, extra `test-ui`) : charge la page
+  servie, vérifie qu'elle tourne sans erreur JS et que les fetch same-origin du navigateur
+  atteignent l'API durcie CSRF — la couverture automatisée qui manquait à la couche JS/UI.
 - **bandit** rendu bloquant en CI ; matrice CI étendue à **macOS** et **Windows** (fumée) en
   plus de Linux (Python 3.10–3.12).
