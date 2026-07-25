@@ -12,7 +12,7 @@ depuis le site officiel, et comprendre le format pour les installer (Lot 3).
   »* Le flux officiel = **l'utilisateur fournit un `.nwa`**, flashé en WebUSB dans la région
   « external apps ». **Il n'y a pas de "catalogue d'apps" JSON public** : le modèle officiel
   est *upload d'un fichier*, pas un store curé côté serveur.
-- Les **catalogues communautaires** (Nwagyu, dépôts GitHub) hébergent des `.nwa`
+- Les **catalogues communautaires** (dépôts GitHub, sites tiers) hébergent des `.nwa`
   indépendamment. → notre updater pourra agréger ces sources en plus du compte NumWorks.
 
 > Implication : « récupérer des apps tierces » = (a) via le compte NumWorks authentifié
