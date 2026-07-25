@@ -37,17 +37,46 @@ class UsbDeviceLike(Protocol):
     ): ...
 
 
+def read_string_descriptor(
+    dev, index: int, *, langid: int = C.USB_LANGID_EN_US, timeout_ms: int = 4000
+) -> str | None:
+    """Read USB string descriptor ``index`` from ``dev`` via standard GET_DESCRIPTOR.
+
+    A free function (not tied to a DfuClient) so hardware setup (usbio) can read the DFU
+    interface's memory-layout string before a client exists. Returns None for index 0 or on
+    any failure/empty descriptor; never raises."""
+    if not index:
+        return None
+    wValue = (C.DESC_TYPE_STRING << 8) | index
+    try:
+        raw = bytes(
+            dev.ctrl_transfer(
+                C.REQ_STD_DEVICE_IN, C.STD_GET_DESCRIPTOR, wValue, langid, 255, timeout_ms
+            )
+        )
+    except Exception:
+        return None
+    if len(raw) < 2 or raw[1] != C.DESC_TYPE_STRING:
+        return None
+    # raw[0] is bLength; trust it but never read past what we got.
+    end = min(raw[0], len(raw))
+    text = raw[2:end].decode("utf-16-le", "replace").strip("\x00").strip()
+    return text or None
+
+
 class DfuError(RuntimeError):
     def __init__(self, status: int, state: int, context: str = ""):
         self.status = status
         self.state = state
         name = C.STATUS_NAMES.get(status, hex(status))
         sname = C.STATE_NAMES.get(state, hex(state))
-        super().__init__(f"DFU error {name} in state {sname}" + (f" ({context})" if context else ""))
+        super().__init__(
+            f"DFU error {name} in state {sname}" + (f" ({context})" if context else "")
+        )
 
 
 class DfuStatus:
-    __slots__ = ("status", "poll_timeout_ms", "state", "istring")
+    __slots__ = ("istring", "poll_timeout_ms", "state", "status")
 
     def __init__(self, raw: bytes):
         if len(raw) < 6:
@@ -58,28 +87,53 @@ class DfuStatus:
         self.istring = raw[5]
 
     def __repr__(self) -> str:
-        return (f"DfuStatus(status={C.STATUS_NAMES.get(self.status, self.status)}, "
-                f"state={C.STATE_NAMES.get(self.state, self.state)}, "
-                f"poll={self.poll_timeout_ms}ms)")
+        return (
+            f"DfuStatus(status={C.STATUS_NAMES.get(self.status, self.status)}, "
+            f"state={C.STATE_NAMES.get(self.state, self.state)}, "
+            f"poll={self.poll_timeout_ms}ms)"
+        )
 
 
 class DfuClient:
     """Stateless-ish wrapper implementing the NumWorks DFU/DfuSe host protocol."""
 
-    def __init__(self, device: UsbDeviceLike, *, sleep=time.sleep, timeout_ms: int = 4000,
-                 interface: int = C.DFU_INTERFACE):
+    def __init__(
+        self,
+        device: UsbDeviceLike,
+        *,
+        sleep=time.sleep,
+        timeout_ms: int = 4000,
+        interface: int = C.DFU_INTERFACE,
+        layout=None,
+    ):
         self.dev = device
         self._sleep = sleep
         self.timeout_ms = timeout_ms
         self.interface = interface  # DFU interface (wIndex); 0 on all known NumWorks devices
         self._address_pointer = 0
+        # Real flash sector geometry (a MemoryLayout) used to erase correctly. When not
+        # passed explicitly it is discovered lazily from the device's ``memory_layout``
+        # attribute (set by usbio for real hardware, by the virtual device for tests).
+        self._layout = layout
+        self._layout_resolved = layout is not None
+        # Alt-setting routing: NumWorks advertises one alt per memory backend (Flash, SRAM, …)
+        # and a DNLOAD only writes within the CURRENT alt's region. We discover the map (attached
+        # to the device by usbio) and switch on demand so a write always lands. usbio selects the
+        # Flash alt right after opening, so start there.
+        self._current_alt = C.ALT_FLASH
+        self._alt_regions = None
+        self._alt_regions_resolved = False
 
     # -- low-level requests --------------------------------------------------------
     def _out(self, request: int, wValue: int = 0, data: bytes = b"") -> None:
         self.dev.ctrl_transfer(C.REQ_OUT, request, wValue, self.interface, data, self.timeout_ms)
 
     def _in(self, request: int, length: int, wValue: int = 0) -> bytes:
-        return bytes(self.dev.ctrl_transfer(C.REQ_IN, request, wValue, self.interface, length, self.timeout_ms))
+        return bytes(
+            self.dev.ctrl_transfer(
+                C.REQ_IN, request, wValue, self.interface, length, self.timeout_ms
+            )
+        )
 
     # -- DFU primitives ------------------------------------------------------------
     def get_status(self) -> DfuStatus:
@@ -120,6 +174,39 @@ class DfuClient:
                 self.abort()
         raise RuntimeError("could not reach dfuIDLE")
 
+    # -- alt-setting routing -------------------------------------------------------
+    def _alt_map(self):
+        """``[(alt, MemoryLayout)]`` advertised by the device (discovered by usbio), or None
+        for single-region devices / tests — in which case the current alt is kept."""
+        if not self._alt_regions_resolved:
+            self._alt_regions = getattr(self.dev, "alt_regions", None)
+            self._alt_regions_resolved = True
+        return self._alt_regions
+
+    def _alt_for(self, address: int) -> int | None:
+        """The alt-setting whose advertised region owns ``address``, or None."""
+        for alt, layout in self._alt_map() or []:
+            if layout is not None and layout.sector_of(address) is not None:
+                return alt
+        return None
+
+    def select_alt(self, alt: int) -> None:
+        """Switch DFU alt-setting (its memory map governs where a DNLOAD lands), then return the
+        state machine to dfuIDLE. No-op if the device cannot switch (virtual device / tests)."""
+        setter = getattr(self.dev, "set_interface_altsetting", None)
+        if setter is not None:
+            setter(interface=self.interface, alternate_setting=alt)
+            self.make_idle()
+        self._current_alt = alt
+
+    def _route(self, address: int) -> None:
+        """Before a write, select the alt-setting owning ``address`` (Flash / SRAM / …). This is
+        the whole point of discovering the layouts: writing scripts (SRAM) vs firmware/apps
+        (Flash) picks the right backend by address, with nothing model-specific hard-coded."""
+        alt = self._alt_for(address)
+        if alt is not None and alt != self._current_alt:
+            self.select_alt(alt)
+
     # -- DfuSe commands ------------------------------------------------------------
     def set_address(self, address: int) -> None:
         self._out(C.DFU_DNLOAD, 0, struct.pack("<BI", C.DFUSE_SET_ADDRESS, address))
@@ -133,6 +220,17 @@ class DfuClient:
     def mass_erase(self) -> None:
         self._out(C.DFU_DNLOAD, 0, bytes([C.DFUSE_ERASE]))
         self._wait_idle_after_command("mass_erase")
+
+    # -- standard descriptors (serial number) --------------------------------------
+    def get_string_descriptor(self, index: int, langid: int = C.USB_LANGID_EN_US) -> str | None:
+        """Read USB string descriptor ``index`` (standard GET_DESCRIPTOR), or None.
+
+        Transport-agnostic: works against both the virtual device and real hardware
+        (this is exactly what pyusb's ``util.get_string`` does under the hood). Returns
+        None for index 0 or on any failure/empty descriptor. Does not disturb the DFU
+        state machine — it is a standard device request, valid in any state.
+        """
+        return read_string_descriptor(self.dev, index, langid=langid, timeout_ms=self.timeout_ms)
 
     # -- memory read/write ---------------------------------------------------------
     def read(self, address: int, length: int) -> bytes:
@@ -150,15 +248,43 @@ class DfuClient:
         return bytes(out[:length])
 
     def write(self, address: int, data: bytes, *, erase: bool = False) -> None:
-        """DNLOAD ``data`` at ``address`` in <=2048-byte chunks (dfu.py strategy)."""
+        """DNLOAD ``data`` at ``address`` in <=2048-byte chunks (dfu.py strategy).
+
+        When ``erase`` is set, every flash sector overlapping the write range is erased
+        **once, aligned to its sector boundary**, before any data is written. A DfuSe erase
+        wipes the whole containing sector (4–128 KiB), so erasing per 2048-byte chunk would
+        re-wipe the sector and destroy the chunks already written into it — only the last
+        chunk of each sector would survive (docs §6.4, §8.2)."""
+        self._route(address)  # select the alt-setting (Flash/SRAM/…) whose region owns address
+        if erase:
+            for base in self._sectors_to_erase(address, len(data)):
+                self.erase_page(base)
         for off in range(0, len(data), C.TRANSFER_SIZE):
-            chunk = data[off:off + C.TRANSFER_SIZE]
+            chunk = data[off : off + C.TRANSFER_SIZE]
             addr = address + off
-            if erase:
-                self.erase_page(addr)
             self.set_address(addr)
             self._out(C.DFU_DNLOAD, C.DNLOAD_BLOCK_BASE, chunk)
             self._wait_idle_after_command(f"write 0x{addr:08x}")
+
+    def _memory_layout(self):
+        """The device's advertised flash layout (a MemoryLayout), or None. Resolved once."""
+        if not self._layout_resolved:
+            self._layout = getattr(self.dev, "memory_layout", None)
+            self._layout_resolved = True
+        return self._layout
+
+    def _sectors_to_erase(self, address: int, length: int) -> list[int]:
+        """Aligned sector base addresses to erase before writing ``[address, address+length)``.
+
+        Uses the device's real sector geometry when advertised. Without a layout it falls
+        back to one erase per transfer chunk — the historical behaviour, correct only when
+        the erase sector equals the transfer size; real hardware always advertises a layout."""
+        layout = self._memory_layout()
+        if layout is not None:
+            sectors = layout.sectors_covering(address, length)
+            if sectors:
+                return sectors
+        return [address + off for off in range(0, length, C.TRANSFER_SIZE)]
 
     # -- leave ---------------------------------------------------------------------
     def leave(self, jump_address: int) -> None:

@@ -1,0 +1,4 @@
+{
+  "_note": "Generic, unofficial example catalogue for Python scripts. Empty by design: there is no official public JSON API (the official flow lists the user's own files and the public scripts on my.numworks.com/python). To add REAL scripts without editing this file: drop .py files in the user scripts folder (NWUPDATER_SCRIPTS_DIR, otherwise <config>/nwupdater/scripts) and/or list their URLs (one per line) in <folder>/_urls.txt — automatically aggregated into \"Available\".",
+  "scripts": []
+}

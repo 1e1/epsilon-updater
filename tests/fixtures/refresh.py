@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "src")
-from nwupdater.catalog import auth as A  # noqa: E402
-from nwupdater.catalog import download as D  # noqa: E402
+from nwupdater.catalog import auth as A
+from nwupdater.catalog import download as D
 
 HERE = Path(__file__).parent
 MODELS = ("n0110", "n0200")
@@ -30,7 +30,9 @@ def main() -> int:
         return 2
 
     tr = A.UrllibTransport()
-    html = tr.open("GET", A.SIGNIN_URL, headers={"User-Agent": A.UA}).body.decode("utf-8", "replace")
+    html = tr.open("GET", A.SIGNIN_URL, headers={"User-Agent": A.UA}).body.decode(
+        "utf-8", "replace"
+    )
     m = re.search(r'<input[^>]*name="authenticity_token"[^>]*>', html)
     snippet = re.sub(r'value="[^"]+"', 'value="REDACTED_CSRF_TOKEN"', m.group(0) if m else "")
     (HERE / "signin_form.html").write_text(snippet + "\n", encoding="utf-8")

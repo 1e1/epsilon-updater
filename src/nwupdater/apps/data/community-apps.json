@@ -1,15 +1,18 @@
 {
-  "_note": "Métadonnées ILLUSTRATIVES d'apps tierces NumWorks. Il n'existe pas d'API JSON publique officielle (le flux officiel = upload d'un .nwa sur my.numworks.com/apps). Cette liste modélise l'agrégation de catalogues communautaires ; les URLs sont des exemples à remplacer par de vraies sources .nwa.",
+  "_note": "Generic, unofficial example catalogue. RPN is a real downloadable source (independent repository); the other entries are ILLUSTRATIVE (example.invalid URLs, installed as a demo image). There is no official public JSON API (the official flow = uploading a .nwa on my.numworks.com/apps). To add REAL apps without editing this file: drop .nwa files in the user apps folder (NWUPDATER_APPS_DIR, otherwise <config>/nwupdater/apps) and/or list their URLs (one per line) in <folder>/_urls.txt — automatically aggregated into \"Available\". Sizes (bytes) reflect app_size.",
   "apps": [
-    {"name": "Nofrendo", "version": "1.0", "api_level": 0, "family": "graphique",
-     "description": "Émulateur NES", "source": "community", "url": "https://example.invalid/nofrendo.nwa"},
-    {"name": "Peanut-GB", "version": "0.3", "api_level": 0, "family": "graphique",
-     "description": "Émulateur Game Boy", "source": "community", "url": "https://example.invalid/peanutgb.nwa"},
-    {"name": "Tetris", "version": "2.1", "api_level": 0, "family": "graphique",
-     "description": "Jeu Tetris", "source": "community", "url": "https://example.invalid/tetris.nwa"},
-    {"name": "Chess", "version": "1.2", "api_level": 0, "family": "graphique",
-     "description": "Jeu d'échecs", "source": "community", "url": "https://example.invalid/chess.nwa"},
-    {"name": "Periodic", "version": "1.0", "api_level": 1, "family": "graphique",
-     "description": "Tableau périodique (API level 1)", "source": "community", "url": "https://example.invalid/periodic.nwa"}
+    {"name": "Chess", "version": "1.2", "api_level": 0, "family": "graphique", "size": 131072,
+     "description": "Chess game", "source": "community", "url": "https://example.invalid/chess.nwa"},
+    {"name": "Nofrendo", "version": "1.0", "api_level": 0, "family": "graphique", "size": 524288,
+     "description": "NES emulator", "source": "community", "url": "https://example.invalid/nofrendo.nwa"},
+    {"name": "Peanut-GB", "version": "0.3", "api_level": 0, "family": "graphique", "size": 327680,
+     "description": "Game Boy emulator", "source": "community", "url": "https://example.invalid/peanutgb.nwa"},
+    {"name": "Periodic", "version": "1.0", "api_level": 1, "family": "graphique", "size": 65536,
+     "description": "Periodic table (API level 1)", "source": "community", "url": "https://example.invalid/periodic.nwa"},
+    {"name": "RPN", "version": "2.0.0", "api_level": 0, "family": "graphique", "size": 117300,
+     "description": "Reverse Polish Notation calculator", "source": "github.com/1e1/numworks-RPN",
+     "url": "https://github.com/1e1/numworks-RPN/releases/download/v2.0.0/rpn-v2.0.0.nwa"},
+    {"name": "Tetris", "version": "2.1", "api_level": 0, "family": "graphique", "size": 65536,
+     "description": "Tetris game", "source": "community", "url": "https://example.invalid/tetris.nwa"}
   ]
 }

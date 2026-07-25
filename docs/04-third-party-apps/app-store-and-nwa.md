@@ -12,7 +12,7 @@ depuis le site officiel, et comprendre le format pour les installer (Lot 3).
   »* Le flux officiel = **l'utilisateur fournit un `.nwa`**, flashé en WebUSB dans la région
   « external apps ». **Il n'y a pas de "catalogue d'apps" JSON public** : le modèle officiel
   est *upload d'un fichier*, pas un store curé côté serveur.
-- Les **catalogues communautaires** (Nwagyu, dépôts GitHub) hébergent des `.nwa`
+- Les **catalogues communautaires** (dépôts GitHub, sites tiers) hébergent des `.nwa`
   indépendamment. → notre updater pourra agréger ces sources en plus du compte NumWorks.
 
 > Implication : « récupérer des apps tierces » = (a) via le compte NumWorks authentifié
@@ -69,6 +69,27 @@ Aucun champ « modèle » ; il est **calculé** depuis les segments mémoire du 
 Les apps sont buildées avec **`nwlink`** en `*.nwa`. Un reset efface les apps externes ;
 depuis OS 24.3.0 elles sont seulement **cachées** en mode examen ; depuis 25.0.0 elles
 survivent à la plupart des crashes.
+
+> ⚠️ **Un `.nwa` *distribué* ne porte PAS ce header `AppInfo`.** Le fichier téléchargé (ex.
+> l'asset GitHub d'une release) est un **ELF ARM relocatable** (`e_type = ET_REL`, magic
+> `7f 45 4c 46`), pas un blob commençant par `0xDEC0BEBA`. Le header `AppInfo` et les adresses
+> absolues (name/icon/entry point) **n'apparaissent qu'après le lien d'installation** : c'est
+> `nwlink nwa-bin --flash-start <addr>` qui place les sections à `externalAppsFlashStart +
+> offset` du slot actif, résout les symboles et applique les relocations (`R_ARM_THM_CALL`,
+> `R_ARM_ABS32`, `R_ARM_THM_JUMP24`, …). Le lien est donc **spécifique à l'adresse de flash**
+> et dépend aussi de la **fenêtre RAM externe** (`m_externalAppsRAMStart/End` du UserlandHeader),
+> où vivent les `.bss`/`.data` de l'app. Conséquence : on ne peut PAS flasher l'asset tel quel
+> — `AppInfo.parse()` le rejette (magic ELF ≠ `0xDEC0BEBA`). Un blob synthétique déjà lié
+> (`nwa.build_nwa`, pour les tests) court-circuite cette étape et ne reflète donc pas une app
+> réellement distribuée.
+>
+> **Ce que fait l'updater** ([`nwupdater.apps.link`](../../src/nwupdater/apps/link.py)) : à
+> l'installation, si le `.nwa` est un ELF relocatable, on **délègue le lien à `nwlink nwa-bin`**
+> exécuté **hors-ligne**, en lui passant les paramètres cible résolus en DFU (fenêtre flash
+> external-apps + fenêtre RAM du UserlandHeader), puis on flashe le `.bin` obtenu avec notre
+> propre moteur DFU. Raison : le lien exige le runtime EADK compilé de NumWorks (`_start` + les
+> stubs `eadk_*`/newlib), qui n'existe qu'à l'intérieur de `nwlink` — on ne peut pas le
+> régénérer en Python. Un `.nwa` déjà lié (magic `0xDEC0BEBA`) est flashé tel quel, sans nwlink.
 
 ## `nwlink` — CLI officielle app/link [CONFIRMÉ npm]
 

@@ -22,25 +22,50 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            asset: NumWorks-Updater-macos
+          - os: macos-latest    # universal2 (Intel + Apple Silicon) — GitHub Intel runners (macos-13) unavailable
+            asset: NumWorks-Updater-macos-universal
           - os: windows-latest
             asset: NumWorks-Updater-windows
           - os: ubuntu-latest
             asset: NumWorks-Updater-linux
     runs-on: ${{ matrix.os }}
+    # macOS builds universal2 (needs a universal2 runner Python); if that ever fails it must not
+    # block the Windows/Linux release — a mac binary can be attached separately.
+    continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # setuptools-scm needs tags + history to stamp the shipped version
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Install build deps
-        run: python -m pip install --upgrade pip pyinstaller pillow .
+        # pyusb + libusb-package are bundled so the app can talk to a REAL calculator
+        # (libusb-package ships the libusb binary for each OS).
+        run: python -m pip install --upgrade pip pyinstaller pillow pyusb libusb-package ".[usb]"
 
       - name: Generate icons
         run: python packaging/icon/generate_icons.py --arrow up
+
+      # macOS builds universal2 (Intel + Apple Silicon) because GitHub's Intel runners hang.
+      # libusb-package ships only per-arch dylibs, so lipo-merge the arm64 + x86_64 ones into
+      # a universal2 dylib in place before PyInstaller (which then bundles universal2).
+      - name: Universalize libusb (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+          dylib=$(python -c "import os,libusb_package;print(os.path.join(os.path.dirname(libusb_package.__file__),'libusb-1.0.dylib'))")
+          echo "installed dylib: $dylib ($(lipo -archs "$dylib"))"
+          python -m pip download libusb-package --only-binary=:all: \
+            --platform macosx_10_9_x86_64 --python-version 3.11 --no-deps --dest x86pkg
+          (cd x86pkg && unzip -oq ./*.whl)
+          x86=$(find x86pkg -name libusb-1.0.dylib | head -1)
+          lipo -create "$dylib" "$x86" -output "$dylib.universal"
+          mv "$dylib.universal" "$dylib"
+          echo "merged → $(lipo -archs "$dylib")"
 
       - name: Build app
         run: pyinstaller packaging/nwupdater.spec --noconfirm
@@ -62,6 +87,10 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}.zip
+          # Per-push builds are for immediate download from the run; keep them short so the
+          # private-repo artifact storage quota can't fill up. Release binaries (on tags) are
+          # attached to the GitHub Release, not kept as artifacts, so this doesn't affect them.
+          retention-days: 7
 
   # Single job that owns the Release, so matrix jobs never race to create it.
   release:
@@ -77,3 +106,16 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist/**/*.zip
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
+
+  # Runs after the current release exists, so major-version pruning sees the new tag.
+  prune:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prune old releases (retention policy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/prune-releases.sh "${{ github.ref_name }}"

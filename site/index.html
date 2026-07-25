@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nwupdater — mise à jour NumWorks, sans Chrome ni WebUSB</title>
+<meta name="description" content="Outil indépendant et non officiel pour mettre à jour les calculatrices NumWorks (N01xx & N02xx) et y installer des applications, sans Chrome ni WebUSB. macOS, Windows, Linux. Open source (MIT).">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f4f3ef; --panel:#fbfaf7; --card:#ffffff; --ink:#1b1c1e; --muted:#6d6f74;
+    --line:#e6e3dc; --line-strong:#d8d4ca;
+    --accent:#e8930c; --accent-soft:#fbe9cd; --accent-ink:#7a4d05;
+    --ok:#1f9d57; --err:#d64545;
+    --blue:#3d68c9; --blue-soft:#e2ecfd; --blue-ink:#2d5bbf;
+    --radius:16px; --shadow:0 1px 2px rgba(30,25,15,.05), 0 8px 26px rgba(30,25,15,.06);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141519; --panel:#191b20; --card:#1f2228; --ink:#eceef1; --muted:#969aa2;
+      --line:#2a2d34; --line-strong:#363a42; --accent:#f7b53d; --accent-soft:#3a2e14;
+      --accent-ink:#f7c469; --ok:#3fbd77; --err:#e26a6a;
+      --blue:#6f9bff; --blue-soft:#1b2740; --blue-ink:#93b6ff;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35); }
+  }
+  :root[data-theme="light"]{ --bg:#f4f3ef; --panel:#fbfaf7; --card:#fff; --ink:#1b1c1e;
+    --muted:#6d6f74; --line:#e6e3dc; --line-strong:#d8d4ca; --accent:#e8930c;
+    --accent-soft:#fbe9cd; --accent-ink:#7a4d05; --ok:#1f9d57; --err:#d64545;
+    --blue:#3d68c9; --blue-soft:#e2ecfd; --blue-ink:#2d5bbf;
+    --shadow:0 1px 2px rgba(30,25,15,.05), 0 8px 26px rgba(30,25,15,.06); }
+  :root[data-theme="dark"]{ --bg:#141519; --panel:#191b20; --card:#1f2228; --ink:#eceef1;
+    --muted:#969aa2; --line:#2a2d34; --line-strong:#363a42; --accent:#f7b53d;
+    --accent-soft:#3a2e14; --accent-ink:#f7c469; --ok:#3fbd77; --err:#e26a6a;
+    --blue:#6f9bff; --blue-soft:#1b2740; --blue-ink:#93b6ff;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35); }
+
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+         line-height:1.6; -webkit-font-smoothing:antialiased; }
+  a { color:var(--blue-ink); }
+  .wrap { width:min(1040px, 92vw); margin-inline:auto; }
+
+  /* Header */
+  header.top { position:sticky; top:0; z-index:10; background:color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--line); }
+  .topbar { display:flex; align-items:center; gap:14px; padding:12px 0; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:-.01em; }
+  .brand img { width:30px; height:30px; }
+  .brand small { font-weight:500; color:var(--muted); }
+  .spacer { flex:1; }
+  .ctrls { display:flex; gap:8px; align-items:center; }
+  .btn { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line-strong);
+    background:var(--card); color:var(--ink); padding:8px 14px; border-radius:11px; font:inherit;
+    font-weight:600; cursor:pointer; text-decoration:none; transition:.15s; }
+  .btn:hover { border-color:var(--accent); }
+  .btn.ghost { padding:8px 11px; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#20160a; }
+  .btn.primary:hover { filter:brightness(1.05); }
+
+  /* Hero */
+  .hero { padding:64px 0 30px; }
+  .hero h1 { font-size:clamp(1.9rem, 4.4vw, 3rem); line-height:1.1; letter-spacing:-.02em; margin:.2em 0 .35em; }
+  .hero p.lead { font-size:clamp(1.05rem, 2vw, 1.25rem); color:var(--muted); max-width:60ch; margin:0 0 1.4em; }
+  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
+  .pill { font-size:.82rem; font-weight:600; padding:5px 11px; border-radius:999px;
+    background:var(--accent-soft); color:var(--accent-ink); border:1px solid transparent; }
+  .pill.b { background:var(--blue-soft); color:var(--blue-ink); }
+
+  /* Disclaimer */
+  .disclaimer { border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-ink);
+    border-radius:var(--radius); padding:14px 18px; margin:18px 0; font-size:.95rem; }
+  .disclaimer strong { color:var(--accent-ink); }
+
+  /* Sections */
+  section { padding:40px 0; }
+  h2 { font-size:clamp(1.4rem, 3vw, 1.9rem); letter-spacing:-.01em; margin:0 0 .2em; }
+  .sub { color:var(--muted); margin:0 0 26px; }
+
+  /* Download */
+  .dl-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:16px; }
+  .dl-card { border:1px solid var(--line); background:var(--card); border-radius:var(--radius);
+    padding:22px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:6px; }
+  .dl-card.reco { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft), var(--shadow); }
+  .dl-card .os { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.1rem; }
+  .dl-card .os .glyph { font-size:1.3rem; line-height:1; }
+  .dl-card .meta { color:var(--muted); font-size:.88rem; min-height:1.2em; }
+  .dl-card .btn { margin-top:10px; justify-content:center; }
+  .reco-tag { align-self:flex-start; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--accent-ink); background:var(--accent-soft); padding:2px 8px; border-radius:6px; }
+  .dl-note { margin-top:16px; color:var(--muted); font-size:.9rem; }
+
+  /* Features */
+  .feat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:16px; }
+  .feat { border:1px solid var(--line); background:var(--panel); border-radius:var(--radius); padding:20px; }
+  .feat h3 { margin:0 0 .35em; font-size:1.08rem; display:flex; align-items:center; gap:9px; }
+  .feat h3 .ic { font-size:1.2rem; }
+  .feat p { margin:0; color:var(--muted); font-size:.95rem; }
+
+  /* Shots */
+  .shots { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:20px; align-items:start; }
+  figure { margin:0; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card); box-shadow:var(--shadow); }
+  figure img { display:block; width:100%; height:auto; }
+  figcaption { padding:12px 16px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--line); }
+
+  /* Footer */
+  footer { border-top:1px solid var(--line); padding:34px 0 60px; color:var(--muted); font-size:.92rem; }
+  .foot-links { display:flex; flex-wrap:wrap; gap:8px 20px; margin-bottom:14px; }
+  .foot-links a { color:var(--ink); text-decoration:none; font-weight:600; }
+  .foot-links a:hover { color:var(--accent-ink); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap topbar">
+    <span class="brand">
+      <img src="assets/logo.svg" alt="">
+      nwupdater <small data-i18n="brandsub">· updater NumWorks</small>
+    </span>
+    <span class="spacer"></span>
+    <div class="ctrls">
+      <button class="btn ghost" id="lang" title="Language">EN</button>
+      <button class="btn ghost" id="theme" title="Thème / Theme" aria-label="theme">◐</button>
+      <a class="btn" href="https://github.com/1e1/epsilon-updater" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div class="badges">
+      <span class="pill" data-i18n="p1">macOS · Windows · Linux</span>
+      <span class="pill b" data-i18n="p2">Sans WebUSB</span>
+      <span class="pill b" data-i18n="p3">Hors-ligne / mode classe</span>
+      <span class="pill" data-i18n="p4">Open source · MIT</span>
+    </div>
+    <h1 data-i18n="h1">Mettez à jour vos calculatrices NumWorks, sans Chrome ni WebUSB.</h1>
+    <p class="lead" data-i18n="lead">Un outil indépendant pour mettre à jour les NumWorks (Graphique N01xx et Scientifique N02xx) et y installer des applications tierces — via un cœur natif qui parle USB/DFU et une page web ouverte dans votre navigateur système. Fonctionne là où l'updater web officiel ne passe pas.</p>
+    <div class="ctrls">
+      <a class="btn primary" href="#download" data-i18n="cta">↓ Télécharger</a>
+      <a class="btn" href="https://github.com/1e1/epsilon-updater#readme" target="_blank" rel="noopener" data-i18n="cta2">Comment ça marche</a>
+    </div>
+
+    <div class="disclaimer">
+      <strong data-i18n="disc_t">Projet indépendant et non officiel.</strong>
+      <span data-i18n="disc_b"> Aucun lien avec NumWorks SAS. Fourni sans aucune garantie : mettre à jour ou flasher une calculatrice peut l'endommager, effacer des données ou la rendre inutilisable. Utilisation à vos seuls risques. Le firmware provient des canaux officiels NumWorks, sous votre propre compte.</span>
+    </div>
+  </div>
+
+  <section id="download">
+    <h2 data-i18n="dl_h">Télécharger</h2>
+    <p class="sub" data-i18n="dl_s">Binaires de la dernière version publiée. Détection automatique de votre système.</p>
+    <div class="dl-grid">
+      <div class="dl-card" id="card-mac">
+        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
+        <span class="os"><span class="glyph">🍎</span> macOS</span>
+        <span class="meta" data-i18n="mac_m">Universal (Intel + Apple Silicon)</span>
+        <a class="btn primary" id="dl-mac" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
+      </div>
+      <div class="dl-card" id="card-win">
+        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
+        <span class="os"><span class="glyph">🪟</span> Windows</span>
+        <span class="meta" data-i18n="win_m">64-bit (.exe dans un .zip)</span>
+        <a class="btn primary" id="dl-win" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
+      </div>
+      <div class="dl-card" id="card-linux">
+        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
+        <span class="os"><span class="glyph">🐧</span> Linux</span>
+        <span class="meta" data-i18n="linux_m">x86-64 (binaire dans un .zip)</span>
+        <a class="btn primary" id="dl-linux" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
+      </div>
+    </div>
+    <p class="dl-note">
+      <span id="ver"></span>
+      <span data-i18n="dl_unsigned">Binaires non signés (pas de compte de signature payant) : au premier lancement, votre système peut afficher un avertissement « développeur non identifié ».</span>
+      <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/docs/05-packaging-ui/desktop-app.md" target="_blank" rel="noopener" data-i18n="dl_help">Comment l'ouvrir →</a>
+      <br>
+      <a href="https://github.com/1e1/epsilon-updater/releases" target="_blank" rel="noopener" data-i18n="dl_all">Toutes les versions et notes de publication →</a>
+    </p>
+  </section>
+
+  <section>
+    <h2 data-i18n="f_h">Pourquoi nwupdater</h2>
+    <p class="sub" data-i18n="f_s">Un complément à l'outil officiel, pour les cas qu'il ne couvre pas aujourd'hui.</p>
+    <div class="feat-grid">
+      <div class="feat"><h3><span class="ic">🧩</span> <span data-i18n="f1_t">Sans WebUSB</span></h3><p data-i18n="f1_b">Fonctionne sur les navigateurs et postes sans WebUSB : Chromebooks, machines scolaires verrouillées, navigateurs bridés, réseaux filtrés.</p></div>
+      <div class="feat"><h3><span class="ic">🎓</span> <span data-i18n="f2_t">Mode classe</span></h3><p data-i18n="f2_b">Pré-téléchargez une version une seule fois, puis flashez tout un parc sans re-télécharger. Une version par modèle.</p></div>
+      <div class="feat"><h3><span class="ic">🔒</span> <span data-i18n="f3_t">Canaux officiels</span></h3><p data-i18n="f3_b">Le firmware vient du serveur NumWorks, sous votre propre compte (modèle « apportez votre jeton »). On ne conserve jamais votre mot de passe.</p></div>
+      <div class="feat"><h3><span class="ic">🧮</span> <span data-i18n="f4_t">Apps & scripts</span></h3><p data-i18n="f4_b">Installez des applications tierces (.nwa) et des scripts Python. Le plan d'écriture ne réécrit que la portion de mémoire qui change.</p></div>
+      <div class="feat"><h3><span class="ic">♻️</span> <span data-i18n="f6_t">Ouvert & durable</span></h3><p data-i18n="f6_b">Code source ouvert (MIT). Prolonge la vie d'un parc existant — anti-obsolescence et droit à la réparation.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-i18n="s_h">Aperçu de l'interface</h2>
+    <p class="sub" data-i18n="s_s">Page web servie en local — données d'exemple. L'interface s'adapte au modèle détecté.</p>
+    <div class="shots">
+      <figure>
+        <img src="assets/nwupdater-n0120-individual.png" alt="nwupdater — N0120, mode individuel" loading="lazy">
+        <figcaption data-i18n="s1">N0120 (Graphique) — mode individuel : ateliers apps et scripts, contenu de la calculatrice face aux éléments disponibles.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/nwupdater-n0200-classroom.png" alt="nwupdater — N0200, mode classe" loading="lazy">
+        <figcaption data-i18n="s2">N0200 (Scientifique) — mode classe : mise à jour système et gestion de parc, ateliers masqués selon le matériel.</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-links">
+      <a href="https://github.com/1e1/epsilon-updater" target="_blank" rel="noopener" data-i18n="fl1">Code source</a>
+      <a href="https://github.com/1e1/epsilon-updater/tree/HEAD/docs" target="_blank" rel="noopener" data-i18n="fl2">Documentation</a>
+      <a href="https://github.com/1e1/epsilon-updater/releases" target="_blank" rel="noopener" data-i18n="fl3">Versions</a>
+      <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/DISCLAIMER.md" target="_blank" rel="noopener" data-i18n="fl4">Avertissement</a>
+      <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/SECURITY.md" target="_blank" rel="noopener" data-i18n="fl5">Sécurité</a>
+      <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/LICENSE" target="_blank" rel="noopener">Licence MIT</a>
+    </div>
+    <p data-i18n="foot">Projet indépendant, non affilié à NumWorks SAS. « NumWorks » est une marque de son propriétaire, citée à titre descriptif. Sous licence MIT — sans aucune garantie.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var REPO = "1e1/epsilon-updater";
+
+  // ---- i18n -------------------------------------------------------------------
+  var EN = {
+    brandsub: "· NumWorks updater",
+    p1: "macOS · Windows · Linux", p2: "No WebUSB", p3: "Offline / classroom", p4: "Open source · MIT",
+    h1: "Update your NumWorks calculators, without Chrome or WebUSB.",
+    lead: "An independent tool to update NumWorks calculators (Graphing N01xx and Scientific N02xx) and install third-party apps — through a native core that speaks USB/DFU and a web page opened in your system browser. Works where the official web updater can't.",
+    cta: "↓ Download", cta2: "How it works",
+    disc_t: "Independent, unofficial project.",
+    disc_b: " Not affiliated with NumWorks SAS. Provided with no warranty: updating or flashing a calculator can damage it, erase data or brick it. Use entirely at your own risk. Firmware comes from NumWorks' official channels, under your own account.",
+    dl_h: "Download", dl_s: "Binaries from the latest published release. Your system is detected automatically.",
+    reco: "Recommended for you", dl_btn: "Download",
+    mac_m: "Universal (Intel + Apple Silicon)", win_m: "64-bit (.exe inside a .zip)", linux_m: "x86-64 (binary inside a .zip)",
+    dl_unsigned: "Unsigned binaries (no paid signing account): on first launch your system may show an “unidentified developer” warning.",
+    dl_help: "How to open it →", dl_all: "All releases and release notes →",
+    f_h: "Why nwupdater", f_s: "A complement to the official tool, for the cases it doesn't cover today.",
+    f1_t: "No WebUSB", f1_b: "Works on browsers and machines without WebUSB: Chromebooks, locked-down school computers, restricted browsers, filtered networks.",
+    f2_t: "Classroom mode", f2_b: "Preload a version once, then flash a whole fleet without re-downloading. One version per model.",
+    f3_t: "Official channels", f3_b: "Firmware comes from the NumWorks server, under your own account (bring-your-own-token model). Your password is never stored.",
+    f4_t: "Apps & scripts", f4_b: "Install third-party apps (.nwa) and Python scripts. The write plan only rewrites the part of memory that changes.",
+    f6_t: "Open & durable", f6_b: "Open source (MIT). Extends the life of an existing fleet — anti-obsolescence and right-to-repair.",
+    s_h: "Interface preview", s_s: "Web page served locally — sample data. The interface adapts to the detected model.",
+    s1: "N0120 (Graphing) — individual mode: apps and scripts workshops, calculator contents next to available items.",
+    s2: "N0200 (Scientific) — classroom mode: system update and fleet management, workshops hidden based on hardware.",
+    fl1: "Source code", fl2: "Documentation", fl3: "Releases", fl4: "Disclaimer", fl5: "Security",
+    foot: "Independent project, not affiliated with NumWorks SAS. “NumWorks” is a trademark of its owner, used descriptively. Licensed under MIT — with no warranty."
+  };
+  var FR = {}; // FR text is the default already present in the DOM.
+  document.querySelectorAll("[data-i18n]").forEach(function (el) { FR[el.getAttribute("data-i18n")] = el.innerHTML; });
+
+  function applyLang(lang) {
+    var dict = lang === "en" ? EN : FR;
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (dict[k] != null) el.innerHTML = dict[k];
+    });
+    document.documentElement.lang = lang;
+    document.getElementById("lang").textContent = lang === "en" ? "FR" : "EN";
+    try { localStorage.setItem("nwu-lang", lang); } catch (e) {}
+  }
+  var savedLang;
+  try { savedLang = localStorage.getItem("nwu-lang"); } catch (e) {}
+  if (!savedLang) savedLang = (navigator.language || "fr").slice(0, 2) === "fr" ? "fr" : "en";
+  applyLang(savedLang);
+  document.getElementById("lang").addEventListener("click", function () {
+    applyLang(document.documentElement.lang === "en" ? "fr" : "en");
+  });
+
+  // ---- theme toggle -----------------------------------------------------------
+  var saved;
+  try { saved = localStorage.getItem("nwu-theme"); } catch (e) {}
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  document.getElementById("theme").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    if (!cur) cur = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    var next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("nwu-theme", next); } catch (e) {}
+  });
+
+  // ---- OS detection: highlight the recommended card ---------------------------
+  var ua = navigator.userAgent || "";
+  var plat = navigator.platform || "";
+  var osKey = /Win/i.test(ua + plat) ? "win" : /Mac|iP(hone|ad|od)/i.test(ua + plat) ? "mac"
+            : /Linux|X11|Android/i.test(ua + plat) ? "linux" : null;
+  if (osKey) {
+    var card = document.getElementById("card-" + osKey);
+    if (card) { card.classList.add("reco"); card.querySelector(".reco-tag").hidden = false; }
+  }
+
+  // ---- dynamic download links from the latest GitHub release ------------------
+  // Falls back to the /releases/latest page (already set in the href) on any error.
+  var MATCH = { mac: /mac|darwin|osx/i, win: /win/i, linux: /linux/i };
+  fetch("https://api.github.com/repos/" + REPO + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (rel) {
+      var assets = (rel.assets || []);
+      Object.keys(MATCH).forEach(function (os) {
+        // pick the app zip for this OS, skipping the separate capture tooling
+        var a = assets.find(function (x) { return MATCH[os].test(x.name) && !/capture/i.test(x.name) && /\.zip$/i.test(x.name); });
+        if (a) {
+          var el = document.getElementById("dl-" + os);
+          if (el) el.href = a.browser_download_url;
+        }
+      });
+      if (rel.tag_name) {
+        var v = document.getElementById("ver");
+        var word = document.documentElement.lang === "en" ? "Latest version" : "Dernière version";
+        v.innerHTML = "<strong>" + word + " : " + rel.tag_name + "</strong> · ";
+      }
+    })
+    .catch(function () { /* keep fallback links */ });
+})();
+</script>
+</body>
+</html>

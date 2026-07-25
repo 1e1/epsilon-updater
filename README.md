@@ -5,15 +5,40 @@
 > C'est un **outil de hobby**, fourni **SANS AUCUNE GARANTIE**. Mettre à jour ou flasher une
 > calculatrice peut **l'endommager, effacer vos données ou la rendre inutilisable
 > (« brick »)**. **Utilisation à vos seuls risques.** Voir [`DISCLAIMER.md`](DISCLAIMER.md).
+>
+> ⚠️ **Examens :** le statut « officiel » est une **signature vérifiée par le bootloader au
+> démarrage à froid** (hors ligne). Flasher l'**image officielle** puis **redémarrer à froid**
+> (bouton RESET) laisse la calculatrice **officielle** ; seul le **« boot » in-app** (saut DFU)
+> affiche **temporairement** « UNOFFICIAL SOFTWARE », effacé par un démarrage à froid. Un
+> firmware **non signé** reste non officiel — cf. [`DISCLAIMER.md`](DISCLAIMER.md).
 
 Utilitaire pour mettre à jour les calculatrices **NumWorks** (famille **Graphique N01xx** et
 **Scientifique N02xx**) et y installer des applications tierces, **sans passer par Chrome +
-WebUSB**. Modèle inspiré de l'updater Flipper Zero : un **cœur headless** natif qui parle
-USB/DFU, et une **page web locale** ouverte dans le navigateur système.
+WebUSB**. L'architecture : un **cœur headless** natif qui parle USB/DFU, et une **page web
+locale** ouverte dans le navigateur système.
 
 > ⚠️ **Contrainte de développement : on ne branche JAMAIS d'USB réel.** Tout se développe et
 > se teste contre un **device DFU virtuel** en mémoire. Voir
 > [`docs/01-specs/emulators-and-usb-analysis.md`](docs/01-specs/emulators-and-usb-analysis.md).
+
+## Aperçu
+
+> Aperçu de l'interface locale (page web servie en local) — données d'exemple. Interface FR/EN,
+> thèmes clair et sombre.
+
+**N0120 (Graphique) — mode individuel.** Les deux ateliers *apps* et *scripts* : contenu de la
+calculatrice (ordre mémoire) face aux éléments **disponibles**, agrégés depuis 3 sources — **cloud
+NumWorks / fichiers locaux / dépôts distants** (dépôts communautaires de `.nwa` fournis par
+l'utilisateur, scripts Python publics `my.numworks.com/python/…`). Le **plan d'écriture** ne
+réécrit que la portion de mémoire qui change.
+
+![nwupdater — N0120, mode individuel](docs/screenshots/nwupdater-n0120-individual.png)
+
+**N0200 (Scientifique) — mode classe.** Pas de flash QSPI ni de Python : les ateliers *apps* et
+*scripts* sont **masqués automatiquement** selon le matériel détecté ; ne restent que la mise à jour
+système et la gestion de parc (pré-téléchargement des caches firmware, une version par modèle).
+
+![nwupdater — N0200, mode classe](docs/screenshots/nwupdater-n0200-classroom.png)
 
 ## État
 
@@ -25,6 +50,26 @@ USB/DFU, et une **page web locale** ouverte dans le navigateur système.
 | 4 | Applications tierces (`.nwa`) | ✅ |
 | 5 | Packaging UI (page web locale) | ✅ |
 | 6 | Authentification + téléchargement du vrai firmware officiel | ✅ |
+
+## 🤝 Complément, pas concurrent
+
+`nwupdater` ne cherche pas à remplacer l'outil officiel NumWorks : il couvre les cas qu'il ne
+sert pas aujourd'hui (navigateurs sans WebUSB, postes scolaires verrouillés, usage hors-ligne) et
+s'appuie sur les **canaux officiels** — le firmware vient du serveur NumWorks, sous le compte de
+l'utilisateur. Le projet est ouvert (MIT) : **nous serions ravis de contribuer en amont ou de
+transférer tout ou partie de l'outil à NumWorks** si cela sert leurs utilisateurs. La porte est
+ouverte → [`SECURITY.md`](SECURITY.md).
+
+## 🎓 Pour les enseignants
+
+- **Équité d'accès** : fonctionne là où l'updater web ne passe pas — Chromebooks et postes
+  scolaires sans WebUSB, navigateurs bridés, réseaux filtrés, salles hors-ligne.
+- **Mode classe** : pré-télécharger une version une fois, puis flasher tout un parc sans
+  re-télécharger.
+- **Anti-obsolescence / droit à la réparation** : prolonge la vie d'un parc de calculatrices
+  existant.
+- **Supervision** : tout flashage par un mineur se fait sous la responsabilité d'un adulte
+  (attestation demandée dans l'outil, cf. [`DISCLAIMER.md`](DISCLAIMER.md)).
 
 Base de connaissance complète : [`docs/`](docs/README.md). **Aucun USB réel dans les tests.**
 
@@ -104,3 +149,5 @@ garantie** — lisez [`DISCLAIMER.md`](DISCLAIMER.md) avant toute utilisation su
   pré-requis, non-altération des données, sécurisation du jeton, cadre juridique de l'interopérabilité.
 - [`SECURITY.md`](SECURITY.md) — signaler une vulnérabilité ou une objection d'ayant droit.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — mise en route dev, style, règle « jamais d'USB réel ».
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — code de conduite (Contributor Covenant).
+- [`CHANGELOG.md`](CHANGELOG.md) — journal des modifications notables.

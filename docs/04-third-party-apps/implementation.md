@@ -15,6 +15,13 @@ le code. Réutilise le moteur DFU du Lot 3.
     modélise l'agrégation de catalogues communautaires.
   - `compatible(family, device_api_level, has_external_apps)` — filtrage **côté client**
     (comme le site) : famille + API level + présence d'une zone apps externes.
+- `src/nwupdater/apps/sources.py` — **source utilisateur générique** (rien de codé en dur) :
+  - `user_apps_dir()` — `NWUPDATER_APPS_DIR`, sinon `<config>/nwupdater/apps`.
+  - `app_entries(dir)` — agrège les `.nwa` **locaux** (nom + API level lus dans le header ;
+    installés **tels quels** via `local_path`) et les URLs d'un `_urls.txt` (une par ligne ;
+    téléchargées via le proxy SSRF-gardé, qui les autorise car désormais dans le store). Le
+    serveur fusionne ces entrées dans `AppStore.bundled()` au démarrage → visibles dans
+    « Disponibles ». C'est le moyen d'ajouter de **vraies** apps sans modifier le dépôt.
 - `src/nwupdater/apps/installer.py` — `AppInstaller` :
   - `check(blob)` — magic valide, zone apps présente, API level == device, taille ≤ espace.
   - `install(blob, at_offset)` — écrit le `.nwa` dans la zone external-apps via le client DFU,

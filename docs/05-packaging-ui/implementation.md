@@ -1,8 +1,8 @@
 # Lot 5 — Packaging UI (page web locale)
 
 Le cœur headless expose une **API HTTP locale** et sert une **page web** ouverte dans le
-navigateur système — comme les apps de bureau Flipper / Lunii, mais **sans WebUSB** : tout
-l'USB est fait dans le processus natif, le navigateur ne fait qu'afficher.
+navigateur système, mais **sans WebUSB** : tout l'USB est fait dans le processus natif, le
+navigateur ne fait qu'afficher.
 
 ## Architecture
 
@@ -39,6 +39,8 @@ Navigateur système  ──HTTP 127.0.0.1──▶  Serveur local (stdlib http.s
   - `index.html` — structure + CSS (design validé) + sélecteur de langue FR/EN.
   - `calc.js` — **rendu SVG fidèle** des deux familles (matrice réelle `keys.inc` :
     graphique blanc/écran couleur/alpha ; scientifique charbon/écran monochrome large).
+    Icônes d'applications redessinées en vectoriel ; **écrans sans texte** par défaut
+    (i18n : seuls illustrations et symboles maths restent — flag interne `DEFAULT_TEXTLESS`).
   - `i18n.js` — dictionnaires **FR/EN** + `t(key, params)` ; langue auto-détectée
     (`navigator.language`), mémorisée (`localStorage`), basculable à chaud.
   - `app.js` — fetch de l'API, rendu, install firmware / app / `.nwa` local, mode classe

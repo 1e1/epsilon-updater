@@ -12,7 +12,7 @@
 ## Protocole DFU / implémentations hôte (à réimplémenter sans WebUSB)
 - **webdfu_numworks** (fork WebDFU pour NumWorks) : https://github.com/TI-Planet/webdfu_numworks — démo live : https://ti-planet.github.io/webdfu_numworks/n0110/
 - Autres forks : quentinguidee, daitangio, M4xi1m3, Itai12 (mêmes bases).
-- Référence DFU communautaire (Nwagyu) : https://nwagyu.org/reference/others/dfu.html
+- Documentation DFU communautaire tierce (rétro-ingénierie indépendante du protocole).
 - Flasher Python officiel du repo : `tools/device/dfu.py` (implémente DFU/DfuSe via pyusb, sans dfu-util).
 - Spec USB DFU 1.1 + ST AN3156 (protocole DFU STM32) + UM0391 (format DfuSe).
 

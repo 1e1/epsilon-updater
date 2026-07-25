@@ -1,0 +1,111 @@
+"""App management on the external-apps region: push / uninstall / reorder with compaction."""
+
+import struct
+
+import pytest
+
+from nwupdater.apps.installer import list_installed
+from nwupdater.apps.manage import SECTOR, AppError, AppManager
+from nwupdater.dfu import constants as C
+from nwupdater.dfu.identity import read_identity
+from nwupdater.dfu.protocol import DfuClient
+from nwupdater.formats.nwa import build_nwa
+from nwupdater.testing.virtual_dfu import virtual_calculator
+
+
+def _mgr(model="n0110"):
+    dev = virtual_calculator(model)
+    cli = DfuClient(dev, sleep=lambda *_: None)
+    ident = read_identity(cli, dev.bcdDevice)
+    return cli, ident, AppManager(cli, ident.external_apps_flash, device_api_level=0)
+
+
+class _EraseRecorder:
+    """Wraps a virtual device to record the addresses of DfuSe ERASE commands."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.erases: list[int] = []
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=None
+    ):
+        if (
+            bmRequestType == C.REQ_OUT
+            and bRequest == C.DFU_DNLOAD
+            and wValue == 0
+            and data_or_wLength
+        ):
+            data = bytes(data_or_wLength)
+            if data and data[0] == C.DFUSE_ERASE and len(data) >= 5:
+                self.erases.append(struct.unpack("<I", data[1:5])[0])
+        return self._inner.ctrl_transfer(
+            bmRequestType, bRequest, wValue, wIndex, data_or_wLength, timeout
+        )
+
+
+def _recording_mgr(model="n0110"):
+    dev = _EraseRecorder(virtual_calculator(model))
+    cli = DfuClient(dev, sleep=lambda *_: None)
+    ident = read_identity(cli, dev.bcdDevice)
+    mgr = AppManager(cli, ident.external_apps_flash, device_api_level=0)
+    dev.erases.clear()  # a read-only identity read never erases; start from a clean slate
+    return dev, ident, mgr
+
+
+def test_apply_erases_once_per_64k_sector():
+    # Regression for the per-chunk erase bug: the erase loop stepped by the 2048-byte transfer
+    # size, re-issuing 32 redundant ERASE commands per 64 KiB sector. It must step by SECTOR.
+    dev, ident, mgr = _recording_mgr()
+    start = ident.external_apps_flash[0]
+    mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))  # ~1 sector
+    assert dev.erases == [start]  # exactly one erase for the single 64 KiB sector
+
+
+def test_apply_erases_span_two_sectors_once_each():
+    dev, ident, mgr = _recording_mgr()
+    start = ident.external_apps_flash[0]
+    mgr.push(build_nwa("Big", api_level=0, code=b"\x02" * (SECTOR + 4096)))  # spans 2 sectors
+    assert dev.erases == [start, start + SECTOR]  # one erase per sector, aligned
+
+
+def test_push_then_uninstall_compacts():
+    cli, ident, mgr = _mgr()
+    mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
+    mgr.push(build_nwa("Beta", api_level=0, code=b"\x02" * 100))
+    assert [m.name for m in mgr.installed()] == ["Alpha", "Beta"]
+
+    mgr.uninstall("Alpha")
+    assert [m.name for m in mgr.installed()] == ["Beta"]
+    # Beta was compacted down to the region start (no ghost app left behind)
+    assert list_installed(cli, ident.external_apps_flash)[0].offset == 0
+
+
+def test_reorder():
+    _cli, _ident, mgr = _mgr()
+    mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
+    mgr.push(build_nwa("Beta", api_level=0, code=b"\x02" * 100))
+    mgr.reorder(["Beta", "Alpha"])
+    assert [m.name for m in mgr.installed()] == ["Beta", "Alpha"]
+
+
+def test_push_rejects_api_mismatch():
+    _, _, mgr = _mgr()
+    with pytest.raises(AppError):
+        mgr.push(build_nwa("X", api_level=1))
+
+
+def test_uninstall_unknown_raises():
+    _, _, mgr = _mgr()
+    with pytest.raises(AppError):
+        mgr.uninstall("Nope")
+
+
+def test_reorder_must_be_a_permutation():
+    _, _, mgr = _mgr()
+    mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
+    with pytest.raises(AppError):
+        mgr.reorder(["Alpha", "Ghost"])

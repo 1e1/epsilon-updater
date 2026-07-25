@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Signalement de sécurité (privé)
+    url: https://github.com/1e1/epsilon-updater/security
+    about: Vulnérabilité ou fuite de secret — passez par le canal privé, pas par une issue.
+  - name: Objection d'un ayant droit
+    url: https://github.com/1e1/epsilon-updater/blob/main/SECURITY.md
+    about: NumWorks SAS ou tout ayant droit — voir SECURITY.md et GOOD-FAITH-DECLARATION.md.

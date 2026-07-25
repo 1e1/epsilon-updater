@@ -47,26 +47,31 @@ class FirmwareCatalog:
 
     # -- constructors --------------------------------------------------------------
     @classmethod
-    def from_json(cls, data) -> "FirmwareCatalog":
+    def from_json(cls, data) -> FirmwareCatalog:
         if isinstance(data, (str, bytes)):
             data = json.loads(data)
         return cls([FirmwareRelease(d["version"], d.get("patch_level", "")) for d in data])
 
     @classmethod
-    def load(cls, path: str | Path) -> "FirmwareCatalog":
+    def load(cls, path: str | Path) -> FirmwareCatalog:
         return cls.from_json(Path(path).read_text())
 
     @classmethod
-    def bundled(cls) -> "FirmwareCatalog":
-        """The snapshot shipped with the package (offline default)."""
+    def bundled(cls, name: str = "firmwares") -> FirmwareCatalog:
+        """A snapshot shipped with the package (offline default).
+
+        ``name`` selects the track: ``firmwares`` = the public Graphing catalog (N01xx),
+        ``firmwares-n0200`` = the Scientific (N0200) 3.x line — they use unrelated version
+        numbers, so the session picks the right one per detected family."""
+        rel = f"data/{name}.json"
         try:
-            raw = resources.files("nwupdater.catalog").joinpath("data/firmwares.json").read_text()
+            raw = resources.files("nwupdater.catalog").joinpath(rel).read_text()
         except (ModuleNotFoundError, FileNotFoundError, AttributeError):
-            raw = (Path(__file__).parent / "data" / "firmwares.json").read_text()
+            raw = (Path(__file__).parent / "data" / f"{name}.json").read_text()
         return cls.from_json(raw)
 
     @classmethod
-    def fetch(cls, url: str = CATALOG_URL, *, timeout: float = 10.0) -> "FirmwareCatalog":
+    def fetch(cls, url: str = CATALOG_URL, *, timeout: float = 10.0) -> FirmwareCatalog:
         """Live fetch. Only place in Lot 2 that touches the network; never used in tests."""
         import urllib.request
 

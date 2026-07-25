@@ -5,8 +5,11 @@ code source fait foi : ce projet est ouvert (MIT) et intégralement auditable. /
 [DISCLAIMER](DISCLAIMER.md). In case of doubt, the source code prevails: this project is open
 (MIT) and fully auditable.*
 
-**Version :** 1.0 — 2026-07-12
-**Portée / Scope :** l'outil `nwupdater` (cœur headless + page web locale), tous lots confondus.
+**Version :** 1.0.0-rc.2 — 2026-07-15
+**Portée / Scope :** l'outil `nwupdater` (cœur headless + page web locale), tous lots confondus —
+y compris la gestion des applications tierces et des scripts Python (lecture/écriture **gatée** du
+storage de l'appareil) et l'agrégation de sources **locales et distantes fournies par
+l'utilisateur** (rien n'est hébergé ni redistribué).
 
 🇫🇷 [Français](#français) · 🇬🇧 [English](#english)
 
@@ -19,8 +22,14 @@ code source fait foi : ce projet est ouvert (MIT) et intégralement auditable. /
 `nwupdater` est un projet **indépendant, non commercial et de hobby**, sans aucun lien avec
 NumWorks SAS. Sa seule finalité est **l'interopérabilité et le droit à la réparation** : offrir
 au **propriétaire** d'une calculatrice NumWorks un moyen de la mettre à jour et d'y installer
-des applications tierces **sans dépendre de Chrome + WebUSB**, sur le modèle des updaters
-communautaires Flipper Zero et Lunii.
+des applications tierces **sans dépendre de Chrome + WebUSB**, au moyen d'un logiciel natif qui
+pilote l'USB, doublé d'une interface web servie en local.
+
+**Complément, pas concurrent.** L'outil ne vise que les cas que l'application officielle ne
+couvre pas aujourd'hui (navigateurs sans WebUSB, postes scolaires verrouillés, usage hors-ligne)
+et s'appuie sur les **canaux officiels** : chaque firmware provient du serveur NumWorks, sous le
+compte de l'utilisateur. Si cela sert leurs utilisateurs, nous sommes prêts à **contribuer en
+amont ou à céder tout ou partie** de cet outil à NumWorks (voir [SECURITY.md](SECURITY.md)).
 
 Cette déclaration atteste que l'outil est conçu et distribué **de bonne foi** :
 
@@ -87,6 +96,11 @@ ce qui garantit qu'il s'exécute dans un cadre légitime :
   calculatrice** (scripts, notes). C'est inhérent à toute mise à jour de firmware, indépendant
   de cet outil, et **clairement signalé dans le [DISCLAIMER](DISCLAIMER.md)**. L'utilisateur est
   invité à sauvegarder au préalable.
+- **Applications & scripts** : la lecture du storage est **non destructive** (UPLOAD seul) ;
+  l'écriture n'intervient qu'après **confirmation explicite** et ne réécrit que la portion qui
+  change (planificateur à préfixe identique préservé). Les `.nwa`/scripts proviennent de sources
+  **fournies par l'utilisateur** (fichiers locaux ou URLs qu'il liste) : l'outil n'en héberge, n'en
+  redistribue et n'en modifie aucun.
 
 ### 4. Sécurisation des données
 
@@ -185,7 +199,14 @@ ouvert, en est la preuve vérifiable.**
 `nwupdater` is an **independent, non-commercial, hobby** project with no affiliation whatsoever
 to NumWorks SAS. Its sole purpose is **interoperability and the right to repair**: giving the
 **owner** of a NumWorks calculator a way to update it and install third-party apps **without
-depending on Chrome + WebUSB**, following the community Flipper Zero and Lunii updaters.
+depending on Chrome + WebUSB**, by means of a native program that drives USB, paired with a
+locally-served web UI.
+
+**Complementary, not competing.** The tool targets only cases the official application does not
+cover today (browsers without WebUSB, locked-down school machines, offline use) and relies on
+**official channels**: every firmware comes from the NumWorks server, under the user's own
+account. If it helps their users, we are ready to **contribute upstream or hand over** all or
+part of this tool to NumWorks (see [SECURITY.md](SECURITY.md)).
 
 This declaration attests that the tool is designed and distributed **in good faith**:
 
@@ -249,6 +270,10 @@ guarantees it runs within a legitimate frame:
 - **Acknowledged caveat**: flashing a firmware **may erase the data present on the calculator**
   (scripts, notes). This is inherent to any firmware update, independent of this tool, and
   **clearly stated in the [DISCLAIMER](DISCLAIMER.md)**. Users are advised to back up first.
+- **Apps & scripts**: reading the storage is **non-destructive** (UPLOAD only); writing happens
+  only after **explicit confirmation** and rewrites only the part that changes (a planner that
+  keeps the identical prefix untouched). The `.nwa`/scripts come from **user-supplied** sources
+  (local files or URLs the user lists): the tool hosts, redistributes and modifies none of them.
 
 ### 4. Data security
 

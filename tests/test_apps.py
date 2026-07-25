@@ -35,7 +35,9 @@ def test_store_bundled_and_compat_filter():
     assert "Tetris" in names
     assert "Periodic" not in names  # api_level 1 filtered out
     # scientific / no external-apps region -> nothing compatible
-    assert store.compatible(family="scientifique", device_api_level=0, has_external_apps=False) == []
+    assert (
+        store.compatible(family="scientifique", device_api_level=0, has_external_apps=False) == []
+    )
 
 
 def test_install_app_into_external_region_and_verify():
@@ -45,7 +47,7 @@ def test_install_app_into_external_region_and_verify():
     assert ident.external_apps_flash is not None
 
     inst = AppInstaller(cli, external_apps_flash=ident.external_apps_flash, device_api_level=0)
-    blob = build_nwa("Nofrendo", api_level=0, code=b"\xAA" * 512)
+    blob = build_nwa("Nofrendo", api_level=0, code=b"\xaa" * 512)
     result = inst.install(blob)
 
     assert result.name == "Nofrendo"

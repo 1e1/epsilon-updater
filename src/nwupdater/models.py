@@ -35,6 +35,10 @@ class Model:
     # N02xx (Scientifique) ships an ENCRYPTED, opaque firmware blob: no plaintext
     # SlotInfo/Kernel/Userland headers, no readable version — see docs/01-specs/n02xx-firmware-format.md.
     opaque_firmware: bool = False
+    # Per-page DfuSe ERASE before writing. The official N0200 flasher issues NO erase (verified
+    # in a real update capture — the bootloader accepts DNLOAD writes directly); graphique models
+    # keep erase. See docs/01-specs/n02xx-firmware-format.md.
+    flash_erase: bool = True
 
     @property
     def marketing_family(self) -> str:
@@ -51,29 +55,43 @@ def family_for_bcd(bcd: int) -> str:
 
 # Common maps -------------------------------------------------------------------
 _MAP_N0110 = MemoryMap(
-    internal_flash_origin=0x08000000, internal_flash_size=0x10000,  # 64 KiB (4x16K)
-    external_flash_origin=0x90000000, external_flash_size=0x800000,  # 8 MiB
-    sram_origin=0x20000000, sram_size=0x40000,  # 256 KiB
-    has_ab_slots=True, slot_size=0x400000,  # 4 MiB per slot
+    internal_flash_origin=0x08000000,
+    internal_flash_size=0x10000,  # 64 KiB (4x16K)
+    external_flash_origin=0x90000000,
+    external_flash_size=0x800000,  # 8 MiB
+    sram_origin=0x20000000,
+    sram_size=0x40000,  # 256 KiB
+    has_ab_slots=True,
+    slot_size=0x400000,  # 4 MiB per slot
 )
 _MAP_N0120 = MemoryMap(
-    internal_flash_origin=0x08000000, internal_flash_size=0x80000,  # 512 KiB (4x128K)
-    external_flash_origin=0x90000000, external_flash_size=0x800000,
-    sram_origin=0x24000000, sram_size=0x50000,  # AXI SRAM (~320 KiB)
-    has_ab_slots=True, slot_size=0x400000,
+    internal_flash_origin=0x08000000,
+    internal_flash_size=0x80000,  # 512 KiB (4x128K)
+    external_flash_origin=0x90000000,
+    external_flash_size=0x800000,
+    sram_origin=0x24000000,
+    sram_size=0x50000,  # AXI SRAM (~320 KiB)
+    has_ab_slots=True,
+    slot_size=0x400000,
 )
 _MAP_N0100 = MemoryMap(  # inferred: internal flash only, no slots
-    internal_flash_origin=0x08000000, internal_flash_size=0x100000,  # ~1 MiB
-    external_flash_origin=None, external_flash_size=0,
-    sram_origin=0x20000000, sram_size=0x40000,
+    internal_flash_origin=0x08000000,
+    internal_flash_size=0x100000,  # ~1 MiB
+    external_flash_origin=None,
+    external_flash_size=0,
+    sram_origin=0x20000000,
+    sram_size=0x40000,
     has_ab_slots=False,
 )
 _MAP_N0200 = MemoryMap(  # STM32U073 (M0+), no slots. DFU firmware base OBSERVED on the real
     # N0200 3.0.0 .dfu = 0x98000000 (NumWorks DFU address space, distinct from the CPU flash at
     # 0x08000000); single opaque/encrypted element of ~232 KiB. See docs/01-specs/n02xx-firmware-format.md.
-    internal_flash_origin=0x98000000, internal_flash_size=0x40000,  # ~256 KiB region
-    external_flash_origin=None, external_flash_size=0,
-    sram_origin=0x20000000, sram_size=0xA000,  # ~40 KiB (M0+), still inferred
+    internal_flash_origin=0x98000000,
+    internal_flash_size=0x40000,  # ~256 KiB region
+    external_flash_origin=None,
+    external_flash_size=0,
+    sram_origin=0x20000000,
+    sram_size=0xA000,  # ~40 KiB (M0+), still inferred
     has_ab_slots=False,
 )
 
@@ -82,8 +100,16 @@ MODELS: dict[int, Model] = {
     0x0110: Model(0x0110, "n0110", "graphique", "STM32F730", _MAP_N0110),
     0x0115: Model(0x0115, "n0115", "graphique", "STM32F730(var)", _MAP_N0110),
     0x0120: Model(0x0120, "n0120", "graphique", "STM32H725", _MAP_N0120),
-    0x0200: Model(0x0200, "n0200", "scientifique", "STM32U073KC", _MAP_N0200,
-                  confirmed=False, opaque_firmware=True),
+    0x0200: Model(
+        0x0200,
+        "n0200",
+        "scientifique",
+        "STM32U073KC",
+        _MAP_N0200,
+        confirmed=False,
+        opaque_firmware=True,
+        flash_erase=False,
+    ),
 }
 
 
@@ -95,6 +121,6 @@ def model_for_bcd(bcd: int) -> Model | None:
 def describe_bcd(bcd: int) -> str:
     m = MODELS.get(bcd)
     if m:
-        flag = "" if m.confirmed else " (carte mémoire inférée)"
+        flag = "" if m.confirmed else " (inferred memory map)"
         return f"{m.name} — {m.marketing_family} — {m.mcu}{flag}"
-    return f"n{bcd:04x} — famille {family_for_bcd(bcd)} — inconnu du registre"
+    return f"n{bcd:04x} — family {family_for_bcd(bcd)} — unknown to the registry"

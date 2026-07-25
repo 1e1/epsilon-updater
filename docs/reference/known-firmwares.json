@@ -1,0 +1,33 @@
+{
+  "_note": "Empreintes des .dfu officiels NumWorks observés (interopérabilité). Les BINAIRES ne sont PAS redistribués (voir GOOD-FAITH-DECLARATION.md) : ce fichier ne contient que des métadonnées + SHA-256, pour (1) vérifier qu'un re-téléchargement est bit-à-bit identique et (2) ancrer une version en vue d'un diff futur (python -m nwupdater.tools.dfudiff v_ancien.dfu v_nouveau.dfu).",
+  "observed_on": "2026-07-12",
+  "source": "GET https://my.numworks.com/firmwares/{model}/{channel}.dfu (authentifié)",
+  "firmwares": [
+    {
+      "model": "n0200",
+      "family": "scientifique",
+      "channel": "stable",
+      "version": "3.0.0",
+      "patch_level": "8059a46",
+      "device_model_id": 9,
+      "device_type_id": 6,
+      "size": 237606,
+      "sha256": "838d8fe3283484ab15b9eb5ab44b8b7f6d0ffe145d06a541947199574017822d",
+      "encrypted": true,
+      "note": "Blob chiffré/opaque, 1 élément DfuSe @0x98000000, PID 0xA51A. Aucun en-tête lisible. beta == stable."
+    },
+    {
+      "model": "n0110",
+      "family": "graphique",
+      "channel": "stable",
+      "version": "25.2.0",
+      "patch_level": "43f67db",
+      "device_model_id": 2,
+      "device_type_id": 1,
+      "size": 3191133,
+      "sha256": "13b97ca9439f4a70f28e978fa18eaf4d4902f5b32fec391cf6cbdc1afaaa6059",
+      "encrypted": false,
+      "note": "Epsilon en clair. Image complète : slots A@0x90000000 et B@0x90400000 + interne @0x08000000. Userland @slot+0x10000."
+    }
+  ]
+}

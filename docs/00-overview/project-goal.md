@@ -27,7 +27,7 @@ L'utilitaire doit :
 - Compte de test NumWorks fourni (pour explorer le Workshop / les apps). On ne pilote pas
   un navigateur réel avec ; on documente les endpoints.
 
-## Modèle d'architecture visé (analogie Flipper / Lunii)
+## Modèle d'architecture visé
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -47,9 +47,9 @@ L'utilitaire doit :
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Le point-clé par rapport à Flipper : Flipper propose *aussi* un flashage web (WebUSB /
-WebSerial) **et** une app native ; on reproduit la partie native, mais en gardant une UI
-web servie en local pour l'ergonomie — sans dépendre de WebUSB.
+Le point-clé : plutôt que de reposer sur un flashage web (WebUSB / WebSerial), tout l'USB est
+piloté par le cœur natif ; on garde une UI web, mais servie en local pour l'ergonomie — sans
+dépendre de WebUSB.
 
 ## Pourquoi c'est faisable
 

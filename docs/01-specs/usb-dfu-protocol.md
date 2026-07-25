@@ -6,7 +6,7 @@ WebUSB. C'est le cœur des Lots 3/4. Sources citées inline :
 - **[epsilon:…]** — firmware local `/Users/agerlier/Documents/repogit/epsilon/…`
 - **[dfu.py]** — flasher officiel `tools/device/dfu.py` (pyusb, sans dfu-util)
 - **[webdfu]** — `TI-Planet/webdfu_numworks` branche `gh-pages` (`n0110/dfu.js`, `n0110/dfuse.js`)
-- **[nwagyu]** — nwagyu.org
+- **[comm]** — documentation communautaire tierce (rétro-ingénierie indépendante)
 
 > `webdfu_numworks` est un fork de la lib générique WebDFU : rien de spécifique NumWorks
 > au-delà de la détection de modèle. Il **corrobore** les codes de requête, la numérotation
@@ -167,7 +167,7 @@ n0120 = `{08000000,08020000,08040000,08060000,08080000}` (128K).
 | Slot | Origine | Contenu |
 |---|---|---|
 | **A** | `0x90000000` | SP-header+Kernel(64K) → ExtraData(0/64K) → Userland → Signature → Apps externes → Persisting(64K) |
-| Khi | `0x90180000` | slot fork tiers [nwagyu] |
+| Khi | `0x90180000` | slot fork tiers [comm] |
 | **B** | `0x90400000` | structure identique |
 
 Userland header ≈ `0x90010000` (sans extra data) ou `0x90020000` (avec) pour slot A ;
@@ -194,8 +194,8 @@ actif ; les deux → « rescue » ; aucun → « unknown ».
 
 ## 7. « platforminfo » : SlotInfo → KernelHeader / UserlandHeader
 
-> Attention notation des magics : le littéral C++ est un `uint32_t` little-endian ; nwagyu
-> cite l'ordre des octets en flash. Les deux désignent les mêmes octets.
+> Attention notation des magics : le littéral C++ est un `uint32_t` little-endian ; la
+> documentation communautaire cite l'ordre des octets en flash. Les deux désignent les mêmes octets.
 
 ### 7.1 SlotInfo — 16 o, à la base SRAM (`0x20000000` ou `0x24000000` n0120) [usb.h]
 | Off | Champ | Valeur |

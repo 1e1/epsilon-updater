@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Python tooling (optional extras: usb/auth/dev/test-ui). Core has no runtime dependency.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+  # Keep the GitHub Actions used by the workflows up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "ci"]
