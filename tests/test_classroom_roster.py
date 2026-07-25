@@ -418,3 +418,56 @@ def test_mode_endpoint_sets_policy_and_enrols(server):
     assert _get(server, "/api/roster")["total"] == 1
     # Back to individual clears the policy (the already-enrolled device stays in the roster).
     assert _post(server, "/api/mode", {"mode": "individual"}) == {"ok": True, "classroom": False}
+
+
+# -- store: per-class distribution config -------------------------------------------------
+
+def test_distribution_defaults_then_persist(tmp_path):
+    p = tmp_path / "roster.json"
+    d = R.distribution("3e A", path=p)  # unknown class → fully defaulted, firmware OFF
+    assert d["actions"] == {"census": True, "firmware": False, "apps": True, "scripts": True}
+    assert d["onboarding"] == "move" and d["apps"] == [] and d["scripts"] == []
+    R.set_distribution(
+        "3e A",
+        {
+            "actions": {"firmware": True, "scripts": False},
+            "onboarding": "ignore",
+            "apps": ["RPN", "Tetris"],
+            "scripts": ["stats.py"],
+            "junk": 1,  # ignored by the sanitiser
+        },
+        path=p,
+    )
+    d = R.distribution("3e A", path=p)
+    assert d["actions"] == {"census": True, "firmware": True, "apps": True, "scripts": False}
+    assert d["onboarding"] == "ignore" and d["apps"] == ["RPN", "Tetris"] and d["scripts"] == ["stats.py"]
+    assert "3e A" in R.all_classes(path=p) and "3e A" in R.all_distributions(path=p)
+
+
+def test_distribution_follows_class_rename_and_delete(tmp_path):
+    p = tmp_path / "roster.json"
+    R.set_distribution("3e A", {"apps": ["RPN"]}, path=p)
+    R.rename_class("3e A", "3e B", path=p)
+    assert R.distribution("3e B", path=p)["apps"] == ["RPN"]
+    assert "3e A" not in R.all_distributions(path=p)
+    R.delete_class("3e B", path=p)
+    assert "3e B" not in R.all_distributions(path=p)
+
+
+def test_set_distribution_rejects_blank_class(tmp_path):
+    with pytest.raises(ValueError):
+        R.set_distribution("  ", {}, path=tmp_path / "roster.json")
+
+
+def test_dist_endpoint_persists_and_shows_in_roster(server):
+    r = _post(
+        server,
+        "/api/roster/dist",
+        {"class": "3e A", "config": {"actions": {"firmware": True}, "onboarding": "ignore", "apps": ["RPN"]}},
+    )
+    assert r["ok"] and r["distribution"]["actions"]["firmware"] is True
+    ros = _get(server, "/api/roster")
+    assert "3e A" in ros["classes"]
+    assert ros["distributions"]["3e A"]["onboarding"] == "ignore"
+    assert ros["distributions"]["3e A"]["apps"] == ["RPN"]
+    assert "dist_apps" in ros and "dist_scripts" in ros

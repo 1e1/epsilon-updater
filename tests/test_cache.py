@@ -68,6 +68,18 @@ def test_auto_expiry_after_ttl(tmp_path):
     assert c.status()["version"] is None
 
 
+def test_touch_extends_ttl_without_redownload(tmp_path):
+    clock = Clock()
+    c = FirmwareCache(tmp_path, ttl_days=30, now=clock)
+    c.put("n0110", "25.2.0", b"DATA")
+    clock.t += 20 * 86400  # 20 days later
+    assert c.touch("n0110") is True  # extend from now — no re-download
+    clock.t += 20 * 86400  # 40 days after the original put, but only 20 since the touch
+    assert c.has("n0110", "25.2.0")  # still fresh thanks to the touch
+    assert c.touch("n0120") is False  # nothing cached for this model
+    assert c.touch("n0110", "0.0.0") is False  # version-guarded: only the matching version refreshes
+
+
 def test_status_reports_expiry(tmp_path):
     clock = Clock()
     c = FirmwareCache(tmp_path, ttl_days=30, now=clock)

@@ -96,6 +96,9 @@ class RosterMixin(SessionBase):
         for c in classes:
             counts.setdefault(c, 0)
         calculators.sort(key=lambda c: (c["name"] or c["default"] or "").lower())
+        # Per-class distribution config (every class defaulted) + the device-independent name pools
+        # the Distribution panels pick from (app/script catalogue), so the UI works with no device.
+        distributions = {c: R.distribution(c) for c in classes}
         return {
             "schema": R.SCHEMA,
             "classes": classes,
@@ -103,7 +106,31 @@ class RosterMixin(SessionBase):
             "unfiled_count": unfiled,
             "total": len(calculators),
             "calculators": calculators,
+            "distributions": distributions,
+            "dist_apps": self._dist_app_names(),
+            "dist_scripts": self._dist_script_names(),
         }
+
+    def _dist_app_names(self) -> list[str]:
+        """Distinct app names available to a class distribution (catalogue + local), device-free."""
+        return sorted({e.name for e in self.store.entries if e.name})
+
+    def _dist_script_names(self) -> list[str]:
+        """Distinct script names available to a class distribution, device-free. ``_scripts_available``
+        lives on the sibling ScriptsMixin (composed into the full Session)."""
+        avail = getattr(self, "_scripts_available", None)
+        if not callable(avail):
+            return []
+        try:
+            return sorted({str(s.get("name", "")) for s in avail() if s.get("name")})
+        except Exception:
+            return []
+
+    def roster_dist_set(self, class_name: str, config: dict) -> dict:
+        """Persist a class's distribution config (action chain, onboarding rule, app/script sets)."""
+        from .. import classroom_roster as R
+
+        return {"ok": True, "class": class_name, "distribution": R.set_distribution(class_name, config)}
 
     # -- mutations (POST /api/roster/*) --------------------------------------------
     def roster_rename(self, key: str, name: str) -> dict:

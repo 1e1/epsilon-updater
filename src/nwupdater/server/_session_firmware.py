@@ -36,15 +36,30 @@ class FirmwareMixin(SessionBase):
         return {"ok": True, "real": real, **self.cache_status()}
 
     def preload_all(self) -> dict:
-        """Classroom: cache the latest firmware for EVERY known model (real ``.dfu`` when
-        signed in, else a synthetic demo image) so a whole mixed fleet is ready offline."""
+        """Classroom: keep the latest firmware cached for EVERY known model (real ``.dfu`` when
+        signed in, else a synthetic demo image) so a whole mixed fleet is ready offline.
+
+        When a model already holds the latest for the current channel, its 30-day TTL is simply
+        EXTENDED from now — no re-download. Only a genuinely newer (or missing) version is fetched."""
+        refreshed = downloaded = 0
         for m in MODELS.values():
             cat = self._catalog_for(m.family, self.channel)
             latest = cat.latest()
-            fallback = latest.version if latest else "0.0.0"
-            v, blob, real = self._fetch_or_synth(m, fallback)
+            target = latest.version if latest else None
+            cur = self.cache.entry_for_model(m.name)
+            if (
+                cur is not None
+                and target is not None
+                and cur.version == target
+                and cur.channel == self.channel
+                and self.cache.touch(m.name, target)
+            ):
+                refreshed += 1  # already the latest → extend the TTL, no download
+                continue
+            v, blob, real = self._fetch_or_synth(m, target or "0.0.0")
             self.cache.put(m.name, v, blob, real=real, channel=self.channel)
-        return {"ok": True, **self.cache_status()}
+            downloaded += 1
+        return {"ok": True, "refreshed": refreshed, "downloaded": downloaded, **self.cache_status()}
 
     def _fetch_or_synth(self, model, fallback_version: str) -> tuple[str, bytes, bool]:
         """``(version, blob, is_real)`` for a model: the REAL official ``.dfu`` when signed in

@@ -9,6 +9,8 @@ from ._session_base import SessionBase
 
 class AppsMixin(SessionBase):
     def apps(self) -> dict:
+        from ..apps.link import nwlink_available
+
         i = self._identity()
         caps = self._capabilities(i)
         compat = self.store.compatible(
@@ -17,6 +19,9 @@ class AppsMixin(SessionBase):
         return {
             "has_external_apps": caps.external_apps,
             "api_level": self.api_level,
+            # Distributed .nwa are relocatable ELFs relinked at install via nwlink (Node). Surface
+            # whether it's discoverable so the UI can warn BEFORE an install fails mid-way.
+            "nwlink": nwlink_available(),
             "apps": [
                 {
                     "name": e.name,

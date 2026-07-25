@@ -295,7 +295,7 @@ def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path, mo
         assert "SECRETAAA111" not in r["html"] and "SECRETBBB222" not in r["html"]
         # Single-clicking the "Seconde A" class name filters to its calculator. The select is
         # delayed (click/dblclick discrimination) so wait for the filtered tbody.
-        page.click(".parc-rail .clsbtn:has-text('Seconde A') .nm")
+        page.click("#rail .clsbtn:has-text('Seconde A') .nm")
         page.wait_for_function("document.querySelectorAll('.parc-tbl tbody tr').length === 1")
         # Back to individual mode: the Parc tab hides and falls back to System.
         page.click("#mode-individual")
@@ -346,9 +346,9 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
         page.wait_for_function("STATE.roster.calculators.some(c => c.name === 'Poste 9')")
         # Create a class from the rail input → it appears as a bucket.
         page.fill("#parc-newclass", "Seconde A")
-        page.click("#pane-parc .cls-add .ib")
+        page.click("#rail .cls-add .ib")
         page.wait_for_function(
-            "[...document.querySelectorAll('#pane-parc .clsbtn .nm')].some(e => e.textContent === 'Seconde A')"
+            "[...document.querySelectorAll('#rail .clsbtn .nm')].some(e => e.textContent === 'Seconde A')"
         )
         # Move the first calculator into it via the row dropdown → the server count reflects it.
         page.select_option("#pane-parc tbody tr:first-child .pc-act .mv", "Seconde A")
@@ -400,7 +400,7 @@ def test_parc_name_filter_and_class_double_click_rename(tmp_path, monkeypatch):
         page.fill(".pc-filter-in", "")
         page.wait_for_function("document.querySelectorAll('#pane-parc tbody tr').length === 2")
         # Double-click the class name → inline rename input; committing renames it on the server.
-        page.dblclick(".parc-rail .clsbtn:has-text('Seconde A') .nm")
+        page.dblclick("#rail .clsbtn:has-text('Seconde A') .nm")
         page.wait_for_selector("#parc-clsedit")
         page.fill("#parc-clsedit", "Terminale S")
         page.eval_on_selector("#parc-clsedit", "el => el.blur()")
@@ -410,9 +410,9 @@ def test_parc_name_filter_and_class_double_click_rename(tmp_path, monkeypatch):
 
 
 def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
-    """Decouple (plan §1 + 'afficher au plus tôt'): the Parc (P3) and the System pane's cache (P3)
-    are device-independent, so classroom mode shows and edits them with NO calculator connected —
-    the workspace is not hidden behind "plug one in", and only the device-dependent bits go away."""
+    """Decouple (plan §1 + 'afficher au plus tôt'): the classroom console (Calculatrices +
+    Distribution, incl. the firmware cache) is device-independent, so it shows and edits with NO
+    calculator connected — the workspace is not hidden behind "plug one in"."""
     monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
     from nwupdater import classroom_roster as R
 
@@ -434,22 +434,96 @@ def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
         page.wait_for_selector("#pane-parc.on .parc-tbl")
         assert page.eval_on_selector("#window", "el => el.dataset.conn") == "0"
         assert page.eval_on_selector(".nodev-main", "el => getComputedStyle(el).display") == "none"
+        # Classroom is a fleet console: Calculatrices + Distribution show; the per-device tabs
+        # (System/Apps/Scripts) are hidden — the firmware cache moved into Distribution → Firmware.
         assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") != "none"
-        # System stays reachable (its cache is device-independent); the workshops (P6) are hidden.
-        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") != "none"
+        assert page.eval_on_selector("#tab-dist", "el => getComputedStyle(el).display") != "none"
+        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") == "none"
         assert page.eval_on_selector("#tab-apps", "el => getComputedStyle(el).display") == "none"
-        # The rail becomes the "connect" entry: rescan + explore-a-demo.
-        assert page.eval_on_selector_all(".rail-nodev .btn", "els => els.length") >= 2
-        # System pane: the firmware-flash card hides without a device; the cache card shows.
-        page.click("#tab-system")
-        assert page.eval_on_selector("#flash-card", "el => getComputedStyle(el).display") == "none"
-        assert (
-            page.eval_on_selector("#classroom-card", "el => getComputedStyle(el).display") != "none"
-        )
-        # Back on the Parc: the seeded calculator is listed and editable (disk-only, offline).
-        page.click("#tab-parc")
+        # The LEFT rail is the classes list (device-independent): at least Toutes + Sans classe.
+        assert page.eval_on_selector_all("#rail .clsbtn", "els => els.length") >= 2
+        # The seeded calculator is listed and editable (disk-only, offline).
         assert page.eval_on_selector_all("#pane-parc .pnm-txt", "els => els.length") == 1
         assert page.evaluate("() => typeof parcNameEdit === 'function'")
+        # Distribution is reachable; with no real class selected it prompts to pick one.
+        page.click("#tab-dist")
+        page.wait_for_selector("#pane-dist.on")
+        assert not errors
+
+
+def test_distribution_tab_gates_panels_and_persists(tmp_path, monkeypatch):
+    """Distribution tab: picking a class shows Recensement + a 4-node action chain (firmware OFF by
+    default → its panel hidden); toggling an action shows/hides its panel and persists to the server."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+
+    R.create_class("Seconde A")
+    with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector("#serial-btn")
+        page.evaluate(
+            "async () => { stopPoll(); await post('/api/device/detach');"
+            " STATE.identity = { connected:false }; await setMode('classroom');"
+            " STATE.roster = await api('/api/roster'); renderAll(); }"
+        )
+        page.click("#rail .clsbtn:has-text('Seconde A') .nm")
+        page.click("#tab-dist")
+        page.wait_for_selector("#pane-dist.on .dist")
+        # 4-node chain; firmware OFF by default → no firmware panel, apps/scripts panels present.
+        assert page.eval_on_selector_all("#pane-dist .node", "els => els.length") == 4
+        assert page.evaluate("() => STATE.roster.distributions['Seconde A'].actions.firmware === false")
+        assert page.evaluate("() => !!document.querySelector('#dist-add-app')")
+        # Toggle firmware ON → the cache panel appears and the config persists to the server.
+        page.evaluate("() => toggleDistAction('firmware')")
+        page.wait_for_function("STATE.roster.distributions['Seconde A'].actions.firmware === true")
+        page.wait_for_function(
+            "[...document.querySelectorAll('#pane-dist .dist-card h4')].some(h => /caches firmware|firmware caches/i.test(h.textContent))"
+        )
+        # Toggle apps OFF → its set panel disappears and the change persists.
+        page.evaluate("() => toggleDistAction('apps')")
+        page.wait_for_function("STATE.roster.distributions['Seconde A'].actions.apps === false")
+        page.wait_for_function("!document.querySelector('#dist-add-app')")
+        # Onboarding rule persists.
+        page.evaluate("() => setDistOnboarding('ignore')")
+        page.wait_for_function("STATE.roster.distributions['Seconde A'].onboarding === 'ignore'")
+        assert not errors
+
+
+def test_batch_mode_runs_chain_and_journals(tmp_path, monkeypatch):
+    """Mode batch: arming opens the overlay; 'Simuler' attaches a virtual calculator and runs the
+    class chain for real, appending a journal row and filing the calc; re-simulating the same model
+    greys the previous pass; the serial never reaches the journal DOM."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+
+    R.create_class("Seconde A")
+    with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector("#serial-btn")
+        page.evaluate(
+            "async () => { stopPoll(); await post('/api/device/detach');"
+            " STATE.identity = { connected:false }; await setMode('classroom');"
+            " STATE.roster = await api('/api/roster'); renderAll(); }"
+        )
+        page.click("#rail .clsbtn:has-text('Seconde A') .nm")
+        page.click("#btn-batch")
+        page.wait_for_selector("#batch-overlay:not([hidden]) .bjournal")
+        # Simulate a first calculator → one journal row, and the calc is filed in the class.
+        page.select_option("#batch-model", "n0110")
+        page.click(".bsim .simbtn")
+        page.wait_for_function(
+            "document.querySelectorAll('#batch-jbody tr').length === 1 && !!(STATE.roster.counts||{})['Seconde A']"
+        )
+        assert page.eval_on_selector_all("#batch-jbody .pc-dist .dist-ic", "els => els.length") >= 1
+        # The serial never reaches the journal DOM (rows render names/models only).
+        serial = page.evaluate("() => STATE.identity && STATE.identity.serial_number")
+        assert serial and serial not in page.inner_html("#batch-jbody")
+        # Simulate the SAME model again → a second row; the older one is greyed (same identity).
+        page.click(".bsim .simbtn")
+        page.wait_for_function("document.querySelectorAll('#batch-jbody tr').length === 2")
+        page.wait_for_function("document.querySelectorAll('#batch-jbody tr.jprev').length === 1")
+        # Stop → the overlay hides and the classroom console returns.
+        page.click(".arm .stop")
+        page.wait_for_function("document.getElementById('batch-overlay').hidden === true")
+        assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") != "none"
         assert not errors
 
 

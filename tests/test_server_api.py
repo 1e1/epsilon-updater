@@ -449,6 +449,88 @@ def test_preload_all_caches_every_model(tmp_path):
     assert all(e["real"] is False for e in r["entries"])
 
 
+def test_preload_all_extends_ttl_on_second_run(tmp_path):
+    s = Session(connect=False, cache_dir=tmp_path)
+    s.attach_demo("n0110")
+    first = s.preload_all()
+    assert first["downloaded"] > 0 and first["refreshed"] == 0
+    second = s.preload_all()  # same versions already cached → extend the TTL, no re-download
+    assert second["downloaded"] == 0 and second["refreshed"] == first["downloaded"]
+
+
+def test_reveal_folder_creates_dir_and_spawns_file_manager(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path / "apps"))
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    calls: list = []
+    monkeypatch.setattr("subprocess.Popen", lambda argv, **kw: calls.append(argv) or object())
+    s = Session(connect=False)
+    out = s.reveal_folder("apps")
+    assert out["ok"] and out["which"] == "apps"
+    assert (tmp_path / "apps").is_dir()  # created on demand
+    assert calls and str(tmp_path / "apps") in calls[0]  # whitelisted path handed to the file manager
+    s.reveal_folder("scripts")
+    assert str(tmp_path / "scripts") in calls[1]
+
+
+def test_reveal_folder_rejects_unknown_key():
+    s = Session(connect=False)
+    with pytest.raises(ValueError):
+        s.reveal_folder("../etc")  # only "apps"/"scripts" resolve — no arbitrary path
+
+
+def test_apps_report_nwlink_availability(monkeypatch):
+    s = Session(model_name="n0110")
+    monkeypatch.setattr("nwupdater.apps.link.nwlink_available", lambda: False)
+    assert s.apps()["nwlink"] is False
+
+
+def test_batch_run_files_and_records_outcome(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    from nwupdater import classroom_roster as R
+
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "stats.py").write_text("print(1)\n", encoding="utf-8")
+    s = Session(model_name="n0110", os_version="99.0.0")  # newer than any catalogue → firmware "ok"
+    R.set_distribution(
+        "Seconde A",
+        {
+            "actions": {"census": True, "firmware": True, "apps": False, "scripts": True},
+            "onboarding": "move",
+            "apps": [],
+            "scripts": ["stats.py"],
+        },
+    )
+    j = s.batch_run("Seconde A")
+    assert j["dist"]["recensement"] == "ok"  # newly filed
+    assert j["dist"]["firmware"] == "ok"  # already up to date
+    assert j["dist"]["scripts"] == "change"  # stats.py pushed
+    assert "apps" not in j["dist"]  # the apps action was off → its panel/step is skipped
+    entry = next(e for e in R.all_entries() if e["class"] == "Seconde A")
+    assert entry["last_dist"]["scripts"] == "change"
+    assert any(x["name"] in ("stats.py", "stats") for x in s.scripts()["scripts"])  # really on device
+    assert ":" in j["key"]  # opaque id (model:serial) — never rendered
+
+
+def test_batch_run_ignore_refuses_calc_filed_elsewhere(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+    from nwupdater import device_names
+
+    s = Session(model_name="n0110", os_version="99.0.0")
+    i = s._identity()
+    key = device_names._key(i.model_name or "", i.serial_number or "")
+    R.upsert_on_scan(i.model_name or "", i.serial_number or "", firmware=i.os_version, family=i.family)
+    R.move([key], "Terminale S")  # already filed in another class
+    R.set_distribution(
+        "Seconde A",
+        {"actions": {"census": True, "firmware": False, "apps": False, "scripts": False}, "onboarding": "ignore"},
+    )
+    j = s.batch_run("Seconde A")
+    assert j["dist"] == {"recensement": "error"}  # refused, chain stopped
+    assert next(e for e in R.all_entries() if e["key"] == key)["class"] == "Terminale S"  # untouched
+
+
 def test_set_scripts_rewrites_store_in_order():
     s = Session(model_name="n0110")
     s.set_scripts(

@@ -220,6 +220,14 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 body = self._read_json()
             except _BodyTooLarge:
                 return  # 413 already sent
+            # Revealing the local library folder touches no device — handle it before taking the
+            # I/O lock so it works even while a flash/write is in flight.
+            if path == "/api/reveal":
+                try:
+                    self._json(session.reveal_folder(body.get("which", "")))
+                except Exception as exc:
+                    self._json({"ok": False, "error": str(exc)}, 400)
+                return
             # Serialize device access: a mutation holds the I/O lock so the background liveness
             # poll (a non-blocking acquirer) never issues USB transfers alongside it. The timeout
             # is a safety net against a wedged operation, not expected under the single-client UI.
@@ -334,6 +342,11 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     )
                 elif path == "/api/roster/class/delete":
                     self._json(session.roster_class_delete(body.get("name", ""), body.get("mode")))
+                elif path == "/api/roster/dist":
+                    self._json(session.roster_dist_set(body.get("class", ""), body.get("config", {})))
+                elif path == "/api/batch/run":
+                    # One kiosk pass on the connected calculator (composes flash/apps/scripts + roster).
+                    self._json(session.batch_run(body.get("class", "")))
                 elif path == "/api/quit":
                     self._json({"ok": True})
                     if ctrl.get("shutdown"):

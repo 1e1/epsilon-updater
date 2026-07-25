@@ -115,7 +115,8 @@ async function loadConnected() {
   const reg = STATE.identity.external_apps_flash;
   const cap = reg ? (parseInt(reg[1], 16) - parseInt(reg[0], 16)) : 0;
   STATE.apps = { hasRegion: appsInfo.has_external_apps, avail: appsInfo.apps || [],
-                 apiLevel: appsInfo.api_level || 0, device: installed.installed || [], capacity: cap };
+                 apiLevel: appsInfo.api_level || 0, device: installed.installed || [], capacity: cap,
+                 nwlink: appsInfo.nwlink };
   const sc = await api("/api/scripts").catch(() => ({ has_scripts: false, capacity: 0, scripts: [], available: [] }));
   STATE.scripts = { hasScripts: sc.has_scripts, device: sc.scripts || [],
                     avail: sc.available || [], capacity: sc.capacity || 0 };
@@ -172,6 +173,33 @@ async function switchDemo(model) {
   try { await post("/api/device/demo", { model }); await onConnected(false); }
   catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
+// Re-read the apps/scripts libraries so PC-side changes (a manual purge of the local folder, a new
+// dropped file, a fresh available version) surface without reconnecting. Event-driven (window focus
+// / tab becomes visible + a gentle interval), lock-guarded server-side. Skips while a write is in
+// flight or a stage has unsaved edits, so it never clobbers a plan in progress.
+async function refreshLibraries() {
+  const i = STATE.identity;
+  if (!i || !i.connected || !STATE.apps || !STATE.scripts) return;
+  if (STATE.busy.apps || STATE.busy.scripts) return;
+  if (planFor("apps").dirty || planFor("scripts").dirty) return;  // don't wipe a pending plan
+  try {
+    const appsInfo = await api("/api/apps");
+    const installed = await api("/api/apps/installed");
+    STATE.apps.hasRegion = appsInfo.has_external_apps;
+    STATE.apps.avail = appsInfo.apps || [];
+    STATE.apps.apiLevel = appsInfo.api_level || 0;
+    STATE.apps.device = installed.installed || [];
+    STATE.apps.nwlink = appsInfo.nwlink;
+    const sc = await api("/api/scripts");
+    STATE.scripts.hasScripts = sc.has_scripts;
+    STATE.scripts.device = sc.scripts || [];
+    STATE.scripts.avail = sc.available || [];
+    STATE.scripts.capacity = sc.capacity || 0;
+    STATE.sources = null;  // re-fetched on the next Sources popover open
+    initStage("apps"); initStage("scripts");
+    renderAll();
+  } catch (e) { /* transient — the next trigger retries */ }
+}
 async function disconnectDevice() {
   try { await post("/api/device/detach"); } catch (e) { /* ignore */ }
   STATE.identity = { connected: false }; renderAll(); startPoll(); toast(t("disconnected_toast"));
@@ -185,7 +213,12 @@ function renderAll() {
   $("quit-btn").title = t("quit"); $("quit-btn").setAttribute("aria-label", t("quit"));
   $("mode-individual-label").textContent = t("mode_individual");
   $("mode-classroom-label").textContent = t("mode_classroom");
-  $("tab-parc-label").textContent = t("parc");
+  $("tab-parc-label").textContent = t("roster_tab_calc");
+  $("tab-dist-label").textContent = t("roster_tab_dist");
+  $("btn-batch-label").textContent = t("batch_mode");
+  $("btn-delclass").title = t("roster_delete_class");
+  $("btn-delclass").setAttribute("aria-label", t("roster_delete_class"));
+  $("btn-batch").title = t("batch_mode");
   $("tab-system-label").textContent = t("tab_system");
   $("tab-apps-label").textContent = t("tab_apps");
   $("tab-scripts-label").textContent = t("tab_scripts");
@@ -213,6 +246,9 @@ function renderAll() {
 
 function renderRail() {
   const el = $("rail"), i = STATE.identity;
+  // Classroom mode: the left rail is the CLASSES list (device-independent), not the device.
+  if (STATE.mode === "classroom") { renderClassesRail(); return; }
+  el.classList.remove("rail-classes");
   if (!i || !i.connected) {
     // No calculator: the rail is the "connect" entry — rescan for real hardware, or explore a demo.
     el.innerHTML = `<div class="rail-nodev">
@@ -258,7 +294,7 @@ function renderRail() {
 // -- tabs ----------------------------------------------------------------------
 function setTab(tab) {
   STATE.tab = tab;
-  ["parc", "system", "apps", "scripts"].forEach(k => {
+  ["parc", "dist", "system", "apps", "scripts"].forEach(k => {
     const tb = $("tab-" + k), pn = $("pane-" + k);
     if (tb) tb.setAttribute("aria-selected", k === tab);
     if (pn) pn.classList.toggle("on", k === tab);
@@ -269,21 +305,30 @@ function renderTabs() {
   const hasApps = !!(STATE.apps && STATE.apps.hasRegion);
   const hasPy = !!(STATE.scripts && STATE.scripts.hasScripts);
   const cls = STATE.mode === "classroom";
-  // The "Parc" (roster) tab is classroom-only — the fleet home, device-INDEPENDENT (P3), so it
-  // shows even with no calculator. System/Apps/Scripts need a connected device (they follow the
-  // HARDWARE: QSPI apps region / Python storage), so they hide when disconnected.
+  // Classroom = a fleet console: Calculatrices (#tab-parc) | Distribution (#tab-dist) + delete-class
+  // + Mode batch, and NO per-device System/Apps/Scripts. Individual = the device tabs (System always;
+  // Apps/Scripts follow the HARDWARE — QSPI apps region / Python storage).
   $("tab-parc").style.display = cls ? "" : "none";
-  $("tab-system").style.display = "";  // account (P2) / cache (P3) are device-independent → always
-  $("tab-apps").style.display = (conn && hasApps) ? "" : "none";
-  $("tab-scripts").style.display = (conn && hasPy) ? "" : "none";
+  $("tab-dist").style.display = cls ? "" : "none";
+  $("tabbar-sp").style.display = cls ? "" : "none";
+  $("btn-delclass").style.display = cls ? "" : "none";
+  $("btn-batch").style.display = cls ? "" : "none";
+  $("tab-system").style.display = cls ? "none" : "";
+  $("tab-apps").style.display = (!cls && conn && hasApps) ? "" : "none";
+  $("tab-scripts").style.display = (!cls && conn && hasPy) ? "" : "none";
   $("tab-parc-cnt").textContent = (cls && STATE.roster) ? String(STATE.roster.total || 0) : "";
   $("tab-apps-cnt").textContent = hasApps ? String(STATE.apps.device.length) : "";
   $("tab-scripts-cnt").textContent = hasPy ? String(STATE.scripts.device.length) : "";
-  // The "update available" signal is a pulsing dot on the System tab (not a text pill).
+  // The "update available" signal is a pulsing dot on the System tab (individual mode only).
   const up = !!(STATE.catalog && STATE.catalog.up_to_date);
-  $("updot").style.display = (STATE.catalog && !up) ? "block" : "none";
-  if ((STATE.tab === "apps" && !(conn && hasApps)) || (STATE.tab === "scripts" && !(conn && hasPy))
-      || (STATE.tab === "parc" && !cls)) setTab(cls ? "parc" : "system");
+  $("updot").style.display = (!cls && STATE.catalog && !up) ? "block" : "none";
+  // Keep the active tab valid for the current mode.
+  if (cls) {
+    if (STATE.tab !== "parc" && STATE.tab !== "dist") setTab("parc");
+  } else if (STATE.tab === "parc" || STATE.tab === "dist"
+      || (STATE.tab === "apps" && !(conn && hasApps)) || (STATE.tab === "scripts" && !(conn && hasPy))) {
+    setTab("system");
+  }
 }
 
 // -- account & mode ------------------------------------------------------------
@@ -299,7 +344,7 @@ async function setMode(m) {
   STATE.mode = m; localStorage.setItem("nwmode", m);
   // The roster is the classroom's home; leaving classroom drops off the (now hidden) Parc tab.
   if (m === "classroom") STATE.tab = "parc";
-  else if (STATE.tab === "parc") STATE.tab = "system";
+  else if (STATE.tab === "parc" || STATE.tab === "dist") STATE.tab = "system";
   // renderAll handles every case — including classroom WITHOUT a device (the Parc stays usable).
   renderAll();
   // Push the mode to the server (capability policy). Switching INTO classroom enrols a connected
@@ -391,20 +436,30 @@ function renderCache() {
       <button class="btn ghost sm" onclick="clearCache()">${t("clear")}</button></div>`;
 }
 async function updateCaches() {
-  try { STATE.cache = await post("/api/cache/preload-all"); toast(t("caches_updated")); renderCache(); }
-  catch (e) { toast(t("fail", { msg: e.message }), true); }
+  try {
+    STATE.cache = await post("/api/cache/preload-all"); toast(t("caches_updated"));
+    renderCache(); if (STATE.mode === "classroom") renderDistPane();  // firmware panel lives in Distribution
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 async function preload(v) {
   try { STATE.cache = await post("/api/cache/preload", { version: v }); toast(t("preloaded", { v })); renderCache(); }
   catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 async function clearCache() {
-  try { STATE.cache = await post("/api/cache/clear"); toast(t("cache_cleared")); renderCache(); }
-  catch (e) { toast(t("fail", { msg: e.message }), true); }
+  try {
+    STATE.cache = await post("/api/cache/clear"); toast(t("cache_cleared"));
+    renderCache(); if (STATE.mode === "classroom") renderDistPane();
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 
 // -- sources popover -----------------------------------------------------------
 let SRC_BTN = null;
+// Reveal the local apps/scripts library in the OS file manager (whitelisted server-side to the
+// two managed dirs; the client only sends the "apps"/"scripts" key).
+async function openFolder(which) {
+  try { await post("/api/reveal", { which }); }
+  catch (e) { toast(t("fail", { msg: e.message }), true); }
+}
 async function ensureSources() {
   if (!STATE.sources) {
     STATE.sources = await api("/api/sources").catch(() => ({ apps: [], scripts: [], dirs: {} }));
@@ -424,8 +479,11 @@ function renderSourcesList(s) {
   add(s.apps, t("tab_apps"));
   add(s.scripts, t("tab_scripts"));
   if (s.dirs) {
-    if (s.dirs.apps) rows.push(`<div class="srcline">${ORIGIN_SVG.local}<span class="u">${esc(s.dirs.apps)}</span><span class="k">${t("tab_apps")}</span></div>`);
-    if (s.dirs.scripts) rows.push(`<div class="srcline">${ORIGIN_SVG.local}<span class="u">${esc(s.dirs.scripts)}</span><span class="k">${t("tab_scripts")}</span></div>`);
+    // The two local library dirs are clickable → reveal in the OS file manager (purge by hand).
+    const dirRow = (which, path, label) => `<button class="srcline srcline-open" onclick="openFolder('${which}')"
+      title="${esc(t("open_folder"))}" aria-label="${esc(t("open_folder"))} — ${esc(path)}">${ORIGIN_SVG.local}<span class="u">${esc(path)}</span><span class="k">${label}</span></button>`;
+    if (s.dirs.apps) rows.push(dirRow("apps", s.dirs.apps, t("tab_apps")));
+    if (s.dirs.scripts) rows.push(dirRow("scripts", s.dirs.scripts, t("tab_scripts")));
   }
   $("src-pop-list").innerHTML = rows.join("") || `<div class="srcline"><span class="u muted">—</span></div>`;
 }
@@ -723,6 +781,7 @@ function workshopBody(kind) {
   const head = `<div class="wkhead">
     <span>${t("used", { used: "<b>" + fmtBytes(p.usedB) + "</b>", total: fmtBytes(cfg.capacity) })}</span>
     <span class="wkhead-r"><span>${t("free", { n: fmtBytes(p.freeB) })}</span>
+      <button class="srcbtn" onclick="openFolder('${kind}')" title="${esc(t("open_folder"))}">${ORIGIN_SVG.local}${t("open_folder")}</button>
       <button class="srcbtn" onclick="toggleSources('${kind}',this)">${ORIGIN_SVG.online}${t("sources")}</button></span></div>`;
   const mov = slots.filter(s => ["rw", "new"].includes(p.status.get(s)));  // writable = reorderable
   const left = slots.length ? slots.map(s => onCalcRow(kind, s, p, mov, busy)).join("")
@@ -753,7 +812,12 @@ function workshopBody(kind) {
     <button class="btn ghost sm" onclick="resetStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${t("reset")}</button>
     <button class="btn sm" onclick="commitStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${writeLabel}</button>
   </div>`;
-  return `<div class="wk${busy ? " wk-busy" : ""}">${head + bar + legend + cols + wplan}</div>`;
+  // Preflight: distributed .nwa are relinked at install via nwlink (Node) — warn on the apps tab
+  // BEFORE an install can fail mid-way (scripts never need it).
+  const nwlinkNote = (kind === "apps" && STATE.apps && STATE.apps.nwlink === false)
+    ? `<p class="riskline"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.5 1.8 13h12.4L8 2.5Z"/><path d="M8 6.6v2.6M8 11.1v.1" stroke-linecap="round"/></svg><span>${t("nwlink_needed")} ${t("nwlink_hint")}</span></p>`
+    : "";
+  return `<div class="wk${busy ? " wk-busy" : ""}">${head + nwlinkNote + bar + legend + cols + wplan}</div>`;
 }
 function renderWorkbench() {
   // Workshops follow the HARDWARE (QSPI apps region / Python storage), in both modes.
@@ -856,42 +920,60 @@ function parcMoveOptions() {
 // Interactive controls sit inside a draggable <tr>: stop mousedown so grabbing a control (to type
 // / click) never starts a row drag, and mark them non-draggable.
 const NODRAG = `draggable="false" onmousedown="event.stopPropagation()"`;
+// Classroom view = classes rail (left #rail) + Calculatrices pane + Distribution pane + tab actions.
+// Every roster handler calls renderParc() to refresh the whole classroom view at once.
 function renderParc() {
+  if (STATE.mode !== "classroom") return;
+  renderClassesRail();
+  renderClassroomTabActions();
+  renderCalcPane();
+  renderDistPane();
+}
+// -- classes rail (LEFT rail #rail): Toutes (top) · classes (alpha, middle) · Sans classe (bottom) --
+function classRailBtn(id, label, count, pressed, cls, icon) {
+  if (cls && STATE.parcRenamingClass === cls) {  // inline rename (double-click): the row → an input
+    return `<div class="clsedit"><input id="parc-clsedit" value="${esc(cls)}" aria-label="${t("roster_rename_class")}"
+      onkeydown="if(event.key==='Enter')parcClassRenameCommit('${jsStr(cls)}',this);else if(event.key==='Escape')parcClassRenameCancel()"
+      onblur="parcClassRenameCommit('${jsStr(cls)}',this)"></div>`;
+  }
+  const dnd = `ondragover="parcRailOver(event)" ondragleave="this.classList.remove('drop-hot')" ondrop="parcRailDrop(event,'${jsStr(id)}')"`;
+  const click = cls
+    ? `onclick="parcClassClick('${jsStr(id)}')" ondblclick="parcClassDblClick('${jsStr(cls)}')" title="${t("roster_rename_hint")}"`
+    : `onclick="selectParcClass('${jsStr(id)}')"`;
+  return `<button class="clsbtn" aria-pressed="${pressed}" ${dnd} ${click}>
+    <span class="cls-ic" aria-hidden="true">${icon}</span><span class="nm">${esc(label)}</span><span class="cnt">${count}</span></button>`;
+}
+function renderClassesRail() {
+  const el = $("rail"); if (!el || STATE.mode !== "classroom") return;
+  el.classList.add("rail-classes");
+  const r = STATE.roster, sel = STATE.parcClass || CLASS_ALL;
+  if (!r) { el.innerHTML = `<h4>${t("roster_classes")}</h4><p class="parc-empty">${t("roster_empty")}</p>`; return; }
+  let list = classRailBtn(CLASS_ALL, t("roster_class_all"), r.total || 0, sel === CLASS_ALL, null, STACK_SVG);
+  (r.classes || []).forEach(c => list += classRailBtn(c, c, (r.counts && r.counts[c]) || 0, sel === c, c, FOLDER_SVG));
+  list += classRailBtn(CLASS_UNFILED, t("roster_unfiled"), r.unfiled_count || 0, sel === CLASS_UNFILED, null, INBOX_SVG);
+  el.innerHTML = `<h4>${t("roster_classes")}</h4><div class="cls-scroll">${list}</div>
+    <div class="cls-add">
+      <input id="parc-newclass" type="text" placeholder="${esc(t("roster_new_class"))}" aria-label="${t("roster_add_class")}"
+        onkeydown="if(event.key==='Enter')parcAddClass()">
+      <button class="ib" title="${t("roster_add_class")}" aria-label="${t("roster_add_class")}" onclick="parcAddClass()">＋</button></div>`;
+  const ce = $("parc-clsedit"); if (ce) { ce.focus(); ce.select(); }
+}
+// The tabbar's delete-class icon acts on the SELECTED class; it's disabled for Toutes / Sans classe.
+function renderClassroomTabActions() {
+  const sel = STATE.parcClass || CLASS_ALL;
+  const del = $("btn-delclass"); if (del) del.disabled = sel === CLASS_ALL || sel === CLASS_UNFILED;
+}
+function parcDeleteCurClass() {
+  const sel = STATE.parcClass || CLASS_ALL;
+  if (sel === CLASS_ALL || sel === CLASS_UNFILED) return;
+  parcDeleteClass(sel);
+}
+// -- Calculatrices pane (roster table + confirm + bulk) → #pane-parc ------------------------------
+function renderCalcPane() {
   const el = $("pane-parc"); if (!el) return;
-  if (STATE.mode !== "classroom") { el.innerHTML = ""; return; }
   const r = STATE.roster;
   if (!r) { el.innerHTML = `<div class="parc-main"><p class="parc-empty">${t("roster_empty")}</p></div>`; return; }
-  const sel = STATE.parcClass || CLASS_ALL;
-  // -- classes rail: folder/inbox-iconed buckets + a right-aligned count pill; NO per-row buttons.
-  //    A real class discriminates single-click (select) from double-click (inline rename) ---------
-  const railBtn = (id, label, count, pressed, cls, icon) => {
-    if (cls && STATE.parcRenamingClass === cls) {  // inline rename (double-click): the row → an input
-      return `<div class="clsedit"><input id="parc-clsedit" value="${esc(cls)}" aria-label="${t("roster_rename_class")}"
-        onkeydown="if(event.key==='Enter')parcClassRenameCommit('${jsStr(cls)}',this);else if(event.key==='Escape')parcClassRenameCancel()"
-        onblur="parcClassRenameCommit('${jsStr(cls)}',this)"></div>`;
-    }
-    const dnd = `ondragover="parcRailOver(event)" ondragleave="this.classList.remove('drop-hot')" ondrop="parcRailDrop(event,'${jsStr(id)}')"`;
-    const click = cls
-      ? `onclick="parcClassClick('${jsStr(id)}')" ondblclick="parcClassDblClick('${jsStr(cls)}')" title="${t("roster_rename_hint")}"`
-      : `onclick="selectParcClass('${jsStr(id)}')"`;
-    return `<button class="clsbtn" aria-pressed="${pressed}" ${dnd} ${click}>
-      <span class="cls-ic" aria-hidden="true">${icon}</span><span class="nm">${esc(label)}</span><span class="cnt">${count}</span></button>`;
-  };
-  let rail = `<h4>${t("roster_classes")}</h4>`;
-  rail += railBtn(CLASS_ALL, t("roster_class_all"), r.total || 0, sel === CLASS_ALL, null, STACK_SVG);
-  rail += railBtn(CLASS_UNFILED, t("roster_unfiled"), r.unfiled_count || 0, sel === CLASS_UNFILED, null, INBOX_SVG);
-  (r.classes || []).forEach(c => rail += railBtn(c, c, (r.counts && r.counts[c]) || 0, sel === c, c, FOLDER_SVG));
-  rail += `<div class="cls-add">
-    <input id="parc-newclass" type="text" placeholder="${esc(t("roster_new_class"))}" aria-label="${t("roster_add_class")}"
-      onkeydown="if(event.key==='Enter')parcAddClass()">
-    <button class="ib" title="${t("roster_add_class")}" aria-label="${t("roster_add_class")}" onclick="parcAddClass()">＋</button></div>`;
-  // -- main: view actions (delete the SELECTED class — icon only, next to a future batch button),
-  //    an optional 2-choice confirm (move vs purge), the Phase-3 multi-select bulk bar, then the
-  //    calculator table -----------------------------------------------------------------------------
-  const realClass = sel !== CLASS_ALL && sel !== CLASS_UNFILED;
-  let main = `<div class="parc-actions">
-    <button class="ib danger-ib" ${realClass ? "" : "disabled"} title="${t("roster_delete_class")}"
-      aria-label="${t("roster_delete_class")}" onclick="parcDeleteClass('${jsStr(realClass ? sel : "")}')">${TRASH_SVG}</button></div>`;
+  let main = "";
   if (STATE.parcConfirm) {
     const c = STATE.parcConfirm;  // a non-empty class → offer the two choices (move vs purge)
     main += `<div class="cls-confirm" role="alertdialog" aria-label="${t("roster_delete_class")}">
@@ -902,7 +984,7 @@ function renderParc() {
   }
   const rows = parcVisibleRows(), selKeys = new Set(STATE.parcSel || []);
   const nsel = rows.filter(c => selKeys.has(c.key)).length;
-  if (nsel) {  // Phase-3 multi-select bulk bar (checkboxes + drag already wired)
+  if (nsel) {  // multi-select bulk bar (checkboxes + drag)
     main += `<div class="parc-bulk" role="region" aria-label="${t("roster_bulk_selected", { n: nsel })}">
       <span class="n">${t("roster_bulk_selected", { n: nsel })}</span>
       <select class="mv" aria-label="${t("roster_move_to")}" onchange="parcBulkMove(this)">${parcMoveOptions()}</select>
@@ -921,9 +1003,233 @@ function renderParc() {
       <th>${t("roster_col_lastscan")}</th><th class="pc-act">${t("roster_col_actions")}</th></tr></thead>`;
     main += `<table class="parc-tbl">${head}<tbody id="parc-tbody">${parcTbodyHTML()}</tbody></table>`;
   }
-  el.innerHTML = `<aside class="parc-rail">${rail}</aside><div class="parc-main">${main}</div>`;
+  el.innerHTML = `<div class="parc-main">${main}</div>`;
   const ed = $("parc-nameedit"); if (ed) { ed.focus(); ed.select(); }  // focus a just-opened name editor
 }
+// -- Distribution pane (per-class action chain · recensement · firmware/apps/scripts sets) → #pane-dist
+const DIST_CHAIN = [
+  { k: "census", key: "roster_dist_recensement", ico: () => DIST_SVG.recensement },
+  { k: "firmware", key: "roster_dist_firmware", ico: () => DIST_SVG.firmware },
+  { k: "apps", key: "roster_dist_apps", ico: () => DIST_SVG.apps },
+  { k: "scripts", key: "roster_dist_scripts", ico: () => DIST_SVG.scripts },
+];
+const DIST_ARROW = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 5l3 3-3 3"/></svg>`;
+const DIST_WARN = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.5 1.8 13h12.4L8 2.5Z"/><path d="M8 6.6v2.6M8 11.1v.1" stroke-linecap="round"/></svg>`;
+const DIST_X = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>`;
+function distDefault() {
+  return { actions: { census: true, firmware: false, apps: true, scripts: true }, onboarding: "move", apps: [], scripts: [] };
+}
+function distConfig() {  // a mutable copy of the selected class's stored config
+  const sel = STATE.parcClass;
+  const d = STATE.roster && STATE.roster.distributions && STATE.roster.distributions[sel];
+  return d ? JSON.parse(JSON.stringify(d)) : distDefault();
+}
+function renderDistPane() {
+  const el = $("pane-dist"); if (!el) return;
+  const r = STATE.roster, sel = STATE.parcClass || CLASS_ALL;
+  if (!r) { el.innerHTML = `<p class="parc-empty">${t("roster_empty")}</p>`; return; }
+  if (sel === CLASS_ALL || sel === CLASS_UNFILED) { el.innerHTML = `<p class="parc-empty">${t("dist_pick_class")}</p>`; return; }
+  const cfg = (r.distributions && r.distributions[sel]) || distDefault(), a = cfg.actions || {};
+  // Recensement — ALWAYS visible; its wording adapts to whether census is in the chain.
+  const moveLabel = a.census ? t("dist_ob_move", { c: esc(sel) }) : t("dist_ob_exclusive", { c: esc(sel) });
+  let html = `<div class="dist">
+    <div class="dist-card"><h4>${t("roster_dist_recensement")}</h4><p class="hint">${t("dist_census_hint")}</p>
+      <div class="ob">
+        <label class="${cfg.onboarding === "move" ? "on" : ""}"><input type="radio" name="ob" ${cfg.onboarding === "move" ? "checked" : ""} onchange="setDistOnboarding('move')">${moveLabel}</label>
+        <label class="${cfg.onboarding === "ignore" ? "on" : ""}"><input type="radio" name="ob" ${cfg.onboarding === "ignore" ? "checked" : ""} onchange="setDistOnboarding('ignore')">${t("dist_ob_ignore")}</label>
+      </div></div>`;
+  // Chaîne d'actions — toggling an action hides/shows its panel below.
+  const pipe = DIST_CHAIN.map((m, j) => {
+    const on = !!a[m.k];
+    const node = `<div class="node ${on ? "on" : "off"}" role="button" aria-pressed="${on}" tabindex="0"
+      onclick="toggleDistAction('${m.k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDistAction('${m.k}')}">
+      <span class="num">${j + 1}</span><span class="pico">${m.ico()}</span><span class="plab">${t(m.key)}</span></div>`;
+    return node + (j < DIST_CHAIN.length - 1 ? `<span class="conn" aria-hidden="true">${DIST_ARROW}</span>` : "");
+  }).join("");
+  html += `<div class="dist-card"><h4>${t("dist_chain")}</h4><div class="pipe">${pipe}</div></div>`;
+  if (a.firmware) html += distFirmwareCard();  // panel shown only when its action is enabled
+  const cols = [];
+  if (a.apps) cols.push(distSetCard("apps", cfg.apps || [], r.dist_apps || []));
+  if (a.scripts) cols.push(distSetCard("scripts", cfg.scripts || [], r.dist_scripts || []));
+  if (cols.length) html += `<div class="dist-2col">${cols.join("")}</div>`;
+  html += `<p class="distfoot">${DIST_WARN} ${t("dist_foot")}</p></div>`;
+  el.innerHTML = html;
+}
+function distSetCard(kind, items, pool) {
+  const isApps = kind === "apps", title = isApps ? t("roster_dist_apps") : t("roster_dist_scripts");
+  const chips = items.length
+    ? items.map(n => `<span class="setchip"><span class="ic${isApps ? "" : " py"}"${isApps ? ` style="background:#5a8fef"` : ""}>${isApps ? esc((n[0] || "?").toUpperCase()) : "py"}</span>${esc(n)}<button onclick="rmDistItem('${kind}','${jsStr(n)}')" aria-label="${t("roster_delete")}">${DIST_X}</button></span>`).join("")
+    : `<span class="hint">${isApps ? t("dist_no_apps") : t("dist_no_scripts")}</span>`;
+  const opts = pool.filter(n => !items.includes(n)).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  const selId = isApps ? "dist-add-app" : "dist-add-scr";
+  return `<div class="dist-card"><h4>${title} <span class="cnt">${items.length}</span></h4>
+    <div class="setlist">${chips}</div>
+    <div class="adder"><select id="${selId}" aria-label="${title}">${opts || "<option value=''>—</option>"}</select>
+      <button onclick="addDistItem('${kind}','${selId}')" ${opts ? "" : "disabled"}>${t("dist_add")}</button></div></div>`;
+}
+function distFirmwareCard() {  // the firmware-cache manager, moved here from the classroom System card
+  const st = STATE.cache || {}, entries = st.entries || [];
+  const rows = entries.length
+    ? entries.map(e => `<div class="dist-cacherow"><span>${esc((e.model || "").toUpperCase())} · Epsilon ${esc(e.version)} <span class="tag un">${esc(e.channel || "stable")}</span></span><span class="sz">${fmtBytes(e.size || 0)}</span></div>`).join("")
+    : `<p class="hint">${t("dist_fw_empty")}</p>`;
+  const ttl = st.expires_in_days ?? 30;
+  return `<div class="dist-card"><h4>${t("dist_fw_title")}</h4>
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <span class="offline">${SHIELD_SM}${t("offline_ready")}</span>
+      <button class="btn ghost sm" onclick="updateCaches()">${REFRESH_SM}${t("update_caches")}</button></div>
+    ${rows}
+    <p class="hint">${t("dist_fw_ttl", { n: ttl })}</p></div>`;
+}
+async function saveDist(cfg) {
+  const sel = STATE.parcClass;
+  if (!sel || sel === CLASS_ALL || sel === CLASS_UNFILED) return;
+  try {
+    const r = await post("/api/roster/dist", { class: sel, config: cfg });
+    if (!STATE.roster.distributions) STATE.roster.distributions = {};
+    STATE.roster.distributions[sel] = r.distribution;
+    renderDistPane();
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
+}
+function toggleDistAction(k) { const c = distConfig(); c.actions[k] = !c.actions[k]; saveDist(c); }
+function setDistOnboarding(v) { const c = distConfig(); c.onboarding = v; saveDist(c); }
+function addDistItem(kind, selId) { const s = $(selId); if (!s || !s.value) return; const c = distConfig(); c[kind] = [...(c[kind] || []), s.value]; saveDist(c); }
+function rmDistItem(kind, n) { const c = distConfig(); c[kind] = (c[kind] || []).filter(x => x !== n); saveDist(c); }
+
+// -- Mode batch (kiosk): arm once, each plugged-in calculator runs the class chain automatically --
+// The overlay drives its own attach/detach loop (the normal poll is paused). A "Simuler" button
+// attaches a demo device and runs the SAME real chain, so the flow is testable without hardware.
+let BATCH = false, batchBusy = false, batchDone = false, batchLog = [], batchLoop = null, BATCH_EDIT = null, batchModel = null;
+const USB_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.4V3.1"/><path d="M6.4 4.7 8 3l1.6 1.7"/><circle cx="8" cy="13.5" r="1.35" fill="currentColor" stroke="none"/><path d="M8 7.2 10.6 5.8"/><circle cx="11.3" cy="5.4" r="1.15" fill="currentColor" stroke="none"/><path d="M8 9.6 5.6 8.3"/><rect x="3.3" y="7" width="2.3" height="2.3" rx=".4" fill="currentColor" stroke="none"/></svg>`;
+const STOP_SVG = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>`;
+async function openBatch() {
+  let sel = STATE.parcClass;
+  if (!sel || sel === CLASS_ALL || sel === CLASS_UNFILED) {
+    sel = ((STATE.roster && STATE.roster.classes) || [])[0];
+    if (!sel) { toast(t("batch_need_class"), true); return; }
+    STATE.parcClass = sel;
+  }
+  BATCH = true; batchBusy = false; batchDone = false; batchLog = []; BATCH_EDIT = null;
+  batchModel = batchModel || ((STATE.demoModels || [{ name: "n0110" }])[0] || {}).name || "n0110";
+  $("batch-overlay").hidden = false;
+  stopPoll();  // the batch drives its own attach/detach loop
+  renderBatch();
+  if (!batchLoop) batchLoop = setInterval(batchTick, 2500);
+}
+function closeBatch() {
+  BATCH = false; batchBusy = false; batchDone = false;
+  if (batchLoop) { clearInterval(batchLoop); batchLoop = null; }
+  $("batch-overlay").hidden = true;
+  startPoll();  // resume the normal connect/disconnect watch
+  renderAll();
+}
+function batchEnabledSteps() {
+  const cfg = (STATE.roster && STATE.roster.distributions && STATE.roster.distributions[STATE.parcClass]) || distDefault();
+  return DIST_CHAIN.filter(m => cfg.actions[m.k]);
+}
+function batchRailHTML() {
+  const i = STATE.identity;
+  if (!i || !i.connected) return `<div class="usb wait">${USB_SVG}</div><h3>${t("batch_waiting")}</h3>`;
+  const variant = variantOf(i.family);
+  return `<div class="devrail">
+    <div class="calcbig">${buildCalc(variant)}</div>
+    <dl class="rspec"><dt>${t("model")}</dt><dd>${esc(i.model || "")}</dd>
+      <dt>${t("family")}</dt><dd>${t(variant === "graphing" ? "fam_g" : "fam_s")}</dd>
+      <dt>OS</dt><dd>Epsilon ${esc(i.os_version || "?")}</dd>
+      <dt>${t("serial")}</dt><dd class="rserial">${esc(i.serial_number || "—")}</dd></dl></div>`;
+}
+function batchJournalRows() {
+  if (!batchLog.length) return `<tr><td colspan="5"><div class="jempty">${t("batch_empty")}</div></td></tr>`;
+  const seen = new Set();  // newest first → first row per calc = latest pass, later ones greyed
+  return batchLog.map((l, idx) => {
+    const prev = seen.has(l.key); seen.add(l.key);
+    const nm = l.name || l.default || ("calc " + (l.model || "").toUpperCase());
+    const nameCell = BATCH_EDIT === idx
+      ? `<input class="pnm" id="batch-nameedit" value="${esc(l.name || "")}" placeholder="${esc(l.default || "")}"
+          onkeydown="if(event.key==='Enter')this.blur();else if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}" onblur="batchRename(${idx},this)">`
+      : `<span class="pnm-txt" tabindex="0" ondblclick="batchNameEdit(${idx})" onkeydown="if(event.key==='Enter')batchNameEdit(${idx})" title="${t("roster_rename_hint")}">${esc(nm)}</span>`;
+    return `<tr class="${prev ? "jprev" : ""}">
+      <td style="width:1%">${parcTypeCell(l.family)}</td>
+      <td>${nameCell}</td>
+      <td><span class="fwcell">${l.firmware ? "Epsilon " + esc(l.firmware) : "—"}</span></td>
+      <td class="pc-dist">${parcDistCell(l.dist)}</td>
+      <td class="parc-lastscan">${esc(l.time || "")}</td></tr>`;
+  }).join("");
+}
+function renderBatchJournal() {
+  const b = $("batch-jbody"); if (b) b.innerHTML = batchJournalRows();
+  const ed = $("batch-nameedit"); if (ed) { ed.focus(); ed.select(); }
+}
+function renderBatch() {
+  const el = $("batch-overlay"); if (!el) return;
+  const steps = batchEnabledSteps().map(m => `<span class="stepchip">${m.ico()}${t(m.key)}</span>`).join("")
+    || `<span class="stepchip">${t("batch_no_action")}</span>`;
+  const models = (STATE.demoModels || [{ name: "n0110" }]).map(m => `<option value="${m.name}"${m.name === batchModel ? " selected" : ""}>${m.name.toUpperCase()}</option>`).join("");
+  el.innerHTML = `
+    <div class="batch-top"><b>${t("batch_mode")}</b><span class="cls">${esc(STATE.parcClass)}</span><span class="sp"></span></div>
+    <div class="batch-body">
+      <div class="bwait">
+        <div class="brail" id="batch-rail">${batchRailHTML()}</div>
+        <div class="bsim"><select id="batch-model" aria-label="${t("demo_model")}" onchange="batchModel=this.value">${models}</select>
+          <button class="simbtn" onclick="batchSimulate()">${t("batch_simulate")}</button></div>
+      </div>
+      <div class="bright">
+        <div class="arm">${DIST_WARN}<span>${t("batch_armed")}</span><span class="sp"></span>
+          <button class="stop" onclick="closeBatch()">${STOP_SVG}${t("batch_stop")}</button></div>
+        <div class="steps">${steps}</div>
+        <div class="bjournal"><div class="jh">${t("batch_journal")}</div>
+          <div class="jscroll"><table><thead><tr><th></th><th>${t("roster_col_name")}</th>
+            <th>${t("roster_known_fw")}</th><th>${t("roster_col_dist")}</th><th>${t("roster_col_lastscan")}</th></tr></thead>
+            <tbody id="batch-jbody">${batchJournalRows()}</tbody></table></div></div>
+      </div>
+    </div>`;
+  const ed = $("batch-nameedit"); if (ed) { ed.focus(); ed.select(); }
+}
+async function batchTick() {
+  if (!BATCH || batchBusy) return;
+  const i = STATE.identity;
+  if (!i || !i.connected) {  // wait for a calculator; try to attach a real one
+    try { const r = await post("/api/device/rescan"); if (r && r.connected) { STATE.identity = await api("/api/identity"); batchDone = false; renderBatch(); } }
+    catch (e) { /* keep waiting */ }
+    return;
+  }
+  if (i.virtual) return;  // demo devices run via the Simuler button, not the auto-loop
+  if (!batchDone) { await batchProcess(); return; }
+  // Already processed this plug → watch for an unplug so re-plugging runs a fresh pass.
+  try { const h = await api("/api/device/health"); if (h && h.connected === false) { STATE.identity = { connected: false }; renderBatch(); } }
+  catch (e) { /* transient */ }
+}
+async function batchProcess() {
+  if (batchBusy) return;
+  batchBusy = true; renderBatch();
+  try {
+    const j = await post("/api/batch/run", { class: STATE.parcClass });
+    batchLog.unshift({ ...j, time: t("batch_now") });
+    batchDone = true;
+    STATE.roster = await api("/api/roster").catch(() => STATE.roster);  // counts/last_dist reflect the pass
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
+  finally { batchBusy = false; renderBatch(); }
+}
+async function batchSimulate() {
+  if (batchBusy) return;
+  const model = ($("batch-model") && $("batch-model").value) || batchModel || "n0110";
+  batchModel = model;
+  try { await post("/api/device/demo", { model }); STATE.identity = await api("/api/identity"); }
+  catch (e) { toast(t("fail", { msg: e.message }), true); return; }
+  batchDone = false;
+  await batchProcess();  // a simulated "plug": run the chain against the just-attached virtual device
+}
+function batchNameEdit(idx) { BATCH_EDIT = idx; renderBatchJournal(); }
+async function batchRename(idx, inp) {
+  BATCH_EDIT = null;
+  const l = batchLog[idx]; if (!l) { renderBatchJournal(); return; }
+  const name = inp.value.trim(); if (name === (l.name || "")) { renderBatchJournal(); return; }
+  try {
+    const r = await post("/api/roster/rename", { key: l.key, name });  // key stays in JS, never the DOM
+    batchLog.forEach(x => { if (x.key === l.key) x.name = r.name; });  // rename all this calc's rows
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
+  renderBatchJournal();
+}
+
 // One <tr> per calculator. Handlers key on the ROW INDEX, never the key: the serial lives INSIDE
 // the key (privacy) and must never reach the DOM.
 function parcRowHTML(c) {
@@ -1313,7 +1619,11 @@ async function commitStage(kind) {
     await refreshLists();
     toast(t("written_ok", { n: removed.length + added.length }));
   } catch (e) {
-    toast(t("fail", { msg: e.message }), true);
+    // A missing linker surfaces as a raw multi-line message — replace it with a clear, translated,
+    // actionable one (and refresh the tab so the preflight note appears).
+    const msg = /nwlink/i.test(e.message || "") ? t("nwlink_needed") + " " + t("nwlink_hint") : e.message;
+    toast(t("fail", { msg }), true);
+    if (kind === "apps" && /nwlink/i.test(e.message || "")) { STATE.apps.nwlink = false; renderWorkbench(); }
   } finally {
     STATE.busy[kind] = false; renderWorkbench();
   }
@@ -1328,6 +1638,12 @@ async function quitApp() {
 
 // Heartbeat: keep the local server alive while this tab is open.
 setInterval(() => { fetch("/api/ping").catch(() => {}); }, 30000);
+
+// Refresh the apps/scripts libraries when the user returns to the window (e.g. after purging the
+// local folder) and gently while it stays visible — so PC-side changes surface without reconnecting.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshLibraries(); });
+window.addEventListener("focus", () => refreshLibraries());
+setInterval(() => { if (document.visibilityState === "visible") refreshLibraries(); }, 20000);
 
 // Safety net: never let the browser navigate to / download a file dropped anywhere in the page
 // (the drop zones read files themselves; this just kills the default "open the file" behaviour).

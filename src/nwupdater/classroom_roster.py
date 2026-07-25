@@ -22,6 +22,38 @@ from . import device_names
 
 SCHEMA = 1
 
+# Per-class distribution config (batch/kiosk). The action chain runs in this order; "firmware" is
+# OFF by default (the most irreversible step). ``onboarding`` decides what a batch does when a
+# calculator is already filed in ANOTHER class: "move" it here, or "ignore" it.
+DIST_ACTIONS = ("census", "firmware", "apps", "scripts")
+
+
+def default_distribution() -> dict:
+    return {
+        "actions": {"census": True, "firmware": False, "apps": True, "scripts": True},
+        "onboarding": "move",  # "move" | "ignore"
+        "apps": [],  # app names pushed to every calculator of the class
+        "scripts": [],  # script names pushed to every calculator of the class
+    }
+
+
+def _merge_dist(raw: dict | None) -> dict:
+    """A class's distribution config with every field defaulted (tolerates a partial/absent blob)."""
+    out = default_distribution()
+    if isinstance(raw, dict):
+        acts = raw.get("actions")
+        if isinstance(acts, dict):
+            for a in DIST_ACTIONS:
+                if a in acts:
+                    out["actions"][a] = bool(acts[a])
+        if raw.get("onboarding") in ("move", "ignore"):
+            out["onboarding"] = raw["onboarding"]
+        for k in ("apps", "scripts"):
+            v = raw.get(k)
+            if isinstance(v, list):
+                out[k] = [str(x) for x in v]
+    return out
+
 
 def roster_path(*, path: Path | None = None) -> Path:
     """Where the roster JSON lives — the SAME base as :func:`device_names.store_path`
@@ -38,7 +70,7 @@ def _now() -> str:
 
 
 def _empty() -> dict:
-    return {"schema": SCHEMA, "classes": [], "calculators": {}}
+    return {"schema": SCHEMA, "classes": [], "calculators": {}, "distributions": {}}
 
 
 def _load(path: Path | None) -> dict:
@@ -63,11 +95,18 @@ def _load(path: Path | None) -> dict:
         for k, v in calcs_raw.items():
             if isinstance(v, dict):
                 calculators[str(k)] = v
+    dists_raw = data.get("distributions")
+    distributions: dict[str, dict] = {}
+    if isinstance(dists_raw, dict):
+        for k, v in dists_raw.items():
+            if isinstance(v, dict):
+                distributions[str(k)] = v
     schema = data.get("schema")
     return {
         "schema": schema if isinstance(schema, int) else SCHEMA,
         "classes": classes,
         "calculators": calculators,
+        "distributions": distributions,
     }
 
 
@@ -87,6 +126,34 @@ def _split_key(key: str) -> tuple[str, str]:
 def all_classes(*, path: Path | None = None) -> list[str]:
     """The explicit class list — the rail's source of truth (an empty class may exist here)."""
     return [str(c) for c in _load(path)["classes"]]
+
+
+def distribution(class_name: str, *, path: Path | None = None) -> dict:
+    """The distribution config for a class, every field defaulted (see :func:`default_distribution`)."""
+    data = _load(path)
+    return _merge_dist(data["distributions"].get((class_name or "").strip()))
+
+
+def all_distributions(*, path: Path | None = None) -> dict:
+    """``{class_name: config}`` for every known class (each fully defaulted) — the batch/kiosk reads
+    it directly and the UI hydrates its per-class panels from it."""
+    data = _load(path)
+    return {c: _merge_dist(data["distributions"].get(c)) for c in data["classes"]}
+
+
+def set_distribution(class_name: str, config: dict, *, path: Path | None = None) -> dict:
+    """Persist a class's distribution config (sanitised to the known shape). Creates the class in
+    the rail's source of truth if new. Returns the stored (defaulted) config."""
+    cls = (class_name or "").strip()
+    if not cls:
+        raise ValueError("no class")
+    merged = _merge_dist(config)
+    data = _load(path)
+    data["distributions"][cls] = merged
+    if cls not in data["classes"]:
+        data["classes"].append(cls)
+    _save(data, path)
+    return merged
 
 
 def all_entries(*, path: Path | None = None, names_path: Path | None = None) -> list[dict]:
@@ -155,6 +222,18 @@ def upsert_on_scan(
         return False  # nothing changed — leave last_scan alone (anti-thrash)
     cur.update(known)
     cur["last_scan"] = _now()
+    _save(data, path)
+    return True
+
+
+def set_last_dist(key: str, dist: dict, *, path: Path | None = None) -> bool:
+    """Record the per-action outcome (``{action: "ok"|"change"|"error"}``) of the last distribution
+    pass on a calculator record. Returns ``True`` iff the record exists and was written."""
+    data = _load(path)
+    rec = data["calculators"].get(str(key))
+    if rec is None:
+        return False
+    rec["last_dist"] = {str(k): str(v) for k, v in (dist or {}).items()}
     _save(data, path)
     return True
 
@@ -229,6 +308,10 @@ def rename_class(old: str, new: str, *, path: Path | None = None) -> list[str]:
     if new not in classes:
         classes.append(new)
         dirty = True
+    dists = data["distributions"]
+    if old in dists:
+        dists.setdefault(new, dists.pop(old))  # carry the config over; keep new's if it already had one
+        dirty = True
     if dirty:
         _save(data, path)
     return sorted(classes, key=str.lower)
@@ -262,7 +345,8 @@ def delete_class(name: str, *, mode: str | None = None, path: Path | None = None
     removed = name in data["classes"]
     if removed:
         data["classes"].remove(name)
-    if members or removed:
+    had_dist = data["distributions"].pop(name, None) is not None
+    if members or removed or had_dist:
         _save(data, path)
     result: dict = {"ok": True, "classes": sorted(data["classes"], key=str.lower)}
     if mode == "purge":

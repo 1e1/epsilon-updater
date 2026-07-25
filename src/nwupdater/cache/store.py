@@ -133,6 +133,26 @@ class FirmwareCache:
         self._save(entries)
         return entry
 
+    def touch(self, model: str, version: str | None = None) -> bool:
+        """Extend an entry's TTL from *now* WITHOUT re-downloading — the classroom "keep the caches
+        fresh" action when the cached version is already the latest. Refreshes the model's single
+        entry (optionally requiring a specific ``version``). Returns ``True`` iff one was refreshed."""
+        entries = self._load()
+        self._prune(entries)
+        e = next(
+            (
+                e
+                for e in entries.values()
+                if e.model == model and (version is None or e.version == version)
+            ),
+            None,
+        )
+        if e is None:
+            return False
+        e.downloaded_at = self._now()
+        self._save(entries)
+        return True
+
     def clear(self) -> None:
         entries = self._load()
         for e in entries.values():

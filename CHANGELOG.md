@@ -6,6 +6,40 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Ajouté
+
+- **Mode Classe — refonte « console de parc » (maquette approuvée)** : en mode Classe le rail gauche
+  devient la **liste des classes** (Toutes en haut · classes triées · Sans classe en bas) et la barre
+  d'onglets pleine largeur passe à **Calculatrices | Distribution** + [supprimer la classe] +
+  [Mode batch]. Les onglets Système/Apps/Scripts (centrés appareil) sont retirés en mode Classe.
+- **Onglet Distribution (config par classe)** : **Recensement** (déplacer/ignorer une calculatrice
+  déjà rangée ailleurs, toujours visible), **Chaîne d'actions** ordonnée (recensement → firmware →
+  apps → scripts, **Firmware désactivé par défaut**), et les panneaux **Firmware / Applications /
+  Scripts** qui n'apparaissent que si leur action est activée. Persistée dans le parc
+  (`classroom_roster.set_distribution`, `POST /api/roster/dist`).
+- **Panneau Firmware = gestion des caches** (déplacé depuis Système) : « Mettre à jour les caches »
+  **prolonge le TTL de 30 j sans re-télécharger** quand la version cachée est déjà à jour
+  (`FirmwareCache.touch`, `preload_all` renvoie `refreshed`/`downloaded`).
+- **Mode batch (kiosque de provisionnement)** : armer une fois, chaque calculatrice branchée exécute
+  automatiquement la chaîne d'actions de la classe (recensement · flash firmware depuis le cache ·
+  apps · scripts, uniquement le **manquant**), avec **journal par appareil** (passages précédents
+  grisés au re-branchement), **arrêt** toujours visible, et un bouton **Simuler** (device virtuel)
+  pour tester sans matériel. `Session.batch_run` compose les opérations atomiques existantes ;
+  `POST /api/batch/run`. Le numéro de série n'atteint jamais le DOM du journal.
+- **Individuel — ouvrir le dossier local** : un lien discret « Ouvrir le dossier » dans l'en-tête
+  des ateliers Apps/Scripts (et les chemins du popover Sources) révèle la bibliothèque locale dans
+  le gestionnaire de fichiers de l'OS pour purger à la main (`POST /api/reveal`, verrouillé aux deux
+  dossiers gérés — jamais de chemin arbitraire).
+- **Individuel — préflight nwlink** : l'onglet Applications avertit **avant** l'installation qu'une
+  app distribuée (ELF, ex. Tetris) nécessite nwlink (Node) s'il est absent, et l'erreur d'install est
+  remplacée par un message clair et traduit (`/api/apps` expose la disponibilité de nwlink).
+
+### Modifié
+
+- **Individuel — rafraîchissement plus fréquent** : les bibliothèques Apps/Scripts se rechargent au
+  retour de focus sur la fenêtre + à intervalle léger (sans écraser un plan d'écriture en cours), de
+  sorte qu'une purge manuelle du dossier local se reflète sans reconnecter.
+
 ## [1.0.0-rc.6] - 2026-07-25
 
 ### Ajouté

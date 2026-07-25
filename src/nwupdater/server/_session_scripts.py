@@ -164,6 +164,34 @@ class ScriptsMixin(SessionBase):
             "dirs": {"apps": str(user_apps_dir()), "scripts": str(user_scripts_dir())},
         }
 
+    def reveal_folder(self, which: str) -> dict:
+        """Open the local apps/scripts library folder in the OS file manager (so the teacher can
+        purge files by hand). Whitelisted to the two managed directories — the client sends only
+        the key ``"apps"``/``"scripts"``, so no arbitrary path ever reaches the shell, and the
+        command is a fixed argv (never ``shell=True``)."""
+        import subprocess
+        import sys
+
+        from ..apps.sources import user_apps_dir, user_scripts_dir
+
+        dirs = {"apps": user_apps_dir, "scripts": user_scripts_dir}
+        resolve = dirs.get(which)
+        if resolve is None:
+            raise ValueError("unknown folder")
+        path = resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "darwin":
+            argv = ["open", str(path)]
+        elif sys.platform.startswith("win"):
+            argv = ["explorer", str(path)]
+        else:
+            argv = ["xdg-open", str(path)]
+        try:
+            subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, ValueError) as exc:  # no file manager / bad launcher — surfaced to the UI
+            raise RuntimeError(f"could not open the folder: {exc}") from exc
+        return {"ok": True, "which": which, "path": str(path)}
+
     def _write_scripts(self, keep_pred) -> dict:
         from ..scripts import read_storage, write_storage
 

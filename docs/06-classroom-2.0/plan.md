@@ -35,10 +35,21 @@ Légende : **[V1]** = dans cette livraison · **[HORS V1]** = explicitement repo
 - **Captures d'écran** — ✅ capture « mode classe » régénérée sur l'onglet Parc, plus un script
   Playwright de régénération (`docs/screenshots/`).
 
+**Livré depuis (refonte « console de parc » + batch)** :
+
+- **Onglets Calculatrices | Distribution** + rail des classes déplacé dans le rail gauche (Toutes
+  haut · classes triées · Sans classe bas), Système/Apps/Scripts retirés en mode Classe.
+- **Distribution par classe** (chaîne d'actions ordonnée · recensement déplacer/ignorer · sets
+  apps/scripts · panneau Firmware = caches, prolongation 30 j sans re-téléchargement), persistée dans
+  le parc (`set_distribution`, `POST /api/roster/dist`).
+- **« Flasher toute la classe » → Mode batch** (la question ouverte du §9 est **résolue**) : kiosque
+  qui arme une fois puis exécute la chaîne à chaque branchement, journal par appareil + arrêt.
+  `Session.batch_run` / `POST /api/batch/run` composent les opérations atomiques existantes.
+
 **Reste ouvert** :
 
-- **« Flasher toute la classe »** — **[HORS V1]** (§9), exploré séparément dans
-  `docs/06-classroom-2.0/flash-whole-class.md`.
+- **Sync cloud du nom (Individuel)** — en attente d'**une capture** de l'appel de renommage
+  `my.numworks.com` pour connaître le endpoint exact (le stub `_session_names.py` reste prêt).
 
 ---
 
