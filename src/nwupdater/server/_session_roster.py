@@ -38,6 +38,24 @@ class RosterMixin(SessionBase):
 
         return upsert_on_scan(i.model_name or "", serial, firmware=i.os_version, family=i.family)
 
+    # -- UX mode → capability policy (POST /api/mode) ------------------------------
+    def set_mode(self, mode: str) -> dict:
+        """Set the session's UX policy from the UI mode toggle (``"classroom"`` vs anything else).
+
+        The roster only enrols under classroom policy, so this is what makes a UI scan populate the
+        Parc. Switching INTO classroom also enrols the currently-connected calculator right away
+        (idempotent) — the Parc then reflects the plugged-in device without waiting for a re-scan."""
+        from ..capabilities import Policy
+
+        classroom = mode == "classroom"
+        self.policy = Policy(classroom=classroom)
+        if classroom and self.connected:
+            try:
+                self.roster_upsert_current()
+            except Exception:
+                pass  # best-effort: a roster hiccup never breaks the mode toggle
+        return {"ok": True, "classroom": classroom}
+
     # -- read view (GET /api/roster) -----------------------------------------------
     def roster(self) -> dict:
         """The whole roster grouped for the UI: the sorted class list (+ counts and a synthetic
@@ -69,6 +87,8 @@ class RosterMixin(SessionBase):
                     "known_firmware": e["known_firmware"],
                     "up_to_date": self._roster_up_to_date(e["known_family"], e["known_firmware"]),
                     "last_scan": e["last_scan"],
+                    # Per-action outcome of the last distribution pass (None until a batch runs).
+                    "last_dist": e.get("last_dist"),
                 }
             )
         referenced = {str(e["class"]) for e in entries if e["class"]}
@@ -120,11 +140,13 @@ class RosterMixin(SessionBase):
 
         return {"ok": True, "classes": R.rename_class(old, new)}
 
-    def roster_class_delete(self, name: str, confirm: bool = False) -> dict:
-        """Delete a class; non-empty needs ``confirm`` (then its members fall back to unfiled)."""
+    def roster_class_delete(self, name: str, mode: str | None = None) -> dict:
+        """Delete a class. A non-empty class needs an explicit ``mode`` (``"move"`` → its members
+        fall back to "Sans classe"; ``"purge"`` → its members are deleted); without one it returns
+        ``{needs_confirm, count}`` so the UI can offer the two choices."""
         from .. import classroom_roster as R
 
-        return R.delete_class(name, confirm=confirm)
+        return R.delete_class(name, mode=mode)
 
     def _roster_up_to_date(self, family: str | None, firmware: str | None) -> bool | None:
         """``True``/``False`` if ``firmware`` matches / is behind the latest for its family (the

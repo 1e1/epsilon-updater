@@ -111,6 +111,9 @@ def all_entries(*, path: Path | None = None, names_path: Path | None = None) -> 
                 "known_family": rec.get("known_family"),
                 "known_model": known_model,
                 "last_scan": rec.get("last_scan"),
+                # Per-action outcome of the last distribution pass (recensement / firmware / apps /
+                # scripts → "ok" | "change" | "error"), or None until a batch fills it (Phase 5).
+                "last_dist": rec.get("last_dist"),
             }
         )
     return out
@@ -231,23 +234,37 @@ def rename_class(old: str, new: str, *, path: Path | None = None) -> list[str]:
     return sorted(classes, key=str.lower)
 
 
-def delete_class(name: str, *, confirm: bool = False, path: Path | None = None) -> dict:
-    """Delete a class. Empty ⇒ removed directly. Non-empty WITHOUT ``confirm`` ⇒ returns
-    ``{ok: False, needs_confirm: True, count: N}``. Non-empty WITH ``confirm`` ⇒ its members fall
-    back to "Sans classe" (never lost), then the class is removed. Returns
-    ``{ok: True, classes: [...]}`` on success."""
+def delete_class(name: str, *, mode: str | None = None, path: Path | None = None) -> dict:
+    """Delete a class, offering two ways to handle its members (the UI's 2-choice confirmation).
+
+    - **Empty class** ⇒ removed directly.
+    - **Non-empty, no ``mode``** ⇒ ``{ok: False, needs_confirm: True, count: N}`` (the caller then
+      asks move-vs-purge).
+    - **Non-empty, ``mode="move"``** ⇒ its members fall back to "Sans classe" (never lost), then the
+      class is removed.
+    - **Non-empty, ``mode="purge"``** ⇒ its members are DELETED (a later scan re-adds them, unfiled),
+      then the class is removed.
+
+    Returns ``{ok: True, classes: [...]}`` on success (plus ``purged: N`` for a purge)."""
     name = (name or "").strip()
     data = _load(path)
     members = [k for k, rec in data["calculators"].items() if rec.get("class") == name]
-    if members and not confirm:
+    if members and mode not in ("move", "purge"):
         return {"ok": False, "needs_confirm": True, "count": len(members)}
-    dirty = False
-    for k in members:
-        data["calculators"][k]["class"] = None
-        dirty = True
-    if name in data["classes"]:
+    purged = 0
+    if mode == "purge":
+        for k in members:
+            del data["calculators"][k]
+            purged += 1
+    else:  # "move" (or an empty class) — members drop back to "Sans classe", never lost
+        for k in members:
+            data["calculators"][k]["class"] = None
+    removed = name in data["classes"]
+    if removed:
         data["classes"].remove(name)
-        dirty = True
-    if dirty:
+    if members or removed:
         _save(data, path)
-    return {"ok": True, "classes": sorted(data["classes"], key=str.lower)}
+    result: dict = {"ok": True, "classes": sorted(data["classes"], key=str.lower)}
+    if mode == "purge":
+        result["purged"] = purged
+    return result

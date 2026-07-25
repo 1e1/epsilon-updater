@@ -273,20 +273,31 @@ def test_rename_class_reassigns_members_and_merges_on_collision(tmp_path):
     assert R.rename_class("B", "B", path=p) == ["B"]
 
 
-def test_delete_class_empty_direct_then_nonempty_confirm_flow(tmp_path):
+def test_delete_class_empty_direct_then_nonempty_confirm_move(tmp_path):
     p, np = tmp_path / "r.json", tmp_path / "n.json"
     # Empty class → removed directly.
     R.create_class("Empty", path=p)
     assert R.delete_class("Empty", path=p) == {"ok": True, "classes": []}
-    # Non-empty WITHOUT confirm → asks, nothing changed yet.
+    # Non-empty WITHOUT a mode → asks, nothing changed yet.
     _enrol(p, "SER1")
     R.move(["n0110:SER1"], "Full", path=p)
     assert R.delete_class("Full", path=p) == {"ok": False, "needs_confirm": True, "count": 1}
     assert "Full" in R.all_classes(path=p)  # untouched
-    # WITH confirm → member falls back to unfiled, class removed (never lost).
-    res = R.delete_class("Full", confirm=True, path=p)
+    # mode="move" → member falls back to unfiled, class removed (never lost).
+    res = R.delete_class("Full", mode="move", path=p)
     assert res["ok"] is True and res["classes"] == []
     assert R.all_entries(path=p, names_path=np)[0]["class"] is None
+
+
+def test_delete_class_purge_deletes_its_members(tmp_path):
+    p, np = tmp_path / "r.json", tmp_path / "n.json"
+    _enrol(p, "SER1", "SER2", "SER3")
+    R.move(["n0110:SER1", "n0110:SER2"], "Doomed", path=p)
+    # mode="purge" → the two members are DELETED (not just unfiled); the class is removed.
+    res = R.delete_class("Doomed", mode="purge", path=p)
+    assert res == {"ok": True, "classes": [], "purged": 2}
+    assert {e["key"] for e in R.all_entries(path=p, names_path=np)} == {"n0110:SER3"}
+    assert R.all_classes(path=p) == []
 
 
 # -- session: mixin mutations against a virtual device -------------------------------------
@@ -299,10 +310,36 @@ def test_session_roster_mutations(tmp_path, monkeypatch):
     assert s.roster_rename("n0110:SER1", "Poste 1")["name"] == "Poste 1"
     assert s.roster()["calculators"][0]["name"] == "Poste 1"  # joined from the name store
     assert s.roster_class_delete("A") == {"ok": False, "needs_confirm": True, "count": 1}
-    assert s.roster_class_delete("A", confirm=True)["ok"] is True
+    assert s.roster_class_delete("A", "move")["ok"] is True
     assert s.roster()["unfiled_count"] == 1
     assert s.roster_delete(["n0110:SER1"])["deleted"] == 1
     assert s.roster()["total"] == 0
+
+
+def test_set_mode_sets_policy_and_enrols_connected_device(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    s = Session(model_name="n0110")  # a connected (demo) device, default individual policy
+    assert s.policy.classroom is False and s.roster()["total"] == 0
+    # Switching to classroom flips the policy AND enrols the currently-connected calculator.
+    assert s.set_mode("classroom") == {"ok": True, "classroom": True}
+    assert s.policy.classroom is True
+    assert s.roster()["total"] == 1 and s.roster()["unfiled_count"] == 1
+    # Any other mode clears the classroom policy (and never enrols).
+    assert s.set_mode("individual") == {"ok": True, "classroom": False}
+    assert s.policy.classroom is False
+
+
+def test_last_dist_passes_through_when_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    R.upsert_on_scan("n0110", "SER1", firmware="1.0", family="graphique")
+    # A batch pass would fill last_dist on the record; the read view surfaces it verbatim.
+    p = R.roster_path()
+    data = json.loads(p.read_text())
+    data["calculators"]["n0110:SER1"]["last_dist"] = {"recensement": "ok", "firmware": "change"}
+    p.write_text(json.dumps(data))
+    c = s.roster()["calculators"][0]
+    assert c["last_dist"] == {"recensement": "ok", "firmware": "change"}
 
 
 # -- server API: POST /api/roster/* --------------------------------------------------------
@@ -324,14 +361,19 @@ def test_roster_rename_move_delete_endpoints(server):
     r = _post(server, "/api/roster/rename", {"key": "n0110:SERA", "name": "Poste 7"})
     assert r["ok"] and r["name"] == "Poste 7" and N.get_name("n0110", "SERA") == "Poste 7"
     # bulk move (several keys)
-    r = _post(server, "/api/roster/move", {"keys": ["n0110:SERA", "n0110:SERB"], "class": "Seconde A"})
+    r = _post(
+        server, "/api/roster/move", {"keys": ["n0110:SERA", "n0110:SERB"], "class": "Seconde A"}
+    )
     assert r == {"ok": True, "moved": 2}
     d = _get(server, "/api/roster")
     assert d["counts"]["Seconde A"] == 2 and d["unfiled_count"] == 0
     # class=null moves back to unfiled
     assert _post(server, "/api/roster/move", {"keys": ["n0110:SERA"], "class": None})["moved"] == 1
     # delete
-    assert _post(server, "/api/roster/delete", {"keys": ["n0110:SERB"]}) == {"ok": True, "deleted": 1}
+    assert _post(server, "/api/roster/delete", {"keys": ["n0110:SERB"]}) == {
+        "ok": True,
+        "deleted": 1,
+    }
     assert _get(server, "/api/roster")["total"] == 1
 
 
@@ -346,13 +388,33 @@ def test_roster_class_crud_endpoints_and_delete_confirm(server):
     assert _post(server, "/api/roster/class/rename", {"from": "Terminale S", "to": "Terminale T"})[
         "classes"
     ] == ["Terminale T"]
-    # delete non-empty WITHOUT confirm → needs_confirm (two-step flow)
+    # delete non-empty WITHOUT a mode → needs_confirm (two-step flow)
     assert _post(server, "/api/roster/class/delete", {"name": "Terminale T"}) == {
         "ok": False,
         "needs_confirm": True,
         "count": 1,
     }
-    # WITH confirm → member unfiled, class gone
-    res = _post(server, "/api/roster/class/delete", {"name": "Terminale T", "confirm": True})
+    # mode="move" → member unfiled, class gone
+    res = _post(server, "/api/roster/class/delete", {"name": "Terminale T", "mode": "move"})
     assert res["ok"] is True and res["classes"] == []
     assert _get(server, "/api/roster")["unfiled_count"] == 1
+
+
+def test_roster_class_delete_purge_endpoint(server):
+    _post(server, "/api/roster/class/create", {"name": "Doomed"})
+    R.upsert_on_scan("n0110", "SERP", firmware="16.4.4", family="graphique")
+    _post(server, "/api/roster/move", {"keys": ["n0110:SERP"], "class": "Doomed"})
+    # mode="purge" → the member is DELETED and the class removed.
+    res = _post(server, "/api/roster/class/delete", {"name": "Doomed", "mode": "purge"})
+    assert res["ok"] is True and res["classes"] == [] and res["purged"] == 1
+    assert _get(server, "/api/roster")["total"] == 0
+
+
+def test_mode_endpoint_sets_policy_and_enrols(server):
+    # No enrolment in individual mode: the server's demo device is not in the roster.
+    assert _get(server, "/api/roster")["total"] == 0
+    # POST /api/mode {classroom} flips the policy and enrols the connected calculator.
+    assert _post(server, "/api/mode", {"mode": "classroom"}) == {"ok": True, "classroom": True}
+    assert _get(server, "/api/roster")["total"] == 1
+    # Back to individual clears the policy (the already-enrolled device stays in the roster).
+    assert _post(server, "/api/mode", {"mode": "individual"}) == {"ok": True, "classroom": False}

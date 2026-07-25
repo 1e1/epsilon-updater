@@ -316,6 +316,10 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
                     self._json(session.set_scripts(body.get("scripts", [])))
+                elif path == "/api/mode":
+                    # UI mode toggle → capability policy. Classroom policy is what lets a scan
+                    # enrol the connected calculator into the local roster (Parc).
+                    self._json(session.set_mode(body.get("mode", "individual")))
                 elif path == "/api/roster/rename":
                     self._json(session.roster_rename(body.get("key", ""), body.get("name", "")))
                 elif path == "/api/roster/move":
@@ -329,11 +333,7 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                         session.roster_class_rename(body.get("from", ""), body.get("to", ""))
                     )
                 elif path == "/api/roster/class/delete":
-                    self._json(
-                        session.roster_class_delete(
-                            body.get("name", ""), bool(body.get("confirm"))
-                        )
-                    )
+                    self._json(session.roster_class_delete(body.get("name", ""), body.get("mode")))
                 elif path == "/api/quit":
                     self._json({"ok": True})
                     if ctrl.get("shutdown"):
