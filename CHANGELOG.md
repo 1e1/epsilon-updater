@@ -25,6 +25,13 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   **officiel sans manip**. Reproduit le flux WebUSB officiel (capturé sur N0120 **et** N0200
   réelles : `leave` final vers `0x08000000`). Constante `dfu.constants.BOOTLOADER_RESET_ADDRESS`.
   Documenté dans [`docs/reference/official-webusb-analysis.md`](docs/reference/official-webusb-analysis.md).
+- **N0200 — flash hors-ligne VIABLE (correction)** : la capture du flux WebUSB officiel sur N0200
+  réelle montre que le mode `0xA51A` **accepte directement** les écritures DfuSe vers `0x98000000`
+  (`SET_ADDRESS`/bloc + `DNLOAD`, **sans erase**, **sans bascule de mode ni changement de PID**,
+  sans attestation en ligne). L'outil le fait **déjà** (mono-slot, `flash_erase=False`).
+  [`docs/01-specs/n02xx-firmware-format.md`](docs/01-specs/n02xx-firmware-format.md) corrigé
+  (l'ancienne conclusion « ni viable ni sûr » était fausse) + layout du **FirmwareHeader**
+  `0xFACECAFE` (version on-device lisible).
 
 ### Modifié
 

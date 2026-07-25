@@ -9,8 +9,10 @@
 Contrairement à l'Epsilon **graphique** (N01xx), qui est distribué **en clair** avec des
 en-têtes lisibles (`SlotInfo`, `KernelHeader`, `UserlandHeader`) et des chaînes de version,
 le firmware **Scientifique (N02xx)** est livré comme **un unique blob chiffré/opaque**. On
-peut le **télécharger, vérifier (taille + SHA-256), mettre en cache et flasher verbatim**,
-mais on **ne peut pas l'introspecter** : la version ne provient que du manifeste.
+peut le **télécharger, vérifier (taille + SHA-256), mettre en cache et flasher verbatim** (vers
+`0x98000000`, **hors ligne** — cf. plus bas). La **charge utile** n'est pas introspectable
+(chiffrée), mais la **version** est lisible dans le bloc **FirmwareHeader** (`0xFACECAFE`,
+lecture seule @ `0x080040C0`) et/ou le manifeste.
 
 ## Source analysée
 
@@ -36,23 +38,44 @@ Le conteneur est standard (identique au graphique) :
 STM32U0 en `0x08000000`). C'est l'adresse que le bootloader attend pour la région firmware ;
 c'est donc là qu'on écrit. Pas de QSPI, **pas de double-slot A/B**.
 
-> **[Observé matériel — capture lecture seule]** Branchée, une N0200 s'énumère en
-> `0483:A51A` (bcd `0x0200`, Product `NumWorks Scientific Calculator`) et **annonce** dans sa
-> chaîne de layout DFU la région `@FirmwareHeader/0x080040C0/01*64Ba` (1×64 KiB, base flash CPU
-> `0x08000000`) — donc distincte de l'adresse d'écriture `0x98000000` du fichier `.dfu`. À garder
-> en tête si on implémente un jour la lecture/écriture bas niveau N0200 : l'adresse annoncée par
-> le descripteur (reads) et la cible du `.dfu` (write bootloader) ne coïncident pas.
+> **[CONFIRMÉ matériel — capture du flux officiel + lecture]** La N0200 s'énumère en `0483:A51A`
+> (bcd `0x0200`, Product `NumWorks Scientific Calculator`) et n'annonce dans sa chaîne de layout DFU
+> qu'**une** région : `@FirmwareHeader/0x080040C0/01*64Ba` — **64 octets en lecture seule** (type
+> `a`, `01*64B` = 64 **octets**), la **fenêtre d'identité** (voir *FirmwareHeader* ci-dessous),
+> **pas** la cible d'écriture. **Ce layout est trompeur** : le mode `0xA51A` **accepte directement
+> les écritures DfuSe vers `0x98000000`** bien qu'aucune région inscriptible n'y soit annoncée —
+> il n'y a **pas** de « mode flasher » séparé à déclencher.
 
-> **[CONFIRMÉ matériel — N0200 réelle]** En **runtime** (PID `0xA51A`), la N0200 n'expose dans sa
-> chaîne de layout DFU **qu'une seule** région : `@FirmwareHeader/0x080040C0/01*64Ba`. Lecture fine
-> du descripteur : la lettre de type **`a` = *readable-only*** (lecture seule) et `01*64B` vaut
-> **64 octets** (et **non** 64 KiB) — c'est donc une fenêtre de **64 octets en LECTURE SEULE**,
-> **aucune région inscriptible n'est annoncée**. Le firmware réel (~232 Kio @ `0x98000000`) n'est
-> dans cet état **ni adressable ni inscriptible**. Le flux officiel doit d'abord **basculer
-> l'appareil en mode flasher**, bascule **déclenchée logiciellement** — la N0200 **n'a pas de bouton
-> reset** physique. Combiné au **mono-slot** (pas de repli A/B) et au firmware **chiffré/signé**, le
-> flashage **hors ligne** du firmware N0200 avec cet outil **n'est ni viable ni sûr** → passer par
-> **my.numworks.com**.
+> **[CONFIRMÉ — capture WebUSB du flux officiel, N0200 réelle]** Voir
+> [../reference/official-webusb-analysis.md](../reference/official-webusb-analysis.md). **Aucune
+> bascule de mode, aucun changement de PID** — tout se fait dans `0xA51A`. Séquence :
+> `SET_ADDRESS 0x98000000` **par bloc de 2048 o** + `DNLOAD`, **sans aucune commande ERASE** (le
+> bootloader efface implicitement) ; handshake de fin `SET_ADDRESS 0x08000000` + `DNLOAD` de
+> longueur nulle (boot). Les seuls appels serveur (`POST /devices/<serial>`, avant/après) sont de la
+> **télémétrie de compte**, **pas** une attestation ; le `.dfu` est un **téléchargement statique
+> protégé par compte** (`401` sans login). Chrono capturé : ~8 s d'écriture.
+>
+> **➡️ Le flash hors-ligne du firmware N0200 EST viable** (corrige la conclusion antérieure « ni
+> viable ni sûr ») : télécharger le `.dfu` → écrire l'élément à `0x98000000` en DfuSe, sans erase.
+> `install/installer.py` le fait **déjà** (mono-slot, `flash_erase=False`). **Réserve mono-slot** :
+> on écrit le firmware actif (pas de repli A/B), mais le **bootloader `0xA51A` persiste** (hors
+> `0x98000000`) → un flash interrompu reste **re-flashable** (risque de brick faible). Firmware
+> **officiel signé uniquement** (on ne signe pas). Le mode examen : voir ci-dessous.
+
+### FirmwareHeader — identité (lecture seule @ `0x080040C0`)
+
+Bloc de **32 octets** lu par DfuSe `UPLOAD`, encadré par le magic **`0xFACECAFE`** :
+`magic` (u32) · `taille firmware` (u32) · `checksum` (u32) · `version` (chaîne, ex. `3.0.0`) ·
+`commit` (chaîne, ex. `8276cd0`) · `magic` (u32). **La version est donc lisible on-device** (pas
+seulement dans le manifeste), même si la **charge utile** à `0x98000000` reste chiffrée/opaque.
+
+### Mode examen
+
+La N0200 **n'écrit aucun secteur exam-bytes/persistant** lors du flash (contrairement au graphique
+qui rafraîchit `0x903f0000`/`0x907f0000`), n'a **pas de stockage utilisateur** (pas de scripts) et
+est classée dans une **famille distincte** côté compte (`device_type_id=6` vs `1` pour le
+graphique). Faisceau d'indices : **pas de machinerie exam-bytes façon graphique**. Un « test mode »
+LED sans mémoire n'est pas exclu ; à confirmer via la page my.numworks du N0200 ou la doc produit.
 
 ## Charge utile : chiffrée / opaque
 
@@ -81,8 +104,10 @@ ni pointeurs de slot.
 - `install/installer.py` : pour un modèle `opaque_firmware`, `plan_install` écrit l'image
   **verbatim** et met `boot_address = None` (aucun en-tête à viser ; le bootloader démarre au
   détachement). On **n'invente pas** d'offset userland.
-- **Version** : elle vient **du manifeste** (`3.0.0`), jamais du binaire. `read_installed_version`
-  renvoie `None` sur N02xx — c'est **attendu**, pas un échec.
+- **Version** : disponible **dans le manifeste** (`3.0.0`) **et** dans le bloc FirmwareHeader
+  on-device (`0xFACECAFE` @ `0x080040C0`). `read_installed_version` (basé sur l'en-tête userland)
+  renvoie `None` sur N02xx — attendu ; lire la version N0200 passe par le FirmwareHeader (chemin
+  distinct, à câbler quand utile).
 - **Intégrité** : on ne peut pas vérifier le contenu déchiffré, mais on atteste l'octet-à-octet
   via la **taille du manifeste** et l'empreinte **SHA-256** (journal de provenance).
 
