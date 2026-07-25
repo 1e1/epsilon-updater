@@ -33,7 +33,7 @@ def read_firmware_identity(client, model) -> tuple[str, str]:
       mapping os_version→version and commit→patch_level.
     """
     if getattr(model, "opaque_firmware", False):
-        info = _pi.parse(client.read(_pi.N0200_FIRMWARE_HEADER_ADDR, _pi.PLATFORM_INFO_SIZE))
+        info = _pi.read_firmware_header(client)
         return info.software_version, info.patch_level
     from ..dfu.identity import read_identity
 

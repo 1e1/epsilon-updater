@@ -117,10 +117,9 @@ def _read_firmware_header(client: DfuClient, ident: CalculatorIdentity) -> None:
     from ..formats import platform_info
 
     try:
-        raw = client.read(C.N0200_FIRMWARE_HEADER_ADDR, C.PLATFORM_INFO_SIZE)
+        fw = platform_info.read_firmware_header(client)
     except Exception:
         return
-    fw = platform_info.parse(raw)
     if fw.valid:
         ident.os_version = fw.software_version or None
         ident.commit = fw.patch_level or None

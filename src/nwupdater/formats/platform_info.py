@@ -37,6 +37,7 @@ __all__ = [
     "PlatformInfo",
     "pack",
     "parse",
+    "read_firmware_header",
 ]
 
 
@@ -63,6 +64,18 @@ def parse(raw: bytes) -> PlatformInfo:
     (foot,) = struct.unpack("<I", raw[28:32])
     valid = head == MAGIC_PLATFORM_INFO and foot == MAGIC_PLATFORM_INFO
     return PlatformInfo(valid, version, patch, field1, field2)
+
+
+def read_firmware_header(client) -> PlatformInfo:
+    """Read + parse the 32-byte FirmwareHeader over DFU (N02xx opaque firmware).
+
+    Reads :data:`PLATFORM_INFO_SIZE` bytes at :data:`N0200_FIRMWARE_HEADER_ADDR` through the
+    ``DfuClient`` and parses them into a :class:`PlatformInfo`. Propagates whatever the client
+    read raises — callers that must tolerate a device not exposing it (e.g. a raw ST bootloader)
+    guard the call themselves. This is the single read+parse shared by the DFU identity read
+    (:mod:`nwupdater.dfu.identity`) and the account pairing path (:mod:`nwupdater.catalog.device`).
+    """
+    return parse(client.read(N0200_FIRMWARE_HEADER_ADDR, PLATFORM_INFO_SIZE))
 
 
 def pack(software_version: str, patch_level: str, *, field1: int = 0, field2: int = 0) -> bytes:
