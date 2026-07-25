@@ -368,10 +368,23 @@ def test_add_store_app_fetches_and_installs_real_bytes():
 
 def test_add_store_app_synthesizes_for_placeholder_url():
     # An example.invalid placeholder has no real download → fall back to the demo image (offline).
+    # The shipped catalogue no longer carries placeholders (they crash on launch), so inject one.
+    from nwupdater.apps.store import AppEntry
+
     s = Session(connect=False)
     s.attach_demo("n0110")
-    r = s.add_store_app("Tetris")  # url = https://example.invalid/tetris.nwa
-    assert r["ok"] and r["name"] == "Tetris"
+    s.store.entries.append(
+        AppEntry(
+            name="DemoApp",
+            version="1.0",
+            api_level=0,
+            family="graphique",
+            url="https://example.invalid/demoapp.nwa",
+            size=65536,
+        )
+    )
+    r = s.add_store_app("DemoApp")  # placeholder URL → synthesized demo image, no network
+    assert r["ok"] and r["name"] == "DemoApp"
 
 
 def test_scripts_available_aggregates_user_sources(tmp_path, monkeypatch):

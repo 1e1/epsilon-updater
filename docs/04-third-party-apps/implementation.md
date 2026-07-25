@@ -42,12 +42,17 @@ apps externes** → aucune app tierce installable (cohérent avec le hardware).
 
 ```bash
 nwupdater apps --virtual n0110                 # liste les apps compatibles
-nwupdater apps --virtual n0110 --install Tetris  # démo: synthétise + flashe + vérifie
+nwupdater apps --virtual n0110 --install Tetris  # télécharge le vrai .nwa, relink + flashe + vérifie
 nwupdater apps --virtual n0200                 # scientifique: aucune zone apps externes
 ```
 
-## À raccorder (prod)
+## Sources du catalogue
 
-Remplacer les URLs d'exemple du store par de vraies sources `.nwa` (compte NumWorks
-authentifié `/apps` et/ou dépôts communautaires), puis télécharger le `.nwa` et appeler
-`AppInstaller.install(blob)` — la logique flash/vérif est déjà là.
+Le catalogue livré (`apps/data/community-apps.json`) ne contient que de **vraies** apps
+téléchargeables, publiées par le dépôt de leur auteur (jamais hébergées ni modifiées par cet
+outil) ; chaque `.nwa` est un ELF relocatable relinké pour l'appareil connecté au moment de
+l'installation. Pour ajouter d'autres apps sans éditer ce fichier : déposer des `.nwa` dans le
+dossier apps utilisateur (`NWUPDATER_APPS_DIR`) et/ou lister leurs URLs (une par ligne) dans
+`<dossier>/_urls.txt` — agrégées automatiquement dans « Available ». Une entrée sans vraie URL
+(placeholder `example.invalid`) retombe sur une image de démo synthétisée hors-ligne : elle
+s'installe mais **plante au lancement** (code à zéro) — à ne jamais livrer.

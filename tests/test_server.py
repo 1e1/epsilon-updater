@@ -13,7 +13,21 @@ from nwupdater.server.session import Session
 
 @pytest.fixture
 def server(tmp_path):
+    from nwupdater.apps.store import AppEntry
+
     session = Session(model_name="n0110", os_version="16.4.4", cache_dir=tmp_path / "cache")
+    # A placeholder catalogue entry so the app install/add tests exercise the offline synth path
+    # without a network fetch (the shipped catalogue now holds only real, downloadable apps).
+    session.store.entries.append(
+        AppEntry(
+            name="DemoApp",
+            version="1.0",
+            api_level=0,
+            family="graphique",
+            url="https://example.invalid/demoapp.nwa",
+            size=65536,
+        )
+    )
     httpd = make_server(session, port=0)  # ephemeral port
     port = httpd.server_address[1]
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -70,9 +84,9 @@ def test_install_firmware_endpoint(server):
 
 
 def test_install_app_endpoint(server):
-    r = _post(server, "/api/install/app", {"name": "Tetris"})
+    r = _post(server, "/api/install/app", {"name": "DemoApp"})
     assert r["ok"] is True
-    assert r["name"] == "Tetris"
+    assert r["name"] == "DemoApp"
 
 
 def test_static_index_served(server):
@@ -312,10 +326,10 @@ def test_apps_routes(server):
 
     b64 = base64.b64encode(build_nwa("Beta", api_level=0, code=b"\x02" * 128)).decode()
     assert _post(server, "/api/apps/inspect", {"data_b64": b64})["size"] > 0
-    assert _post(server, "/api/apps/add", {"name": "Tetris"})["ok"] is True
+    assert _post(server, "/api/apps/add", {"name": "DemoApp"})["ok"] is True
     assert _post(server, "/api/apps/push", {"filename": "b.nwa", "data_b64": b64})["ok"] is True
-    assert _post(server, "/api/apps/reorder", {"order": ["Tetris", "Beta"]})["ok"] is True
-    assert _post(server, "/api/apps/uninstall", {"name": "Tetris"})["ok"] is True
+    assert _post(server, "/api/apps/reorder", {"order": ["DemoApp", "Beta"]})["ok"] is True
+    assert _post(server, "/api/apps/uninstall", {"name": "DemoApp"})["ok"] is True
 
 
 def test_auth_routes_smoke(server):

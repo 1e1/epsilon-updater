@@ -40,7 +40,21 @@ def _launch(p):
 @contextlib.contextmanager
 def _ui(tmp_path, model="n0110", os_version="16.4.4"):
     """Serve a connected demo device and yield ``(page, errors)`` with app.js loaded."""
+    from nwupdater.apps.store import AppEntry
+
     session = Session(model_name=model, os_version=os_version, cache_dir=tmp_path / "cache")
+    # A placeholder catalogue entry so staging/committing an app stays offline (synth demo, no
+    # network fetch); the shipped catalogue now holds only real, downloadable apps.
+    session.store.entries.append(
+        AppEntry(
+            name="DemoApp",
+            version="1.0",
+            api_level=0,
+            family="graphique",
+            url="https://example.invalid/demoapp.nwa",
+            size=65536,
+        )
+    )
     httpd = make_server(session, port=0)
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -140,15 +154,16 @@ def test_stage_and_commit_app_reaches_the_device(tmp_path):
         # The workshop lives under the Apps tab now — reveal it first.
         page.click("#tab-apps")
         page.wait_for_selector("#pane-apps", state="visible")
-        # Stage a bundled catalogue app via its "+" (aria-label = the app name).
-        page.click("#pane-apps button.add[aria-label='Tetris']")
-        page.wait_for_function("STATE.stage.apps.some(s => s.name === 'Tetris' && !s.onDevice)")
+        # Stage a catalogue app via its "+" (aria-label = the app name). DemoApp is an offline
+        # placeholder injected by the fixture, so the commit synthesizes rather than downloads.
+        page.click("#pane-apps button.add[aria-label='DemoApp']")
+        page.wait_for_function("STATE.stage.apps.some(s => s.name === 'DemoApp' && !s.onDevice)")
         # The "Write" button (the non-ghost .btn in the plan bar) is now enabled.
         commit = page.query_selector("#pane-apps .wplan button.btn.sm:not(.ghost)")
         assert commit is not None and commit.is_enabled()
         commit.click()
-        # Commit installs to the (demo) device; after refresh the device list holds Tetris.
-        page.wait_for_function("STATE.apps.device.some(a => a.name === 'Tetris')", timeout=8000)
+        # Commit installs to the (demo) device; after refresh the device list holds DemoApp.
+        page.wait_for_function("STATE.apps.device.some(a => a.name === 'DemoApp')", timeout=8000)
         assert not errors
 
 

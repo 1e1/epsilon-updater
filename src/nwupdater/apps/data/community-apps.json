@@ -1,18 +1,23 @@
 {
-  "_note": "Generic, unofficial example catalogue. RPN is a real downloadable source (independent repository); the other entries are ILLUSTRATIVE (example.invalid URLs, installed as a demo image). There is no official public JSON API (the official flow = uploading a .nwa on my.numworks.com/apps). To add REAL apps without editing this file: drop .nwa files in the user apps folder (NWUPDATER_APPS_DIR, otherwise <config>/nwupdater/apps) and/or list their URLs (one per line) in <folder>/_urls.txt — automatically aggregated into \"Available\". Sizes (bytes) reflect app_size.",
+  "_note": "Generic, unofficial example catalogue. Every entry here is a REAL, downloadable relocatable .nwa published by its own author's repository (never hosted or modified by this tool); each is relinked to the connected device at install time. There is no official public JSON API (the official flow = uploading a .nwa on my.numworks.com/apps). To add more REAL apps without editing this file: drop .nwa files in the user apps folder (NWUPDATER_APPS_DIR, otherwise <config>/nwupdater/apps) and/or list their URLs (one per line) in <folder>/_urls.txt — automatically aggregated into \"Available\". Sizes (bytes) are the installed footprint (app_size after the install-time link), which is device-independent.",
   "apps": [
-    {"name": "Chess", "version": "1.2", "api_level": 0, "family": "graphique", "size": 131072,
-     "description": "Chess game", "source": "community", "url": "https://example.invalid/chess.nwa"},
-    {"name": "Nofrendo", "version": "1.0", "api_level": 0, "family": "graphique", "size": 524288,
-     "description": "NES emulator", "source": "community", "url": "https://example.invalid/nofrendo.nwa"},
-    {"name": "Peanut-GB", "version": "0.3", "api_level": 0, "family": "graphique", "size": 327680,
-     "description": "Game Boy emulator", "source": "community", "url": "https://example.invalid/peanutgb.nwa"},
-    {"name": "Periodic", "version": "1.0", "api_level": 1, "family": "graphique", "size": 65536,
-     "description": "Periodic table (API level 1)", "source": "community", "url": "https://example.invalid/periodic.nwa"},
-    {"name": "RPN", "version": "2.0.0", "api_level": 0, "family": "graphique", "size": 117300,
+    {"name": "RPN", "version": "2.0.1", "api_level": 0, "family": "graphique", "size": 69587,
      "description": "Reverse Polish Notation calculator", "source": "github.com/1e1/numworks-RPN",
-     "url": "https://github.com/1e1/numworks-RPN/releases/download/v2.0.0/rpn-v2.0.0.nwa"},
-    {"name": "Tetris", "version": "2.1", "api_level": 0, "family": "graphique", "size": 65536,
-     "description": "Tetris game", "source": "community", "url": "https://example.invalid/tetris.nwa"}
+     "url": "https://github.com/1e1/numworks-RPN/releases/download/v2.0.1/rpn-v2.0.1.nwa"},
+    {"name": "Tetris", "version": "1.0", "api_level": 0, "family": "graphique", "size": 61580,
+     "description": "Tetris game", "source": "github.com/Tatone26/Numworks-games",
+     "url": "https://raw.githubusercontent.com/Tatone26/Numworks-games/main/apps/tetris.nwa"},
+    {"name": "Snake", "version": "1.0", "api_level": 0, "family": "graphique", "size": 33732,
+     "description": "Snake game", "source": "github.com/Tatone26/Numworks-games",
+     "url": "https://raw.githubusercontent.com/Tatone26/Numworks-games/main/apps/snake.nwa"},
+    {"name": "Solitaire", "version": "1.0", "api_level": 0, "family": "graphique", "size": 90844,
+     "description": "Solitaire card game", "source": "github.com/Tatone26/Numworks-games",
+     "url": "https://raw.githubusercontent.com/Tatone26/Numworks-games/main/apps/solitaire.nwa"},
+    {"name": "Flappy Bird", "version": "1.0", "api_level": 0, "family": "graphique", "size": 51280,
+     "description": "Flappy Bird game", "source": "github.com/Tatone26/Numworks-games",
+     "url": "https://raw.githubusercontent.com/Tatone26/Numworks-games/main/apps/flappybird.nwa"},
+    {"name": "Connect Four", "version": "1.0", "api_level": 0, "family": "graphique", "size": 48148,
+     "description": "Connect Four game", "source": "github.com/Tatone26/Numworks-games",
+     "url": "https://raw.githubusercontent.com/Tatone26/Numworks-games/main/apps/connectfour.nwa"}
   ]
 }

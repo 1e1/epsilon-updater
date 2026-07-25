@@ -32,12 +32,37 @@ def test_store_bundled_and_compat_filter():
     assert len(store) >= 5
     compat = store.compatible(family="graphique", device_api_level=0, has_external_apps=True)
     names = {e.name for e in compat}
-    assert "Tetris" in names
-    assert "Periodic" not in names  # api_level 1 filtered out
+    assert {"RPN", "Tetris"} <= names  # real bundled graphique/api-0 entries
     # scientific / no external-apps region -> nothing compatible
     assert (
         store.compatible(family="scientifique", device_api_level=0, has_external_apps=False) == []
     )
+
+
+def test_compat_filters_by_api_level():
+    from nwupdater.apps.store import AppEntry
+
+    store = AppStore(
+        [
+            AppEntry(name="A0", version="1", api_level=0, family="graphique"),
+            AppEntry(name="A1", version="1", api_level=1, family="graphique"),
+        ]
+    )
+    names = {
+        e.name
+        for e in store.compatible(family="graphique", device_api_level=0, has_external_apps=True)
+    }
+    assert names == {"A0"}  # api_level 1 filtered out for an api-0 device
+
+
+def test_bundled_catalog_has_no_placeholder_urls():
+    # The shipped catalogue must hold only REAL downloadable apps — never an example.invalid
+    # placeholder. A placeholder falls through to the synthesized zero-code demo image, which
+    # installs fine but reboots the calculator when launched (see add_store_app). This guard keeps
+    # fictitious entries out of the release.
+    for e in AppStore.bundled().entries:
+        assert e.url.startswith("https://"), f"{e.name}: not an https URL"
+        assert "example.invalid" not in e.url, f"{e.name}: placeholder URL shipped"
 
 
 def test_install_app_into_external_region_and_verify():

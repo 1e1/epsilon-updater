@@ -90,16 +90,19 @@ def test_apps_install_fetches_and_installs_real_bytes(tmp_path, monkeypatch, cap
 
 
 def test_apps_install_synthesizes_for_placeholder_url(tmp_path, monkeypatch, capsys):
-    # An example.invalid placeholder has no real download → offline demo fallback, no network.
+    # An example.invalid placeholder has no real download → offline demo fallback, no network. The
+    # shipped catalogue holds only real apps now, so supply the placeholder via the user _urls.txt
+    # source (aggregated into the store exactly like the web UI).
     monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+    (tmp_path / "_urls.txt").write_text("https://example.invalid/demoapp.nwa\n")
 
     def _boom():
         raise AssertionError("placeholder install must not fetch over the network")
 
     monkeypatch.setattr("nwupdater.catalog.auth.UrllibTransport", _boom)
-    assert cli.main(["apps", "--virtual", "n0110", "--install", "Tetris"]) == 0
+    assert cli.main(["apps", "--virtual", "n0110", "--install", "demoapp.nwa"]) == 0
     out = capsys.readouterr().out
-    assert "installed 'Tetris'" in out
+    assert "installed 'demoapp.nwa'" in out
 
 
 def test_identify_real_without_pyusb_exits(monkeypatch):
