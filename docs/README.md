@@ -23,6 +23,12 @@ contient les specs brutes réutilisables (protocole, API, captures).
 | 4 — Apps tierces | [`04-third-party-apps/`](04-third-party-apps/) | Simuler une calculatrice connectée pour récupérer des applications tierces depuis le site officiel |
 | 5 — Packaging UI | [`05-packaging-ui/`](05-packaging-ui/) | Module de transfert headless qui ouvre une page locale dans le navigateur |
 
+## Contribuer
+
+- [`07-contributing/`](07-contributing/README.md) — **guide illustré du contributeur** : référencer
+  une app/script, modifier le front, interfacer une API NumWorks, ajouter un device (schémas +
+  exemples).
+
 ## Références transverses
 
 - [`01-specs/os-architecture.md`](01-specs/os-architecture.md) — architecture Epsilon (boot chain, slots A/B, carte mémoire)

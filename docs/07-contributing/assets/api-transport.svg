@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 410" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" role="img" aria-label="Motif du transport injectable et boucle de découverte d'une API NumWorks">
+  <defs>
+    <marker id="a4" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="880" height="410" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="700" fill="#1f2328">Un appel = une fonction pure + un transport injectable</text>
+
+  <!-- function box -->
+  <rect x="266" y="50" width="348" height="52" rx="9" fill="#f3e8ff" stroke="#8250df"/>
+  <text x="440" y="74" font-size="11.5" fill="#3e1f79" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">fetch_manifest(model, channel, auth,</text>
+  <text x="440" y="90" font-size="11.5" fill="#3e1f79" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">*, transport=None)</text>
+
+  <!-- branches -->
+  <line x1="380" y1="102" x2="240" y2="150" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+  <line x1="500" y1="102" x2="640" y2="150" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <!-- PROD -->
+  <rect x="40" y="154" width="360" height="96" rx="10" fill="#ffe3d5" stroke="#bc4c00"/>
+  <text x="56" y="176" font-size="12.5" font-weight="700" fill="#7a3100">Production</text>
+  <rect x="56" y="186" width="328" height="24" rx="5" fill="#ffffff" stroke="#bc4c00"/>
+  <text x="64" y="203" font-size="10.5" fill="#7a3100" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">transport = UrllibTransport()  → réseau réel</text>
+  <text x="56" y="228" font-size="10" fill="#1f2328">https://my.numworks.com · TLS (certifi)</text>
+  <text x="56" y="243" font-size="10" fill="#1f2328">cookie remember_user_token · jamais le mot de passe</text>
+
+  <!-- TEST -->
+  <rect x="480" y="154" width="360" height="96" rx="10" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="496" y="176" font-size="12.5" font-weight="700" fill="#0f4c25">Test (hors-ligne)</text>
+  <rect x="496" y="186" width="328" height="24" rx="5" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="504" y="203" font-size="10.5" fill="#0f4c25" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">transport = FakeTransport(routes)  → 0 réseau</text>
+  <text x="496" y="228" font-size="10" fill="#1f2328">fixture = réponse HTTP réelle enregistrée,</text>
+  <text x="496" y="243" font-size="10" fill="#1f2328">rejouée telle quelle, sans aucun secret.</text>
+
+  <!-- discovery loop -->
+  <rect x="24" y="272" width="832" height="118" rx="10" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="40" y="296" font-size="13" font-weight="700" fill="#0a3069">Découvrir un nouvel endpoint</text>
+
+  <rect x="40" y="312" width="140" height="56" rx="8" fill="#ffffff" stroke="#0969da"/>
+  <text x="110" y="336" font-size="11" font-weight="700" fill="#0a3069" text-anchor="middle">1. Capturer</text>
+  <text x="110" y="354" font-size="9" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">capture serve</text>
+
+  <line x1="180" y1="340" x2="212" y2="340" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+  <rect x="214" y="312" width="150" height="56" rx="8" fill="#ffffff" stroke="#0969da"/>
+  <text x="289" y="336" font-size="11" font-weight="700" fill="#0a3069" text-anchor="middle">2. Nettoyer</text>
+  <text x="289" y="354" font-size="9" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">scrub (retire secrets)</text>
+
+  <line x1="364" y1="340" x2="396" y2="340" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+  <rect x="398" y="312" width="150" height="56" rx="8" fill="#ffffff" stroke="#0969da"/>
+  <text x="473" y="336" font-size="11" font-weight="700" fill="#0a3069" text-anchor="middle">3. Analyser</text>
+  <text x="473" y="354" font-size="9" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">analyze → carte API</text>
+
+  <line x1="548" y1="340" x2="580" y2="340" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+  <rect x="582" y="312" width="150" height="56" rx="8" fill="#ffffff" stroke="#0969da"/>
+  <text x="657" y="332" font-size="11" font-weight="700" fill="#0a3069" text-anchor="middle">4. Documenter</text>
+  <text x="657" y="350" font-size="9" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">web-api.md</text>
+  <text x="657" y="362" font-size="9" fill="#57606a" text-anchor="middle">[CONFIRMÉ]/[INFÉRÉ]</text>
+
+  <line x1="732" y1="340" x2="764" y2="340" stroke="#57606a" stroke-width="1.5" marker-end="url(#a4)"/>
+  <rect x="766" y="312" width="74" height="56" rx="8" fill="#f3e8ff" stroke="#8250df"/>
+  <text x="803" y="332" font-size="10.5" font-weight="700" fill="#3e1f79" text-anchor="middle">5. Coder</text>
+  <text x="803" y="350" font-size="9" fill="#57606a" text-anchor="middle">fonction +</text>
+  <text x="803" y="361" font-size="9" fill="#57606a" text-anchor="middle">test</text>
+</svg>

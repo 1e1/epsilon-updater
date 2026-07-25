@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" role="img" aria-label="Architecture du front : navigateur, appels /api, cœur headless, device virtuel, et parité FR/EN">
+  <defs>
+    <marker id="a3" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="880" height="400" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="700" fill="#1f2328">Front : page locale ↔ cœur headless</text>
+
+  <!-- Navigateur -->
+  <rect x="24" y="56" width="322" height="196" rx="10" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="40" y="80" font-size="13" font-weight="700" fill="#0a3069">Navigateur — page locale</text>
+  <rect x="40" y="94" width="92" height="30" rx="6" fill="#ffffff" stroke="#0969da"/>
+  <text x="86" y="113" font-size="11" fill="#0a3069" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">i18n.js</text>
+  <rect x="140" y="94" width="92" height="30" rx="6" fill="#ffffff" stroke="#0969da"/>
+  <text x="186" y="113" font-size="11" fill="#0a3069" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">calc.js</text>
+  <rect x="240" y="94" width="92" height="30" rx="6" fill="#ffffff" stroke="#0969da"/>
+  <text x="286" y="113" font-size="11" fill="#0a3069" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">app.js</text>
+  <text x="40" y="148" font-size="11" fill="#1f2328">app.js appelle api() / post()</text>
+  <rect x="40" y="158" width="290" height="40" rx="7" fill="#ffffff" stroke="#0969da"/>
+  <text x="185" y="182" font-size="11" fill="#0a3069" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">fetch('/api/…') → JSON</text>
+  <text x="40" y="222" font-size="10.5" fill="#57606a">Vanilla JS. Aucun WebUSB,</text>
+  <text x="40" y="238" font-size="10.5" fill="#57606a">aucun framework, aucun build.</text>
+
+  <!-- arrows -->
+  <line x1="346" y1="120" x2="410" y2="120" stroke="#57606a" stroke-width="1.5" marker-end="url(#a3)"/>
+  <text x="378" y="112" font-size="10" fill="#57606a" text-anchor="middle">requête</text>
+  <line x1="410" y1="188" x2="346" y2="188" stroke="#57606a" stroke-width="1.5" marker-end="url(#a3)"/>
+  <text x="378" y="204" font-size="10" fill="#57606a" text-anchor="middle">JSON</text>
+
+  <!-- Serveur -->
+  <rect x="414" y="56" width="300" height="196" rx="10" fill="#eaeef2" stroke="#1f2328"/>
+  <text x="430" y="80" font-size="13" font-weight="700" fill="#1f2328">Cœur headless (Python, stdlib)</text>
+  <rect x="430" y="94" width="268" height="44" rx="7" fill="#ffffff" stroke="#bc4c00"/>
+  <text x="564" y="112" font-size="11.5" font-weight="700" fill="#7a3100" text-anchor="middle">httpd.py — garde</text>
+  <text x="564" y="128" font-size="10" fill="#1f2328" text-anchor="middle">hôte loopback + Origin (POST : Origin requis)</text>
+  <rect x="430" y="150" width="268" height="86" rx="7" fill="#ffffff" stroke="#1f2328"/>
+  <text x="564" y="170" font-size="11.5" font-weight="700" fill="#1f2328" text-anchor="middle">_session_*.py</text>
+  <text x="564" y="190" font-size="10.5" fill="#57606a" text-anchor="middle">roster · apps · scripts · catalog</text>
+  <text x="564" y="206" font-size="10.5" fill="#57606a" text-anchor="middle">firmware · auth · names</text>
+  <text x="564" y="226" font-size="10" fill="#1f2328" text-anchor="middle">une route = une méthode de mixin</text>
+
+  <!-- device -->
+  <line x1="714" y1="154" x2="756" y2="154" stroke="#57606a" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="758" y="104" width="98" height="104" rx="9" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="807" y="146" font-size="11.5" font-weight="700" fill="#0f4c25" text-anchor="middle">Device</text>
+  <text x="807" y="162" font-size="11.5" font-weight="700" fill="#0f4c25" text-anchor="middle">virtuel</text>
+  <text x="807" y="182" font-size="9" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">virtual_dfu.py</text>
+
+  <!-- parity panel -->
+  <rect x="24" y="272" width="832" height="108" rx="10" fill="#f3e8ff" stroke="#8250df"/>
+  <text x="40" y="296" font-size="13" font-weight="700" fill="#3e1f79">Parité FR / EN — chaque texte existe dans les deux langues</text>
+  <rect x="40" y="308" width="360" height="58" rx="7" fill="#ffffff" stroke="#8250df"/>
+  <text x="52" y="326" font-size="10.5" fill="#1f2328" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">STRINGS.fr.rescan = "Relancer…"</text>
+  <text x="52" y="342" font-size="10.5" fill="#1f2328" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">STRINGS.en.rescan = "Rescan…"</text>
+  <text x="52" y="358" font-size="10.5" fill="#57606a" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">t("rescan")  → texte selon LANG</text>
+  <line x1="410" y1="337" x2="452" y2="337" stroke="#57606a" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="456" y="308" width="384" height="58" rx="7" fill="#ffffff" stroke="#8250df"/>
+  <text x="470" y="328" font-size="11" font-weight="700" fill="#3e1f79">test_i18n.py vérifie :</text>
+  <text x="470" y="345" font-size="10" fill="#1f2328">mêmes clés, même ordre, triées, une par ligne,</text>
+  <text x="470" y="360" font-size="10" fill="#1f2328">et toute clé utilisée dans app.js est traduite.</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 360" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" role="img" aria-label="Flux d'agrégation d'une app ou d'un script, de la source vers la liste affichée">
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="880" height="360" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="700" fill="#1f2328">De la source à la liste affichée</text>
+
+  <!-- Sources -->
+  <text x="24" y="66" font-size="12" font-weight="700" fill="#57606a">3 SOURCES</text>
+  <rect x="24" y="78" width="196" height="58" rx="9" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="36" y="100" font-size="12.5" font-weight="700" fill="#0a3069">Cloud NumWorks</text>
+  <text x="36" y="120" font-size="10.5" fill="#1f2328" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">my.numworks.com/python/…</text>
+
+  <rect x="24" y="146" width="196" height="58" rx="9" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="36" y="168" font-size="12.5" font-weight="700" fill="#0f4c25">Fichier local</text>
+  <text x="36" y="188" font-size="10.5" fill="#1f2328" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">dossier : .nwa / .py</text>
+
+  <rect x="24" y="214" width="196" height="58" rx="9" fill="#fff1e5" stroke="#bc4c00"/>
+  <text x="36" y="236" font-size="12.5" font-weight="700" fill="#7a3100">Dépôt distant</text>
+  <text x="36" y="256" font-size="10.5" fill="#1f2328" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">_urls.txt (une URL/ligne)</text>
+
+  <!-- arrows to aggregation -->
+  <line x1="220" y1="107" x2="280" y2="150" stroke="#57606a" stroke-width="1.5" marker-end="url(#a2)"/>
+  <line x1="220" y1="175" x2="280" y2="175" stroke="#57606a" stroke-width="1.5" marker-end="url(#a2)"/>
+  <line x1="220" y1="243" x2="280" y2="200" stroke="#57606a" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- aggregation -->
+  <rect x="286" y="120" width="150" height="110" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="361" y="150" font-size="12.5" font-weight="700" fill="#1f2328" text-anchor="middle">Agrégation</text>
+  <text x="361" y="172" font-size="10.5" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">apps/sources.py</text>
+  <text x="361" y="188" font-size="10.5" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">apps/store.py</text>
+  <text x="361" y="210" font-size="10" fill="#1f2328" text-anchor="middle">fusion + dédup.</text>
+
+  <line x1="436" y1="175" x2="486" y2="175" stroke="#57606a" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- filter -->
+  <rect x="492" y="120" width="150" height="110" rx="9" fill="#f3e8ff" stroke="#8250df"/>
+  <text x="567" y="146" font-size="12.5" font-weight="700" fill="#3e1f79" text-anchor="middle">Filtre</text>
+  <text x="567" y="162" font-size="10.5" fill="#3e1f79" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">compatible()</text>
+  <text x="504" y="184" font-size="10" fill="#1f2328">• famille = device</text>
+  <text x="504" y="200" font-size="10" fill="#1f2328">• api_level égal</text>
+  <text x="504" y="216" font-size="10" fill="#1f2328">• apps externes ?</text>
+
+  <line x1="642" y1="175" x2="692" y2="175" stroke="#57606a" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- UI -->
+  <rect x="698" y="120" width="158" height="110" rx="9" fill="#eaeef2" stroke="#1f2328"/>
+  <text x="777" y="150" font-size="12.5" font-weight="700" fill="#1f2328" text-anchor="middle">Liste affichée</text>
+  <text x="777" y="172" font-size="10.5" fill="#57606a" text-anchor="middle">page locale</text>
+  <text x="777" y="194" font-size="10.5" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">GET /api/apps</text>
+  <text x="777" y="214" font-size="10.5" fill="#57606a" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">GET /api/scripts</text>
+
+  <text x="24" y="312" font-size="11" fill="#57606a">Règle de sécurité : toute URL du catalogue commence par https:// et n'est jamais un lien d'exemple.</text>
+  <text x="24" y="332" font-size="11" fill="#57606a">Le proxy ne télécharge qu'une URL déjà présente dans le catalogue (liste blanche), plafond 9 Mio.</text>
+</svg>

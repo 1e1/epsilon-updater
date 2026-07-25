@@ -41,6 +41,9 @@ python -m bandit -r src -ll           # scan sécurité
 
 ## Portée
 
+- **Guide illustré du contributeur** : [`docs/07-contributing/`](docs/07-contributing/README.md) —
+  quatre façons de contribuer (référencer une app/script, modifier le front, interfacer une API
+  NumWorks, ajouter un device), avec schémas et exemples.
 - Base de connaissance et specs : [`docs/`](docs/README.md).
 - On ne contourne **aucune** protection : on rejoue des dialogues documentés et on flashe des
   firmwares **officiels signés** récupérés tels quels. Voir
