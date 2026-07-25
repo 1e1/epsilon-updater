@@ -1,12 +1,40 @@
 # Classroom 2.0 — Parc de calculatrices (roster local) · cible 2.0.0-rc
 
-> **Plan de conception + implémentation** (pas encore codé). Décrit un **parc local** de
+> **Plan de conception + implémentation** (implémenté — voir « État de livraison » ci-dessous). Décrit un **parc local** de
 > calculatrices pour le **mode classe uniquement** : un registre hors-ligne qui regroupe les
 > calculatrices scannées, les range par **classe (un seul niveau, un tag par calculatrice)** et
 > laisse l'enseignant les renommer / déplacer / supprimer. Aucun compte, aucun cloud en mode
 > classe : le nommage est **purement local**.
 
 Légende : **[V1]** = dans cette livraison · **[HORS V1]** = explicitement reporté.
+
+---
+
+## État de livraison (2026-07-25)
+
+**Livré** — les phases 0-4 du §8 ont atterri :
+
+- **Phase 0 — Fondation magasin** : `src/nwupdater/classroom_roster.py` (`upsert_on_scan`,
+  `move` / `delete` / `create_class` / `rename_class` / `delete_class`, avec jointure du nom sur
+  `device_names`).
+- **Phases 1-2 — Lecture + édition** : `RosterMixin` (`src/nwupdater/server/_session_roster.py` :
+  `roster` / `roster_rename` / `roster_move` / `roster_delete` /
+  `roster_class_create|rename|delete` + le seam upsert-on-scan) et le routage
+  `src/nwupdater/server/httpd.py` (`GET /api/roster` + `POST /api/roster/{rename,move,delete,
+  class/create,class/rename,class/delete}`).
+- **Phases 3-4 — Onglet Parc éditable** : `src/nwupdater/server/web/app.js` (`renderParc` +
+  handlers `parc*`), `i18n.js` (clés `roster_*`, parité FR/EN) et `index.html` (CSS). Les serials
+  n'atteignent **jamais** le DOM (les handlers sont indexés par ligne, pas par serial).
+- **Tests** : `tests/test_classroom_roster.py` + les tests Parc de `tests/test_ui_logic.py`.
+
+**Reste ouvert** :
+
+- **Onglet Parc « connecté uniquement »** : la barre d'onglets et les panneaux se masquent quand
+  aucune calculatrice n'est branchée (`index.html`), alors que le §1 veut le Parc visible **sans
+  appareil**.
+- **Captures d'écran** en attente (§8, Phase 4).
+- **« Flasher toute la classe »** reste **[HORS V1]** (§9), exploré séparément dans
+  `docs/06-classroom-2.0/flash-whole-class.md`.
 
 ---
 
