@@ -244,5 +244,5 @@ def test_serial_reveal_and_calc_name_are_wired(tmp_path):
         page.fill("#calc-name", "Lab bench")
         page.eval_on_selector("#calc-name", "el => el.blur()")
         page.wait_for_function("STATE.name && STATE.name.name === 'Lab bench'", timeout=8000)
-        assert "Lab bench" in page.inner_text("#titlebar-text")
+        assert page.input_value("#calc-name") == "Lab bench"
         assert not errors

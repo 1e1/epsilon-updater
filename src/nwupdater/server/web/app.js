@@ -179,7 +179,6 @@ function renderAll() {
   const conn = !!(STATE.identity && STATE.identity.connected);
   $("window").dataset.conn = conn ? "1" : "0";
   renderRail();
-  updateTitlebar();
   if (conn) { renderSystem(); renderWorkbench(); }
   else renderNoDevMain();
 }
@@ -214,7 +213,7 @@ function renderRail() {
     <div class="calcname">
       <input class="cn-input" id="calc-name" type="text" value="${esc(name.name || "")}"
         placeholder="${esc(name.default)}" aria-label="${t("calc_name")}"
-        oninput="onNameInput()" onchange="saveDeviceName()" onblur="saveDeviceName()" onfocus="this.select()">
+        onchange="saveDeviceName()" onblur="saveDeviceName()" onfocus="this.select()">
       <span class="cn-pencil" aria-hidden="true">${PENCIL_SVG}</span>
     </div>
     <div class="calc">${buildCalc(variant)}</div>
@@ -231,13 +230,6 @@ function renderRail() {
     ${i.virtual ? `<div class="demo-switch"><span>${t("demo_model")}</span>
       <select id="demo-model2" onchange="switchDemo(this.value)">${demoModelOptions(i.model)}</select></div>` : ""}
     <div class="rail-foot"><button class="btn ghost sm" onclick="disconnectDevice()">${t("dev_menu")}</button></div>`;
-}
-
-function updateTitlebar() {
-  const i = STATE.identity;
-  if (!i || !i.connected) { $("titlebar-text").textContent = "nwupdater"; return; }
-  const nm = (STATE.name && (STATE.name.name || STATE.name.default)) || ("calc " + (i.model || "").toUpperCase());
-  $("titlebar-text").textContent = `nwupdater — ${nm} · Epsilon ${i.os_version || "?"}`;
 }
 
 // -- tabs ----------------------------------------------------------------------
@@ -406,12 +398,6 @@ document.addEventListener("click", (e) => {
 });
 
 // -- calculator name (local store) ---------------------------------------------
-function onNameInput() {
-  const inp = $("calc-name"); if (!inp) return;
-  const shown = inp.value.trim() || (STATE.name && STATE.name.default) || "";
-  const i = STATE.identity;
-  if (i && i.connected) $("titlebar-text").textContent = `nwupdater — ${shown} · Epsilon ${i.os_version || "?"}`;
-}
 async function saveDeviceName() {
   const inp = $("calc-name"); if (!inp) return;
   const val = inp.value.trim(), cur = (STATE.name && STATE.name.name) || "";
@@ -420,7 +406,6 @@ async function saveDeviceName() {
     const r = await post("/api/device/name", { name: val });
     STATE.name = { name: r.name, default: r.default };
     if (inp === document.activeElement) inp.value = r.name || "";
-    updateTitlebar();
   } catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 
@@ -536,7 +521,7 @@ async function installFw() {
     STATE.lastResult = { version: r.verified_version || version, slot: r.target_slot };
     toast(t("fw_done", { v: r.verified_version || version,
       slot: r.target_slot ? t("fw_slot_b") : "", cache: r.from_cache ? t("fw_from_cache") : "" }));
-    renderRail(); updateTitlebar(); renderCatalog(); renderTabs();
+    renderRail(); renderCatalog(); renderTabs();
   } catch (e) {
     toast(t("fail", { msg: e.message }), true);
   } finally {
