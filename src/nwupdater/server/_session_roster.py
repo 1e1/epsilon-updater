@@ -85,6 +85,47 @@ class RosterMixin(SessionBase):
             "calculators": calculators,
         }
 
+    # -- mutations (POST /api/roster/*) --------------------------------------------
+    def roster_rename(self, key: str, name: str) -> dict:
+        """Rename a calculator by its ``model:serial`` key. Delegates to the SHARED name store
+        (:func:`device_names.set_name`) so the new name follows the calculator in both modes; an
+        empty name clears the override (display falls back to the default)."""
+        from .. import device_names
+
+        model, _, serial = (key or "").partition(":")
+        stored = device_names.set_name(model, serial, name)
+        return {"ok": True, "key": key, "name": stored}
+
+    def roster_move(self, keys: list[str], class_name: str | None) -> dict:
+        """File one or more calculators into ``class_name`` (``None`` → "Sans classe")."""
+        from .. import classroom_roster as R
+
+        return {"ok": True, "moved": R.move(keys or [], class_name)}
+
+    def roster_delete(self, keys: list[str]) -> dict:
+        """Remove one or more calculator records (a re-scan re-creates them)."""
+        from .. import classroom_roster as R
+
+        return {"ok": True, "deleted": R.delete(keys or [])}
+
+    def roster_class_create(self, name: str) -> dict:
+        """Create a class (an empty class may exist)."""
+        from .. import classroom_roster as R
+
+        return {"ok": True, "classes": R.create_class(name)}
+
+    def roster_class_rename(self, old: str, new: str) -> dict:
+        """Rename a class and re-file its members (merges into an existing target)."""
+        from .. import classroom_roster as R
+
+        return {"ok": True, "classes": R.rename_class(old, new)}
+
+    def roster_class_delete(self, name: str, confirm: bool = False) -> dict:
+        """Delete a class; non-empty needs ``confirm`` (then its members fall back to unfiled)."""
+        from .. import classroom_roster as R
+
+        return R.delete_class(name, confirm=confirm)
+
     def _roster_up_to_date(self, family: str | None, firmware: str | None) -> bool | None:
         """``True``/``False`` if ``firmware`` matches / is behind the latest for its family (the
         bundled snapshot), ``None`` when either is unknown. Labelled "up to date at last scan" in

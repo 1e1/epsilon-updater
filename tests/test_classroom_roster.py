@@ -215,3 +215,144 @@ def test_roster_endpoint_joins_names_groups_classes_and_hides_serial(server):
         for field in ("name", "default", "model", "family", "class", "known_firmware"):
             assert "SERAAA111" not in str(c.get(field))
             assert "SERBBB222" not in str(c.get(field))
+
+
+# -- store: mutations (move / delete) ------------------------------------------------------
+def _enrol(p, *serials, model="n0110"):
+    for s in serials:
+        R.upsert_on_scan(model, s, firmware="1.0", family="graphique", path=p)
+
+
+def test_move_single_multiple_and_back_to_unfiled(tmp_path):
+    p, np = tmp_path / "r.json", tmp_path / "n.json"
+    _enrol(p, "SER1", "SER2", "SER3")
+    # Move two into a NEW class → it is added to the rail; returns the count moved.
+    assert R.move(["n0110:SER1", "n0110:SER2"], "Seconde A", path=p) == 2
+    assert "Seconde A" in R.all_classes(path=p)
+    by = {e["key"]: e["class"] for e in R.all_entries(path=p, names_path=np)}
+    assert by["n0110:SER1"] == "Seconde A" and by["n0110:SER2"] == "Seconde A"
+    assert by["n0110:SER3"] is None
+    # Unknown keys are skipped (not counted).
+    assert R.move(["n0110:NOPE"], "Seconde A", path=p) == 0
+    # class=None files back to "Sans classe".
+    assert R.move(["n0110:SER1"], None, path=p) == 1
+    by = {e["key"]: e["class"] for e in R.all_entries(path=p, names_path=np)}
+    assert by["n0110:SER1"] is None
+
+
+def test_delete_removes_records_and_counts_only_known(tmp_path):
+    p, np = tmp_path / "r.json", tmp_path / "n.json"
+    _enrol(p, "SER1", "SER2")
+    assert R.delete(["n0110:SER1", "n0110:NOPE"], path=p) == 1
+    assert {e["key"] for e in R.all_entries(path=p, names_path=np)} == {"n0110:SER2"}
+
+
+# -- store: class CRUD ---------------------------------------------------------------------
+def test_create_class_allows_empty_dedups_and_sorts(tmp_path):
+    p = tmp_path / "r.json"
+    assert R.create_class("Terminale S", path=p) == ["Terminale S"]
+    assert R.create_class("Terminale S", path=p) == ["Terminale S"]  # dedup
+    assert R.create_class("   ", path=p) == ["Terminale S"]  # blank ignored
+    assert R.create_class("Seconde A", path=p) == ["Seconde A", "Terminale S"]  # sorted
+
+
+def test_rename_class_reassigns_members_and_merges_on_collision(tmp_path):
+    p, np = tmp_path / "r.json", tmp_path / "n.json"
+    _enrol(p, "SER1", "SER2")
+    R.move(["n0110:SER1"], "A", path=p)
+    R.move(["n0110:SER2"], "B", path=p)
+    # A → C: the member follows; C replaces A in the rail.
+    assert R.rename_class("A", "C", path=p) == ["B", "C"]
+    assert {e["key"]: e["class"] for e in R.all_entries(path=p, names_path=np)}["n0110:SER1"] == "C"
+    # C → B: MERGE into the existing B (no data loss, no duplicate rail entry).
+    assert R.rename_class("C", "B", path=p) == ["B"]
+    by = {e["key"]: e["class"] for e in R.all_entries(path=p, names_path=np)}
+    assert by["n0110:SER1"] == "B" and by["n0110:SER2"] == "B"
+    # Blank target / same name → no-op.
+    assert R.rename_class("B", "", path=p) == ["B"]
+    assert R.rename_class("B", "B", path=p) == ["B"]
+
+
+def test_delete_class_empty_direct_then_nonempty_confirm_flow(tmp_path):
+    p, np = tmp_path / "r.json", tmp_path / "n.json"
+    # Empty class → removed directly.
+    R.create_class("Empty", path=p)
+    assert R.delete_class("Empty", path=p) == {"ok": True, "classes": []}
+    # Non-empty WITHOUT confirm → asks, nothing changed yet.
+    _enrol(p, "SER1")
+    R.move(["n0110:SER1"], "Full", path=p)
+    assert R.delete_class("Full", path=p) == {"ok": False, "needs_confirm": True, "count": 1}
+    assert "Full" in R.all_classes(path=p)  # untouched
+    # WITH confirm → member falls back to unfiled, class removed (never lost).
+    res = R.delete_class("Full", confirm=True, path=p)
+    assert res["ok"] is True and res["classes"] == []
+    assert R.all_entries(path=p, names_path=np)[0]["class"] is None
+
+
+# -- session: mixin mutations against a virtual device -------------------------------------
+def test_session_roster_mutations(tmp_path, monkeypatch):
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    s = Session(model_name="n0110")
+    R.upsert_on_scan("n0110", "SER1", firmware="1.0", family="graphique")
+    assert s.roster_class_create("A")["classes"] == ["A"]
+    assert s.roster_move(["n0110:SER1"], "A")["moved"] == 1
+    assert s.roster_rename("n0110:SER1", "Poste 1")["name"] == "Poste 1"
+    assert s.roster()["calculators"][0]["name"] == "Poste 1"  # joined from the name store
+    assert s.roster_class_delete("A") == {"ok": False, "needs_confirm": True, "count": 1}
+    assert s.roster_class_delete("A", confirm=True)["ok"] is True
+    assert s.roster()["unfiled_count"] == 1
+    assert s.roster_delete(["n0110:SER1"])["deleted"] == 1
+    assert s.roster()["total"] == 0
+
+
+# -- server API: POST /api/roster/* --------------------------------------------------------
+def _post(base, path, payload):
+    req = urllib.request.Request(
+        base + path,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "Origin": base},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read())
+
+
+def test_roster_rename_move_delete_endpoints(server):
+    R.upsert_on_scan("n0110", "SERA", firmware="16.4.4", family="graphique")
+    R.upsert_on_scan("n0110", "SERB", firmware="16.4.4", family="graphique")
+    # rename → delegates to the shared name store
+    r = _post(server, "/api/roster/rename", {"key": "n0110:SERA", "name": "Poste 7"})
+    assert r["ok"] and r["name"] == "Poste 7" and N.get_name("n0110", "SERA") == "Poste 7"
+    # bulk move (several keys)
+    r = _post(server, "/api/roster/move", {"keys": ["n0110:SERA", "n0110:SERB"], "class": "Seconde A"})
+    assert r == {"ok": True, "moved": 2}
+    d = _get(server, "/api/roster")
+    assert d["counts"]["Seconde A"] == 2 and d["unfiled_count"] == 0
+    # class=null moves back to unfiled
+    assert _post(server, "/api/roster/move", {"keys": ["n0110:SERA"], "class": None})["moved"] == 1
+    # delete
+    assert _post(server, "/api/roster/delete", {"keys": ["n0110:SERB"]}) == {"ok": True, "deleted": 1}
+    assert _get(server, "/api/roster")["total"] == 1
+
+
+def test_roster_class_crud_endpoints_and_delete_confirm(server):
+    # create (empty class allowed)
+    assert _post(server, "/api/roster/class/create", {"name": "Terminale S"})["classes"] == [
+        "Terminale S"
+    ]
+    R.upsert_on_scan("n0110", "SERA", firmware="16.4.4", family="graphique")
+    _post(server, "/api/roster/move", {"keys": ["n0110:SERA"], "class": "Terminale S"})
+    # rename the class (member follows)
+    assert _post(server, "/api/roster/class/rename", {"from": "Terminale S", "to": "Terminale T"})[
+        "classes"
+    ] == ["Terminale T"]
+    # delete non-empty WITHOUT confirm → needs_confirm (two-step flow)
+    assert _post(server, "/api/roster/class/delete", {"name": "Terminale T"}) == {
+        "ok": False,
+        "needs_confirm": True,
+        "count": 1,
+    }
+    # WITH confirm → member unfiled, class gone
+    res = _post(server, "/api/roster/class/delete", {"name": "Terminale T", "confirm": True})
+    assert res["ok"] is True and res["classes"] == []
+    assert _get(server, "/api/roster")["unfiled_count"] == 1

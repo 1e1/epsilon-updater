@@ -154,3 +154,100 @@ def upsert_on_scan(
     cur["last_scan"] = _now()
     _save(data, path)
     return True
+
+
+def move(keys: list[str], class_name: str | None, *, path: Path | None = None) -> int:
+    """File one or more calculators into ``class_name`` (``None``/blank → "Sans classe").
+
+    A non-blank target class is added to the explicit class list if new, so the rail shows it.
+    Unknown keys are skipped. Returns the number of known keys moved; writes only when something
+    actually changes (idempotent)."""
+    cls = (class_name or "").strip() or None
+    data = _load(path)
+    calcs = data["calculators"]
+    moved, dirty = 0, False
+    for key in keys:
+        rec = calcs.get(str(key))
+        if rec is None:
+            continue
+        moved += 1
+        if rec.get("class") != cls:
+            rec["class"] = cls
+            dirty = True
+    if cls and cls not in data["classes"]:
+        data["classes"].append(cls)
+        dirty = True
+    if dirty:
+        _save(data, path)
+    return moved
+
+
+def delete(keys: list[str], *, path: Path | None = None) -> int:
+    """Remove calculator records (a later scan re-creates them — no tombstone, no "ignored" list).
+    Returns the number of records actually removed."""
+    data = _load(path)
+    calcs = data["calculators"]
+    deleted = 0
+    for key in keys:
+        if calcs.pop(str(key), None) is not None:
+            deleted += 1
+    if deleted:
+        _save(data, path)
+    return deleted
+
+
+def create_class(name: str, *, path: Path | None = None) -> list[str]:
+    """Create a class (an empty class may exist — the rail's source of truth). Blank names and
+    duplicates are no-ops. Returns the class list, sorted for display."""
+    cls = (name or "").strip()
+    data = _load(path)
+    if cls and cls not in data["classes"]:
+        data["classes"].append(cls)
+        _save(data, path)
+    return sorted(data["classes"], key=str.lower)
+
+
+def rename_class(old: str, new: str, *, path: Path | None = None) -> list[str]:
+    """Rename a class and re-file its members. Renaming ONTO an existing class MERGES into it (no
+    data loss). A blank ``new``, or ``old == new``, is a no-op. Returns the sorted class list."""
+    old, new = (old or "").strip(), (new or "").strip()
+    data = _load(path)
+    if not old or not new or old == new:
+        return sorted(data["classes"], key=str.lower)
+    classes = data["classes"]
+    dirty = False
+    for rec in data["calculators"].values():
+        if rec.get("class") == old:
+            rec["class"] = new
+            dirty = True
+    if old in classes:
+        classes.remove(old)
+        dirty = True
+    if new not in classes:
+        classes.append(new)
+        dirty = True
+    if dirty:
+        _save(data, path)
+    return sorted(classes, key=str.lower)
+
+
+def delete_class(name: str, *, confirm: bool = False, path: Path | None = None) -> dict:
+    """Delete a class. Empty ⇒ removed directly. Non-empty WITHOUT ``confirm`` ⇒ returns
+    ``{ok: False, needs_confirm: True, count: N}``. Non-empty WITH ``confirm`` ⇒ its members fall
+    back to "Sans classe" (never lost), then the class is removed. Returns
+    ``{ok: True, classes: [...]}`` on success."""
+    name = (name or "").strip()
+    data = _load(path)
+    members = [k for k, rec in data["calculators"].items() if rec.get("class") == name]
+    if members and not confirm:
+        return {"ok": False, "needs_confirm": True, "count": len(members)}
+    dirty = False
+    for k in members:
+        data["calculators"][k]["class"] = None
+        dirty = True
+    if name in data["classes"]:
+        data["classes"].remove(name)
+        dirty = True
+    if dirty:
+        _save(data, path)
+    return {"ok": True, "classes": sorted(data["classes"], key=str.lower)}

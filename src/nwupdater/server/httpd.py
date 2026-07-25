@@ -316,6 +316,24 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.delete_script(body.get("name", "")))
                 elif path == "/api/scripts/set":
                     self._json(session.set_scripts(body.get("scripts", [])))
+                elif path == "/api/roster/rename":
+                    self._json(session.roster_rename(body.get("key", ""), body.get("name", "")))
+                elif path == "/api/roster/move":
+                    self._json(session.roster_move(body.get("keys", []), body.get("class")))
+                elif path == "/api/roster/delete":
+                    self._json(session.roster_delete(body.get("keys", [])))
+                elif path == "/api/roster/class/create":
+                    self._json(session.roster_class_create(body.get("name", "")))
+                elif path == "/api/roster/class/rename":
+                    self._json(
+                        session.roster_class_rename(body.get("from", ""), body.get("to", ""))
+                    )
+                elif path == "/api/roster/class/delete":
+                    self._json(
+                        session.roster_class_delete(
+                            body.get("name", ""), bool(body.get("confirm"))
+                        )
+                    )
                 elif path == "/api/quit":
                     self._json({"ok": True})
                     if ctrl.get("shutdown"):
