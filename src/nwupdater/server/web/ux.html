@@ -147,6 +147,21 @@
   footer { max-width:1080px; margin:40px auto 0; padding:20px clamp(18px,4vw,40px) 0; border-top:1px solid var(--line);
     color:var(--muted); font-family:var(--mono); font-size:11.5px; }
   @media (prefers-reduced-motion:reduce){ .updot{ animation:none; } }
+  /* prérequis d'exécution — voir docs/05-packaging-ui/ui-prerequisites.md */
+  .spec-head .anchor { margin-left:auto; }
+  .prereq { font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.02em;
+    padding:2px 7px; border-radius:999px; white-space:nowrap; border:1px solid transparent; }
+  .prereq.p0 { background:var(--ok-soft); color:var(--ok); }
+  .prereq.p1 { background:var(--blue-soft); color:var(--blue-ink); }
+  .prereq.p2 { background:var(--blue-soft); color:var(--blue-ink); border-color:var(--blue); }
+  .prereq.p3 { background:var(--accent-soft); color:var(--accent-ink); }
+  .prereq.p4 { background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent); }
+  .prereq.p5 { background:var(--accent); color:#1b1c1e; }
+  .prereq.p6 { background:color-mix(in srgb,var(--err) 18%,transparent); color:var(--err); border-color:var(--err); }
+  .prereq-legend { display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; margin:14px 0 6px;
+    padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:10px; font-size:12px; color:var(--muted); }
+  .prereq-legend .lg-t { font-weight:700; color:var(--ink); }
+  .prereq-legend code { font-family:var(--mono); font-size:11px; }
 </style>
 </head>
 <body>
@@ -168,6 +183,19 @@
     <p class="lead">Catalogue vivant des composants. Les rendus calculatrice sont générés en direct par
       <code>calc.js</code> ; les composants du parc suivent le plan Classroom 2.0 (§5) et les tokens de
       <code>index.html</code>. Chaque bloc indique son <b>rôle</b>, <b>quand l'utiliser</b> et son <b>ancre code</b>.</p>
+
+    <div class="prereq-legend" aria-label="Prérequis d'exécution">
+      <span class="lg-t">Prérequis :</span>
+      <span class="prereq p0">P0 · standalone</span>
+      <span class="prereq p1">P1 · internet</span>
+      <span class="prereq p2">P2 · net+compte</span>
+      <span class="prereq p3">P3 · disque</span>
+      <span class="prereq p4">P4 · USB</span>
+      <span class="prereq p5">P5 · USB+calc</span>
+      <span class="prereq p6">P6 · USB+calc+fonction</span>
+      <span style="flex:1"></span>
+      <span>matrice complète : <code>docs/05-packaging-ui/ui-prerequisites.md</code></span>
+    </div>
 
     <!-- ============ RENDUS CALC ============ -->
     <h2 class="sec">Rendus calculatrice — calc.js</h2>
@@ -370,6 +398,30 @@
       '<td class="act"><button class="kbtn" title="Déplacer / renommer / supprimer" aria-label="Actions">⋯</button></td>'+
     '</tr>';
   }).join("");
+
+  // ----- prereq badges (source de vérité : docs/05-packaging-ui/ui-prerequisites.md) -----
+  var PREREQ = {
+    "Icône famille":"P0", "Vignette écran":"P0", "Appareil complet":"P0", "Onglets":"P0",
+    "Parc complet":"P3", "États de ligne":"P3", "Barre groupée":"P3", "Pastilles":"P0",
+    "Boutons":"P0", "Notifications":"P0"
+  };
+  var PREREQ_LABEL = {P0:"standalone", P1:"internet", P2:"net+compte", P3:"disque",
+    P4:"USB", P5:"USB+calc", P6:"USB+calc+fonction"};
+  var PREREQ_TITLE = {
+    P0:"Standalone — aucun réseau / disque / USB (rendu pur ; la donnée affichée a son propre niveau)",
+    P1:"Internet", P2:"Internet + compte NumWorks", P3:"Accès disque PC (roster / noms / cache — aucun appareil requis)",
+    P4:"Accès USB", P5:"USB + calculatrice reconnue", P6:"USB + reconnue + fonction (région apps / stockage Python…)"
+  };
+  Array.prototype.forEach.call(document.querySelectorAll(".spec-head"), function(head){
+    var h3 = head.querySelector("h3"); if (!h3) return;
+    var key = Object.keys(PREREQ).filter(function(k){ return h3.textContent.indexOf(k) !== -1; })[0];
+    if (!key) return;
+    var p = PREREQ[key], b = document.createElement("span");
+    b.className = "prereq " + p.toLowerCase();
+    b.textContent = p + " · " + PREREQ_LABEL[p];
+    b.title = PREREQ_TITLE[p];
+    h3.insertAdjacentElement("afterend", b);
+  });
 </script>
 </body>
 </html>
