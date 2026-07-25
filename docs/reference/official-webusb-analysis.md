@@ -112,3 +112,39 @@ sans trous internes** (une seule zone libre = la queue jusqu'à `k_totalSize = 4
 Sources : `Omega-Numworks/numworks.js`, `TI-Planet/webdfu_numworks`, `UpsilonNumworks/upsilon.js`,
 blog NumWorks WebUSB. Recoupement firmware : `shared/ion/.../storage/file_system.{h,cpp}`,
 `.../drivers/external_apps.cpp`, `.../userland/drivers/userland_header.cpp`, `include/n0110/config/board.h`.
+
+## Flux de flash officiel — capturé sur matériel réel
+
+Le flux WebUSB officiel a été **instrumenté** (Chromium natif + shim `navigator.usb` journalisant
+chaque transfert DFU ; réseau + `.dfu` capturés) sur une **N0120** et une **N0200** réelles.
+Traces non commitées (règle : pas de firmware réel dans le dépôt).
+
+**Aucune attestation en ligne** (les deux modèles) : le flash est une transaction locale
+WebUSB→DfuSe sur un `.dfu` pré-téléchargé et **protégé par compte** (`401` sans login). Les seuls
+appels serveur sont `POST /devices/<serial>` avant/après = **télémétrie de compte**
+(`{device_model, software_version, software_patch_level}`), **pas** d'attestation ni de blocage.
+
+### N0120 (graphique)
+DFU userland `0x0483:0xA291`, filtres `[0xA291, 0xA51A]`, **une seule `requestDevice`, aucune
+bascule de PID** (interface 0, alt 0 `@Flash` + alt 1 `@SRAM`). Séquence : **26× ERASE** du slot
+**inactif** (secteurs de 64 Kio), puis `SET_ADDRESS` par bloc de 2 Kio + `DNLOAD` (~1,48 Mio) ;
+rafraîchit les **secteurs persistants** `0x903f0000`/`0x907f0000` (exam-bytes — **optionnel**, le
+firmware ré-initialise à « Off » un état non initialisé) ; écrit ~42 Kio en **SRAM** (`alt 1`,
+sauvegarde/restauration du storage utilisateur). **N'écrit PAS la flash interne `0x08000000`** —
+ce qui confirme que notre approche « slot inactif seul » est correcte. **Chrono : ~27 s
+d'écriture, ~37 s connexion→fin** (à parité avec notre outil : 26,3 s).
+
+### N0200 (scientifique)
+Mode `0x0483:0xA51A` (pas de bascule de PID, pas de mode flasher séparé ; le layout RO annoncé
+`@FirmwareHeader/0x080040C0/64Ba` est trompeur — il accepte les écritures DfuSe). Écrit un
+**élément unique à `0x98000000`** (~237 Kio), **sans ERASE**, `SET_ADDRESS` par bloc + `DNLOAD`.
+`.dfu` = DfuSe standard (1 cible / 1 élément `0x98000000`, suffixe 16 o pid `0xA51A`, **aucune
+signature ajoutée** après le suffixe). **Chrono : ~8,4 s d'écriture, ~13 s connexion→fin.**
+
+### Terminaison → reste « officiel » (les deux modèles)
+Le flux termine par un `SET_ADDRESS 0x08000000` + **`DNLOAD` de longueur nulle** = `leave` vers la
+**base flash interne (le bootloader)**. `0x08000000` n'étant **pas** un secteur reflashable, le
+firmware fait `Reset::core()` (**boot à froid**) → le bootloader **re-vérifie la signature** →
+**officiel, sans RESET manuel**. Un `leave` *dans* un slot (ce que faisait notre `boot()`) le
+marque « UNOFFICIAL SOFTWARE ». D'où le correctif `boot()` → `leave(BOOTLOADER_RESET_ADDRESS)`.
+Voir [../01-specs/firmware-authenticity.md](../01-specs/firmware-authenticity.md).

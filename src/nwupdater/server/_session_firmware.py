@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..cache.store import FirmwareCache
+from ..dfu import constants as C
 from ..install.image import FirmwareImage
 from ..install.installer import Installer
 from ..models import MODELS
@@ -162,18 +163,15 @@ class FirmwareMixin(SessionBase):
         }
 
     def boot(self) -> dict:
-        """Send DFU detach + jump so the calculator reboots on the freshly-flashed slot.
+        """Reboot through the bootloader so the calculator runs the freshly-flashed firmware.
 
-        On real hardware the USB handle drops as the device resets (expected). Requires a
-        prior install in this session.
-
-        NB: this is a DFU *jump*, not a cold boot. The running kernel cannot verify the slot's
-        signature, so it marks the jumped-into userland ``ThirdParty`` and the calc shows
-        "UNOFFICIAL SOFTWARE" *transiently*. For official status (and exam mode) the user must
-        **cold-boot** (RESET button / power-cycle) so the bootloader re-verifies the signature —
-        see docs/01-specs/firmware-authenticity.md."""
-        addr = self._last_boot_address
-        if not addr:
+        Sends a DFU leave to the internal-flash base (0x08000000 = the bootloader), NOT the
+        flashed slot. A leave *into* a QSPI slot boots it unauthenticated → "UNOFFICIAL SOFTWARE";
+        leaving to the bootloader triggers a cold boot that re-verifies the slot signature and
+        keeps the device **official**, with no manual RESET — this mirrors the official WebUSB
+        flow (see docs/reference/official-webusb-analysis.md). The USB handle drops as the device
+        resets; callers re-enumerate. Requires a prior install in this session."""
+        if not self._last_boot_address:
             raise ValueError("no freshly installed firmware to boot")
-        self._conn()[0].leave(addr)
-        return {"ok": True, "jumped_to": f"0x{addr:08x}"}
+        self._conn()[0].leave(C.BOOTLOADER_RESET_ADDRESS)
+        return {"ok": True, "jumped_to": f"0x{C.BOOTLOADER_RESET_ADDRESS:08x}"}

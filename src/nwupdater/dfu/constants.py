@@ -139,3 +139,10 @@ COMMIT_HASH_SIZE = 8
 SLOT_INFO_SIZE = 16  # struct "<IIII" (see formats/headers.py)
 KERNEL_HEADER_SIZE = 24  # struct "<I8s8sI"
 USERLAND_HEADER_SIZE = 0x30  # 48 bytes; struct "<I8sIIIIIIIII"; jump target = pointer + this
+
+# STM32 internal-flash base = the bootloader. A DFU `leave` to this address is NOT in a reflashable
+# QSPI slot, so the firmware does Reset::core() (a cold boot) instead of jumping into a slot: the
+# bootloader then re-verifies the slot signature and the device stays "official". Leaving *into* a
+# slot boots it unauthenticated ("UNOFFICIAL SOFTWARE"). Captured from the official WebUSB flow;
+# universal to all NumWorks models (F7/H7 internal flash at 0x08000000).
+BOOTLOADER_RESET_ADDRESS = 0x08000000

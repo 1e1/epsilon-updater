@@ -190,7 +190,11 @@ class Installer:
         plan = plan_install(self.model, image, active_slot=active_slot)
         self.flash(plan, verify=verify)
         if boot and plan.boot_address is not None:
-            self.client.leave(plan.boot_address)
+            # Leave to the bootloader (internal-flash base), NOT the flashed slot: a leave into a
+            # reflashable QSPI slot makes the kernel mark it unauthenticated ("UNOFFICIAL
+            # SOFTWARE"). Leaving to 0x08000000 triggers a cold boot through the bootloader, which
+            # re-verifies the slot signature and keeps the device official (official WebUSB flow).
+            self.client.leave(C.BOOTLOADER_RESET_ADDRESS)
         return plan
 
     # -- post-flash sanity: read headers back from where we flashed ----------------

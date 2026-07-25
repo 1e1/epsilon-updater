@@ -18,6 +18,13 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
   (image officielle signée + boot à froid, pas le saut DFU). Un firmware non signé reste « non
   officiel » (signature non forgeable). Nouvelle spec :
   [`docs/01-specs/firmware-authenticity.md`](docs/01-specs/firmware-authenticity.md).
+- **`boot()` garde la calculatrice *officielle* (plus de RESET manuel)** : le « boot » après flash
+  faisait un saut DFU *dans* le slot (secteur reflashable) → le noyau le marquait « UNOFFICIAL
+  SOFTWARE ». Désormais `boot()` fait le `leave` vers la **base flash interne `0x08000000` (le
+  bootloader)** → `Reset::core()` = **boot à froid** → le bootloader re-vérifie la signature →
+  **officiel sans manip**. Reproduit le flux WebUSB officiel (capturé sur N0120 **et** N0200
+  réelles : `leave` final vers `0x08000000`). Constante `dfu.constants.BOOTLOADER_RESET_ADDRESS`.
+  Documenté dans [`docs/reference/official-webusb-analysis.md`](docs/reference/official-webusb-analysis.md).
 
 ### Modifié
 

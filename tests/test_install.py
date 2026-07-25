@@ -46,14 +46,17 @@ def test_install_synthetic_to_inactive_slot_and_verify():
     assert UserlandHeader.unpack(a_userland).expected_software_version == "23.2.4"
 
 
-def test_install_and_boot_sets_jump_address():
+def test_install_and_boot_leaves_to_bootloader():
+    # Booting leaves to the bootloader (internal-flash base), NOT the flashed slot: a leave into a
+    # QSPI slot boots it unauthenticated ("UNOFFICIAL SOFTWARE"). Leaving to 0x08000000 cold-boots
+    # via the bootloader, which re-verifies the signature and keeps the device official.
     model = _model("n0110")
     dev = virtual_calculator("n0110")
     inst = Installer(_client(dev), model)
     img = FirmwareImage.synthetic(model, version="99.9.9")
-    plan = inst.install(img, active_slot="A", boot=True)
+    inst.install(img, active_slot="A", boot=True)
     assert dev.left is True
-    assert dev.jump_address == plan.boot_address + C.USERLAND_HEADER_SIZE
+    assert dev.jump_address == C.BOOTLOADER_RESET_ADDRESS + C.USERLAND_HEADER_SIZE
 
 
 def test_install_single_slot_scientific_n0200():
