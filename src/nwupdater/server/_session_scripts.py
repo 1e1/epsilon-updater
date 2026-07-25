@@ -114,6 +114,56 @@ class ScriptsMixin(SessionBase):
             out.append(entry)
         return out
 
+    def sources(self) -> dict:
+        """Resolved sources feeding the "Available" apps & scripts lists, for the UI's Sources
+        popover: the app/script source URLs plus the two local user directories. Each entry is
+        tagged ``kind`` (``online`` | ``cloud`` | ``local``) so the client can hide personal
+        (cloud) sources in classroom mode. No device I/O — reads the catalogue + configured dirs."""
+        from urllib.parse import urlparse
+
+        from ..apps.sources import user_apps_dir, user_scripts_dir
+
+        def kind_of(source: str, url: str, local_path: str = "") -> str:
+            if local_path or not url:
+                return "local"
+            host = (urlparse(url).hostname or "").lower()
+            if "numworks" in host or "cloud" in (source or "").lower():
+                return "cloud"
+            return "online"
+
+        apps: list[dict] = []
+        seen_a: set[str] = set()
+        for e in self.store.entries:
+            key = e.url or e.local_path or e.source or e.name
+            if key in seen_a:
+                continue
+            seen_a.add(key)
+            apps.append(
+                {
+                    "label": e.name,
+                    "source": e.source,
+                    "url": e.url,
+                    "kind": kind_of(e.source, e.url, e.local_path),
+                }
+            )
+        scripts: list[dict] = []
+        seen_s: set[str] = set()
+        for s in self._scripts_available():
+            url = str(s.get("url", "") or "")
+            src = str(s.get("source", "") or "")
+            key = url or src or str(s.get("name", ""))
+            if key in seen_s:
+                continue
+            seen_s.add(key)
+            scripts.append(
+                {"label": s.get("name", ""), "source": src, "url": url, "kind": kind_of(src, url)}
+            )
+        return {
+            "apps": apps,
+            "scripts": scripts,
+            "dirs": {"apps": str(user_apps_dir()), "scripts": str(user_scripts_dir())},
+        }
+
     def _write_scripts(self, keep_pred) -> dict:
         from ..scripts import read_storage, write_storage
 

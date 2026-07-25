@@ -196,6 +196,10 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.auth_status())
                 elif path == "/api/apps/download":
                     self._stream_app(session)
+                elif path == "/api/device/name":
+                    self._locked_json(session.device_name)
+                elif path == "/api/sources":
+                    self._json(session.sources())
                 elif path.startswith("/api/"):
                     self._json({"error": "unknown endpoint"}, 404)
                 else:
@@ -239,6 +243,8 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._json(session.attach_demo(body.get("model") or None))
                 elif path == "/api/device/detach":
                     self._json(session.detach())
+                elif path == "/api/device/name":
+                    self._json(session.set_device_name(body.get("name", "")))
                 elif path == "/api/channel":
                     self._json(session.set_channel(body.get("channel", "stable")))
                 elif path == "/api/auth/login":

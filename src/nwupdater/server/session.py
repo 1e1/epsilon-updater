@@ -12,8 +12,12 @@ from ._session_auth import AuthMixin
 from ._session_base import SessionBase
 from ._session_catalog import CatalogMixin
 from ._session_firmware import FirmwareMixin
+from ._session_names import NamesMixin
 from ._session_scripts import ScriptsMixin
 
 
-class Session(CatalogMixin, AppsMixin, AuthMixin, FirmwareMixin, ScriptsMixin, SessionBase):
-    """The updater session: device lifecycle + catalogue + apps + auth + firmware + scripts."""
+class Session(
+    CatalogMixin, AppsMixin, AuthMixin, FirmwareMixin, ScriptsMixin, NamesMixin, SessionBase
+):
+    """The updater session: device lifecycle + catalogue + apps + auth + firmware + scripts +
+    local calculator naming."""
