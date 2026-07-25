@@ -86,7 +86,17 @@ async function load() {
   STATE.demoModels = await api("/api/device/demo-models").catch(() => null);
   STATE.identity = await api("/api/identity");
   if (STATE.identity && STATE.identity.connected) await loadConnected();
-  else { STATE.roster = await api("/api/roster").catch(() => null); renderAll(); }  // Parc is device-independent
+  else {
+    // Disconnected: still load the device-INDEPENDENT surfaces so the app is useful "au plus tôt"
+    // — the Parc (roster, P3), the account (P2) and the firmware cache (P3).
+    const [roster, auth, cache] = await Promise.all([
+      api("/api/roster").catch(() => null),
+      api("/api/auth").catch(() => null),
+      api("/api/cache").catch(() => null),
+    ]);
+    STATE.roster = roster; STATE.auth = auth; STATE.cache = cache;
+    renderAll();
+  }
   startPoll();  // always on: catches a plug-in while disconnected AND an unplug while connected
 }
 
@@ -187,32 +197,28 @@ function renderAll() {
   const cls = STATE.mode === "classroom";
   const w = $("window"); w.dataset.conn = conn ? "1" : "0"; w.dataset.mode = STATE.mode;
   renderRail();
-  if (conn) { renderSystem(); renderWorkbench(); renderParc(); setTab(STATE.tab); }
-  else if (cls) {
-    // Classroom without a device: the Parc (a local, device-independent fleet register) stays
-    // usable — view/rename/file the fleet before any calculator is plugged in (all disk-only).
-    renderTabs(); renderParc(); setTab("parc");
-  } else renderNoDevMain();
-}
-
-function renderNoDevMain() {
-  $("nodev-main").innerHTML = `<div class="ico" aria-hidden="true">🔌</div>
-    <h3>${t("nodev_title")}</h3><p>${t("nodev_hint")}</p>
-    <div class="row">
-      <button class="btn" onclick="rescanDevice()">${t("rescan")}</button>
-      <div class="demo-pick">
-        <select id="demo-model" aria-label="${t("demo_model")}">${demoModelOptions("n0110")}</select>
-        <button class="btn ghost" onclick="exploreDemo()">${t("demo_btn")}</button>
-      </div>
-    </div>
-    <p class="hint" style="margin-top:14px"><span class="waitdot"></span>${t("nodev_wait")}</p>`;
+  // The device-independent surfaces render in every state: System hosts the account (P2) / cache
+  // (P3); the Parc (P3) is the classroom home. Only the workshops (P6) need a live device.
+  renderSystem();
+  if (conn) renderWorkbench();
+  if (cls) renderParc();
+  renderTabs();
+  setTab(STATE.tab);
 }
 
 function renderRail() {
   const el = $("rail"), i = STATE.identity;
   if (!i || !i.connected) {
-    el.innerHTML = `<div class="rail-nodev"><div class="ico" aria-hidden="true">🔌</div>
-      <p>${t("nodev_title")}</p></div>`;
+    // No calculator: the rail is the "connect" entry — rescan for real hardware, or explore a demo.
+    el.innerHTML = `<div class="rail-nodev">
+      <div class="ico" aria-hidden="true">🔌</div>
+      <p>${t("nodev_title")}</p>
+      <button class="btn" onclick="rescanDevice()">${t("rescan")}</button>
+      <div class="demo-pick">
+        <select id="demo-model" aria-label="${t("demo_model")}">${demoModelOptions("n0110")}</select>
+        <button class="btn ghost" onclick="exploreDemo()">${t("demo_btn")}</button>
+      </div>
+      <p class="hint"><span class="waitdot"></span>${t("nodev_wait")}</p></div>`;
     return;
   }
   const variant = variantOf(i.family), fc = variant === "graphing" ? "g" : "s";
@@ -262,7 +268,7 @@ function renderTabs() {
   // shows even with no calculator. System/Apps/Scripts need a connected device (they follow the
   // HARDWARE: QSPI apps region / Python storage), so they hide when disconnected.
   $("tab-parc").style.display = cls ? "" : "none";
-  $("tab-system").style.display = conn ? "" : "none";
+  $("tab-system").style.display = "";  // account (P2) / cache (P3) are device-independent → always
   $("tab-apps").style.display = (conn && hasApps) ? "" : "none";
   $("tab-scripts").style.display = (conn && hasPy) ? "" : "none";
   $("tab-parc-cnt").textContent = (cls && STATE.roster) ? String(STATE.roster.total || 0) : "";
@@ -272,7 +278,7 @@ function renderTabs() {
   const up = !!(STATE.catalog && STATE.catalog.up_to_date);
   $("updot").style.display = (STATE.catalog && !up) ? "block" : "none";
   if ((STATE.tab === "apps" && !(conn && hasApps)) || (STATE.tab === "scripts" && !(conn && hasPy))
-      || (STATE.tab === "parc" && !cls) || (STATE.tab === "system" && !conn)) setTab(cls ? "parc" : "system");
+      || (STATE.tab === "parc" && !cls)) setTab(cls ? "parc" : "system");
 }
 
 // -- account & mode ------------------------------------------------------------
@@ -294,8 +300,12 @@ function setMode(m) {
 }
 function renderSystem() {
   renderModeButtons();
-  renderCatalog();
+  const conn = !!(STATE.identity && STATE.identity.connected);
   const ind = STATE.mode === "individual";
+  // Firmware flashing needs a live calculator: hide the card until one is present (its "connect"
+  // entry lives in the device rail). The account (P2) and cache (P3) cards are device-independent.
+  $("flash-card").style.display = conn ? "" : "none";
+  if (conn) renderCatalog();
   $("account-card").style.display = ind ? "" : "none";
   $("classroom-card").style.display = ind ? "none" : "";
   $("status-offline").style.display = ind ? "none" : "inline-flex";

@@ -133,11 +133,13 @@
   @media (max-width:620px){ .panes{ position:static; } .pane{ position:static; } }
 
   .nodev-main { display:none; position:absolute; inset:0; align-items:center; justify-content:center; padding:24px; }
-  /* Disconnected: hide the workspace and show the "connect a calculator" screen — EXCEPT in
-     classroom mode, where the Parc (a local, device-independent fleet register) stays usable. */
-  .window[data-conn="0"]:not([data-mode="classroom"]) .tabbar,
-  .window[data-conn="0"]:not([data-mode="classroom"]) .panes { display:none; }
-  .window[data-conn="0"]:not([data-mode="classroom"]) .nodev-main { display:flex; }
+  /* Disconnected: the workspace stays visible — the Parc (P3) and the System pane's cache/account
+     (P3/P2) are device-independent. The device rail hosts the "connect a calculator" entry; the
+     firmware flash card (device-dependent) hides until a calculator is present. */
+  .rail-nodev .btn { width:100%; margin-top:12px; }
+  .rail-nodev .demo-pick { flex-direction:column; gap:8px; margin-top:10px; }
+  .rail-nodev .demo-pick select, .rail-nodev .demo-pick .btn { width:100%; margin-top:0; }
+  .rail-nodev .hint { margin-top:12px; }
   .nodev { text-align:center; max-width:340px; }
   .nodev .ico { font-size:34px; opacity:.7; }
   .nodev h3 { font-size:15px; margin:10px 0 4px; }

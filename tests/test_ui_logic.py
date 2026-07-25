@@ -341,8 +341,9 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
 
 
 def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
-    """Decouple (plan §1): the Parc is device-independent (P3), so classroom mode shows and edits
-    it with NO calculator connected — the workspace is not hidden behind "plug one in"."""
+    """Decouple (plan §1 + 'afficher au plus tôt'): the Parc (P3) and the System pane's cache (P3)
+    are device-independent, so classroom mode shows and edits them with NO calculator connected —
+    the workspace is not hidden behind "plug one in", and only the device-dependent bits go away."""
     monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
     from nwupdater import classroom_roster as R
 
@@ -350,21 +351,51 @@ def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
     with _ui(tmp_path) as (page, errors):
         page.evaluate(
             """async () => {
-                STATE.roster = await api('/api/roster');
+                stopPoll();  // pin the simulated disconnect (the server still holds a demo device)
+                [STATE.roster, STATE.cache] = await Promise.all([api('/api/roster'), api('/api/cache')]);
                 setMode('classroom');
                 STATE.identity = { connected:false };  // simulate the calculator being unplugged
                 renderAll();
             }"""
         )
-        # The Parc stays: its pane renders the fleet, the "connect a calculator" screen does not show.
         page.wait_for_selector("#pane-parc.on .parc-tbl")
         assert page.eval_on_selector("#window", "el => el.dataset.conn") == "0"
         assert page.eval_on_selector(".nodev-main", "el => getComputedStyle(el).display") == "none"
         assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") != "none"
-        # Device-dependent tabs are hidden without a calculator.
-        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") == "none"
+        # System stays reachable (its cache is device-independent); the workshops (P6) are hidden.
+        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") != "none"
         assert page.eval_on_selector("#tab-apps", "el => getComputedStyle(el).display") == "none"
-        # The seeded calculator is listed and editable (rename is disk-only, works offline).
+        # The rail becomes the "connect" entry: rescan + explore-a-demo.
+        assert page.eval_on_selector_all(".rail-nodev .btn", "els => els.length") >= 2
+        # System pane: the firmware-flash card hides without a device; the cache card shows.
+        page.click("#tab-system")
+        assert page.eval_on_selector("#flash-card", "el => getComputedStyle(el).display") == "none"
+        assert page.eval_on_selector("#classroom-card", "el => getComputedStyle(el).display") != "none"
+        # Back on the Parc: the seeded calculator is listed and editable (disk-only, offline).
+        page.click("#tab-parc")
         assert page.eval_on_selector_all("#pane-parc .pnm", "els => els.length") == 1
         assert page.evaluate("() => typeof parcRename === 'function'")
+        assert not errors
+
+
+def test_account_reachable_without_a_device_in_individual(tmp_path, monkeypatch):
+    """The account card (P2) is device-independent, so individual mode can sign in with no
+    calculator; the firmware-flash card (device-dependent) is hidden until one is present."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    with _ui(tmp_path) as (page, errors):
+        page.evaluate(
+            """async () => {
+                stopPoll();
+                STATE.auth = await api('/api/auth');
+                STATE.identity = { connected:false };
+                setMode('individual');
+                renderAll();
+            }"""
+        )
+        page.wait_for_selector("#window[data-conn='0']")
+        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") != "none"
+        page.click("#tab-system")
+        assert page.eval_on_selector("#account-card", "el => getComputedStyle(el).display") != "none"
+        assert page.eval_on_selector("#flash-card", "el => getComputedStyle(el).display") == "none"
+        assert page.query_selector("#auth-email") is not None  # the login form is available offline
         assert not errors
