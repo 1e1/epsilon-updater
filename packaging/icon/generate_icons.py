@@ -42,8 +42,8 @@ def draw_icon(size: int, arrow: str = "up") -> Image.Image:
     x0, x1 = S * 0.30, S * 0.70
     y0, y1 = S * 0.28, S * 0.72
     w = S * 0.088
-    d.rectangle([x0, y0, x0 + w, y1], fill=WHITE)             # left bar
-    d.rectangle([x1 - w, y0, x1, y1], fill=WHITE)             # right bar
+    d.rectangle([x0, y0, x0 + w, y1], fill=WHITE)  # left bar
+    d.rectangle([x1 - w, y0, x1, y1], fill=WHITE)  # right bar
     d.line([(x0 + w / 2, y0), (x1 - w / 2, y1)], fill=WHITE, width=int(w))  # diagonal
 
     # update badge (charcoal disc, bottom-right) with an arrow
@@ -82,15 +82,22 @@ def main() -> int:
     # macOS .icns via iconutil (if present)
     iconset = HERE / "icon.iconset"
     iconset.mkdir(exist_ok=True)
-    mapping = {16: "16x16", 32: ["16x16@2x", "32x32"], 64: "32x32@2x", 128: "128x128",
-               256: ["128x128@2x", "256x256"], 512: ["256x256@2x", "512x512"],
-               1024: "512x512@2x"}
+    mapping = {
+        16: "16x16",
+        32: ["16x16@2x", "32x32"],
+        64: "32x32@2x",
+        128: "128x128",
+        256: ["128x128@2x", "256x256"],
+        512: ["256x256@2x", "512x512"],
+        1024: "512x512@2x",
+    }
     for s, names in mapping.items():
-        for n in ([names] if isinstance(names, str) else names):
+        for n in [names] if isinstance(names, str) else names:
             imgs[s].save(iconset / f"icon_{n}.png")
     try:
-        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(HERE / "icon.icns")],
-                       check=True)
+        subprocess.run(
+            ["iconutil", "-c", "icns", str(iconset), "-o", str(HERE / "icon.icns")], check=True
+        )
         print("ICNS: icon.icns")
     except (FileNotFoundError, subprocess.CalledProcessError):
         print("ICNS: skipped (iconutil unavailable — macOS only)", file=sys.stderr)

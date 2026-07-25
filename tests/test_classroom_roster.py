@@ -422,6 +422,7 @@ def test_mode_endpoint_sets_policy_and_enrols(server):
 
 # -- store: per-class distribution config -------------------------------------------------
 
+
 def test_distribution_defaults_then_persist(tmp_path):
     p = tmp_path / "roster.json"
     d = R.distribution("3e A", path=p)  # unknown class → fully defaulted, firmware OFF
@@ -440,7 +441,11 @@ def test_distribution_defaults_then_persist(tmp_path):
     )
     d = R.distribution("3e A", path=p)
     assert d["actions"] == {"census": True, "firmware": True, "apps": True, "scripts": False}
-    assert d["onboarding"] == "ignore" and d["apps"] == ["RPN", "Tetris"] and d["scripts"] == ["stats.py"]
+    assert (
+        d["onboarding"] == "ignore"
+        and d["apps"] == ["RPN", "Tetris"]
+        and d["scripts"] == ["stats.py"]
+    )
     assert "3e A" in R.all_classes(path=p) and "3e A" in R.all_distributions(path=p)
 
 
@@ -463,7 +468,10 @@ def test_dist_endpoint_persists_and_shows_in_roster(server):
     r = _post(
         server,
         "/api/roster/dist",
-        {"class": "3e A", "config": {"actions": {"firmware": True}, "onboarding": "ignore", "apps": ["RPN"]}},
+        {
+            "class": "3e A",
+            "config": {"actions": {"firmware": True}, "onboarding": "ignore", "apps": ["RPN"]},
+        },
     )
     assert r["ok"] and r["distribution"]["actions"]["firmware"] is True
     ros = _get(server, "/api/roster")

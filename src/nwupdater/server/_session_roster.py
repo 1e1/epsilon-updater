@@ -130,7 +130,11 @@ class RosterMixin(SessionBase):
         """Persist a class's distribution config (action chain, onboarding rule, app/script sets)."""
         from .. import classroom_roster as R
 
-        return {"ok": True, "class": class_name, "distribution": R.set_distribution(class_name, config)}
+        return {
+            "ok": True,
+            "class": class_name,
+            "distribution": R.set_distribution(class_name, config),
+        }
 
     # -- mutations (POST /api/roster/*) --------------------------------------------
     def roster_rename(self, key: str, name: str) -> dict:

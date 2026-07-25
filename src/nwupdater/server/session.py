@@ -57,7 +57,9 @@ class Session(
             entry = next((e for e in R.all_entries() if e["key"] == key), None)
             cur = entry["class"] if entry else None
             if cur and cur != cls:
-                if cfg["onboarding"] == "ignore":  # already ranged elsewhere → refuse, stop the chain
+                if (
+                    cfg["onboarding"] == "ignore"
+                ):  # already ranged elsewhere → refuse, stop the chain
                     dist["recensement"] = "error"
                     R.set_last_dist(key, dist)
                     return self._batch_journal(key, i, dist)
@@ -112,7 +114,9 @@ class Session(
         """Install the class's app set that's missing from the device; ``change`` if any was added,
         ``ok`` if none were needed, ``error`` on failure (e.g. nwlink absent for a distributed .nwa)."""
         try:
-            installed = {a.get("name") for a in self.installed_apps_on_device().get("installed", [])}
+            installed = {
+                a.get("name") for a in self.installed_apps_on_device().get("installed", [])
+            }
             changed = False
             for n in names:
                 if n in installed:

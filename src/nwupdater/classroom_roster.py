@@ -310,7 +310,9 @@ def rename_class(old: str, new: str, *, path: Path | None = None) -> list[str]:
         dirty = True
     dists = data["distributions"]
     if old in dists:
-        dists.setdefault(new, dists.pop(old))  # carry the config over; keep new's if it already had one
+        dists.setdefault(
+            new, dists.pop(old)
+        )  # carry the config over; keep new's if it already had one
         dirty = True
     if dirty:
         _save(data, path)

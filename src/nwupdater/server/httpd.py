@@ -343,7 +343,9 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 elif path == "/api/roster/class/delete":
                     self._json(session.roster_class_delete(body.get("name", ""), body.get("mode")))
                 elif path == "/api/roster/dist":
-                    self._json(session.roster_dist_set(body.get("class", ""), body.get("config", {})))
+                    self._json(
+                        session.roster_dist_set(body.get("class", ""), body.get("config", {}))
+                    )
                 elif path == "/api/batch/run":
                     # One kiosk pass on the connected calculator (composes flash/apps/scripts + roster).
                     self._json(session.batch_run(body.get("class", "")))

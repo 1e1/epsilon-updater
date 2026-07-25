@@ -467,7 +467,9 @@ def test_reveal_folder_creates_dir_and_spawns_file_manager(tmp_path, monkeypatch
     out = s.reveal_folder("apps")
     assert out["ok"] and out["which"] == "apps"
     assert (tmp_path / "apps").is_dir()  # created on demand
-    assert calls and str(tmp_path / "apps") in calls[0]  # whitelisted path handed to the file manager
+    assert (
+        calls and str(tmp_path / "apps") in calls[0]
+    )  # whitelisted path handed to the file manager
     s.reveal_folder("scripts")
     assert str(tmp_path / "scripts") in calls[1]
 
@@ -508,7 +510,9 @@ def test_batch_run_files_and_records_outcome(tmp_path, monkeypatch):
     assert "apps" not in j["dist"]  # the apps action was off → its panel/step is skipped
     entry = next(e for e in R.all_entries() if e["class"] == "Seconde A")
     assert entry["last_dist"]["scripts"] == "change"
-    assert any(x["name"] in ("stats.py", "stats") for x in s.scripts()["scripts"])  # really on device
+    assert any(
+        x["name"] in ("stats.py", "stats") for x in s.scripts()["scripts"]
+    )  # really on device
     assert ":" in j["key"]  # opaque id (model:serial) — never rendered
 
 
@@ -520,15 +524,22 @@ def test_batch_run_ignore_refuses_calc_filed_elsewhere(tmp_path, monkeypatch):
     s = Session(model_name="n0110", os_version="99.0.0")
     i = s._identity()
     key = device_names._key(i.model_name or "", i.serial_number or "")
-    R.upsert_on_scan(i.model_name or "", i.serial_number or "", firmware=i.os_version, family=i.family)
+    R.upsert_on_scan(
+        i.model_name or "", i.serial_number or "", firmware=i.os_version, family=i.family
+    )
     R.move([key], "Terminale S")  # already filed in another class
     R.set_distribution(
         "Seconde A",
-        {"actions": {"census": True, "firmware": False, "apps": False, "scripts": False}, "onboarding": "ignore"},
+        {
+            "actions": {"census": True, "firmware": False, "apps": False, "scripts": False},
+            "onboarding": "ignore",
+        },
     )
     j = s.batch_run("Seconde A")
     assert j["dist"] == {"recensement": "error"}  # refused, chain stopped
-    assert next(e for e in R.all_entries() if e["key"] == key)["class"] == "Terminale S"  # untouched
+    assert (
+        next(e for e in R.all_entries() if e["key"] == key)["class"] == "Terminale S"
+    )  # untouched
 
 
 def test_set_scripts_rewrites_store_in_order():

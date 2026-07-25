@@ -470,7 +470,9 @@ def test_distribution_tab_gates_panels_and_persists(tmp_path, monkeypatch):
         page.wait_for_selector("#pane-dist.on .dist")
         # 4-node chain; firmware OFF by default → no firmware panel, apps/scripts panels present.
         assert page.eval_on_selector_all("#pane-dist .node", "els => els.length") == 4
-        assert page.evaluate("() => STATE.roster.distributions['Seconde A'].actions.firmware === false")
+        assert page.evaluate(
+            "() => STATE.roster.distributions['Seconde A'].actions.firmware === false"
+        )
         assert page.evaluate("() => !!document.querySelector('#dist-add-app')")
         # Toggle firmware ON → the cache panel appears and the config persists to the server.
         page.evaluate("() => toggleDistAction('firmware')")
