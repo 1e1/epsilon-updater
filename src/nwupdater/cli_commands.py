@@ -323,8 +323,6 @@ def _cmd_apps(args) -> int:
         print("    (no external-apps region on this model)")
 
     if args.install:
-        from .formats.nwa import build_nwa
-
         entry = store.get(args.install)
         if entry is None:
             print(f"unknown app: {args.install}", file=sys.stderr)
@@ -333,15 +331,37 @@ def _cmd_apps(args) -> int:
         if not confirm("   Install? [y/N] "):
             print("cancelled.", file=sys.stderr)
             return 1
-        # offline demo: synthesize a .nwa (catalog URLs are placeholders)
-        blob = build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
         try:
+            blob = _resolve_install_blob(store, entry)
             m = mgr.push(blob)  # append via the minimal rewrite (like the web UI), never overwrite
-        except AppError as exc:
+        except (AppError, OSError, ValueError) as exc:
             print(f"app install failed: {exc}", file=sys.stderr)
             return 1
         print(f"→ installed '{m.name}' ({len(m.blob)} B), verified ✅")
     return 0
+
+
+def _resolve_install_blob(store, entry) -> bytes:
+    """Resolve the bytes to install for a catalog entry, mirroring the web session's
+    ``add_store_app``: a user-provided local ``.nwa`` or a real remote URL yields the REAL bytes
+    (the remote download goes through the SSRF-guarded, size-capped proxy and is validated by
+    ``AppManager.push``); only placeholder entries (``example.invalid``) or entries without a URL
+    fall back to a synthesized offline demo image."""
+    from pathlib import Path
+
+    from .formats.nwa import build_nwa
+
+    if entry.local_path:
+        return Path(entry.local_path).read_bytes()
+    if entry.url and "example.invalid" not in entry.url:
+        import base64
+
+        from .apps import proxy
+
+        fetched = proxy.fetch(store, entry.url)
+        return base64.b64decode(fetched["data_b64"])
+    # placeholder / no URL: synthesize an offline demo .nwa
+    return build_nwa(entry.name, api_level=entry.api_level, code=b"\x00" * 1024)
 
 
 def _cmd_scripts(args) -> int:

@@ -65,6 +65,43 @@ def test_sources_lists_bundled_and_user(tmp_path, monkeypatch, capsys):
     assert "hello.py" in out  # user local script file
 
 
+def test_apps_install_fetches_and_installs_real_bytes(tmp_path, monkeypatch, capsys):
+    # `apps --install NAME` on a catalog entry with a real URL downloads the actual .nwa through the
+    # SSRF-guarded proxy and installs its REAL bytes — mirrors the server's add_store_app.
+    from nwupdater.apps.store import AppStore
+    from nwupdater.catalog.auth import Response
+    from nwupdater.formats.appicon import demo_icon_lz4
+    from nwupdater.formats.nwa import build_nwa
+
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))  # hermetic: no stray user .nwa
+    url = next(e.url for e in AppStore.bundled().entries if e.name == "RPN")
+    nwa = build_nwa("RPN", api_level=0, code=b"\x00" * 4096, icon=demo_icon_lz4("RPN"))
+
+    class _FakeTransport:
+        def open(self, method, u, *, headers=None, data=None, timeout=20.0, allow_redirects=False):
+            assert (method, u) == ("GET", url)  # the allowlisted catalogue URL, over the proxy
+            return Response(200, [], nwa)
+
+    monkeypatch.setattr("nwupdater.catalog.auth.UrllibTransport", _FakeTransport)
+
+    assert cli.main(["apps", "--virtual", "n0110", "--install", "RPN"]) == 0
+    out = capsys.readouterr().out
+    assert f"({len(nwa)} B)" in out  # the exact fetched bytes were flashed, not a synthesized demo
+
+
+def test_apps_install_synthesizes_for_placeholder_url(tmp_path, monkeypatch, capsys):
+    # An example.invalid placeholder has no real download → offline demo fallback, no network.
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
+
+    def _boom():
+        raise AssertionError("placeholder install must not fetch over the network")
+
+    monkeypatch.setattr("nwupdater.catalog.auth.UrllibTransport", _boom)
+    assert cli.main(["apps", "--virtual", "n0110", "--install", "Tetris"]) == 0
+    out = capsys.readouterr().out
+    assert "installed 'Tetris'" in out
+
+
 def test_identify_real_without_pyusb_exits(monkeypatch):
     # No --virtual and pyusb unavailable → a clean SystemExit(2), not a traceback.
     real_import = builtins.__import__

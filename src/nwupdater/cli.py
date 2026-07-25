@@ -113,7 +113,10 @@ def main(argv=None) -> int:
     p_app.add_argument("--api-level", type=int, default=0, help="device EXTERNAL_APPS_API_LEVEL")
     p_app.add_argument("--store-file", metavar="PATH", help="local app catalog JSON")
     p_app.add_argument(
-        "--install", metavar="NAME", help="install a catalog app (demo: synthetic .nwa)"
+        "--install",
+        metavar="NAME",
+        help="install a catalog app: fetch the real .nwa when the entry has a URL "
+        "(SSRF-guarded, size-capped), else synthesize an offline demo .nwa",
     )
     p_app.add_argument(
         "--list-device",
