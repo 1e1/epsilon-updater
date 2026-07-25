@@ -246,12 +246,14 @@
   .tag.new { background:var(--blue-soft); color:var(--blue-ink); } .tag.del { background:var(--line); color:var(--muted); }
   .tag.imp { background:var(--panel); color:var(--muted); border:1px solid var(--line-strong); }
   .empty { color:var(--muted); font-size:12.5px; padding:10px 2px; }
-  /* remote-download sweep on staged items; determinate fill from a real Content-Length */
-  .wk-busy .item { background-image:linear-gradient(90deg, transparent 0%, color-mix(in srgb,var(--accent) 22%,transparent) 50%, transparent 100%);
+  /* Busy highlight — ONLY the concerned cards carry .busy: on a write, the items actually being
+     written (rw/new); on a remote download, the single available item in flight. The action
+     buttons still lock workshop-wide (.wk-busy .ib). Determinate fill from a real Content-Length. */
+  .wk-busy .item.busy { background-image:linear-gradient(90deg, transparent 0%, color-mix(in srgb,var(--accent) 22%,transparent) 50%, transparent 100%);
     background-size:35% 100%; background-repeat:no-repeat; animation:dlsweep 1.15s linear infinite; }
   @keyframes dlsweep { from { background-position:-35% 0; } to { background-position:135% 0; } }
   .wk-busy .ib { pointer-events:none; opacity:.5; }
-  .wk-busy.determinate .item { animation:none; background-repeat:no-repeat; background-size:100% 100%;
+  .wk-busy.determinate .item.busy { animation:none; background-repeat:no-repeat; background-size:100% 100%;
     background-image:linear-gradient(90deg, color-mix(in srgb,var(--accent) 22%,transparent) 0%,
       color-mix(in srgb,var(--accent) 22%,transparent) var(--dlp,0%), transparent var(--dlp,0%)); }
   /* export progress fills RIGHT→LEFT (device→PC), the mirror of the write bar's left→right */

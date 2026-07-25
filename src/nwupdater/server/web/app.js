@@ -19,7 +19,8 @@ let STATE = {
   identity: null, catalog: null, cache: null, auth: null, lastResult: null,
   mode: "individual", channel: "stable", tab: "system", name: null, sources: null,
   apps: null, scripts: null, stage: { apps: [], scripts: [] }, hist: { apps: [], scripts: [] },
-  busy: { apps: false, scripts: false },  // a remote .nwa download is in flight for this workshop
+  // per-workshop op descriptor while busy (still truthy): false | {op:"write"} | {op:"download", name}
+  busy: { apps: false, scripts: false },
 };
 // Optional deep-link / reproducible-capture overrides (all are already user-settable prefs):
 // ?lang=fr|en · ?theme=light|dark · ?mode=individual|classroom. They never auto-connect a device.
@@ -619,8 +620,11 @@ function slotIcon(kind, item) {
   return kind === "scripts" ? `<div class="ic py">py</div>`
     : `<div class="ic" style="background:${color(name)}">${esc(name[0].toUpperCase())}</div>`;
 }
-function onCalcRow(kind, s, p, mov) {
+function onCalcRow(kind, s, p, mov, busy) {
   const st = p.status.get(s), movable = st === "rw" || st === "new";
+  // During a write, only the slots actually being (re)written animate — rw (rewritten) and new
+  // (added). Frozen "un" items and everything else stay still.
+  const busyCard = !!(busy && busy.op === "write" && (st === "rw" || st === "new"));
   const meta = kind === "scripts"
     ? `${fmtBytes(s.size)}${s.auto_import ? " · " + t("auto_import") : ""}`
     : `${fmtBytes(s.size)} · API ${s.api_level ?? 0}`;
@@ -647,18 +651,20 @@ function onCalcRow(kind, s, p, mov) {
     ? ` draggable="true" ondragstart="dragStart('${kind}','${jsStr(s.name)}')" ondragend="dragEnd()"
         ondragover="event.preventDefault()" ondragenter="this.classList.add('drag-over')"
         ondragleave="this.classList.remove('drag-over')" ondrop="dropOn(event,'${kind}','${jsStr(s.name)}')"` : "";
-  return `<div class="item oncalc st-${st}${movable ? " grab" : ""}"${drag}>${slotIcon(kind, s)}
+  return `<div class="item oncalc st-${st}${movable ? " grab" : ""}${busyCard ? " busy" : ""}"${drag}>${slotIcon(kind, s)}
     <div class="grow"><div class="nm">${esc(s.name)} <span class="tag ${st}">${t(tagKey)}</span></div>
       <div class="mt">${meta}</div></div>
     <div class="rowbtns">${btns}</div></div>`;
 }
-function availRow(kind, a) {
+function availRow(kind, a, busy) {
   const nm = a.name;
+  // During a remote download, only the single item being fetched animates (its --dlp fill).
+  const busyCard = !!(busy && busy.op === "download" && busy.name === nm);
   const inStage = STATE.stage[kind].some(x => x.name === nm && !x.deleted);
   const bad = kind === "apps" && a.api_level && a.api_level > (STATE.apps.apiLevel || 0);
   const src = a.source || a.url || "";
   const meta = `<span class="origin" aria-hidden="true">${originIcon(a)}</span>${a.size ? fmtBytes(a.size) + " · " : ""}API ${a.api_level ?? 0}${src ? " · " + esc(src) : ""}`;
-  return `<div class="item">${slotIcon(kind, a)}
+  return `<div class="item${busyCard ? " busy" : ""}">${slotIcon(kind, a)}
     <div class="grow"><div class="nm">${esc(nm)}${bad ? ` <span class="mt bad">${t("incompatible", { n: a.api_level })}</span>` : ""}</div>
       <div class="mt">${meta}</div></div>
     <button class="ib add" ${inStage || bad ? "disabled" : ""} title="+" aria-label="${esc(nm)}"
@@ -666,6 +672,7 @@ function availRow(kind, a) {
 }
 function workshopBody(kind) {
   const cfg = wcfg(kind), slots = STATE.stage[kind], p = planFor(kind);
+  const busy = STATE.busy[kind];  // false | {op:"write"} | {op:"download",name} — truthy while busy
   const target = slots.filter(s => !s.deleted);
   // Classroom prepares a fleet from local/remote sources, not a personal NumWorks-cloud account.
   let avail = cfg.avail;
@@ -685,14 +692,14 @@ function workshopBody(kind) {
     <span class="wkhead-r"><span>${t("free", { n: fmtBytes(p.freeB) })}</span>
       <button class="srcbtn" onclick="toggleSources('${kind}',this)">${ORIGIN_SVG.online}${t("sources")}</button></span></div>`;
   const mov = slots.filter(s => ["rw", "new"].includes(p.status.get(s)));  // writable = reorderable
-  const left = slots.length ? slots.map(s => onCalcRow(kind, s, p, mov)).join("")
+  const left = slots.length ? slots.map(s => onCalcRow(kind, s, p, mov, busy)).join("")
     : `<p class="empty">${t("no_installed")}</p>`;
   // Drop zone: taller, anchored at the BOTTOM of the LEFT column, always visible (outside scroll).
   const drop = `<div class="drop" ondragover="event.preventDefault();this.classList.add('drag-over')"
     ondragleave="this.classList.remove('drag-over')" ondrop="dropFiles(event,'${kind}')">${DROP_SVG}
     <span><b>${cfg.accept}</b> — <input id="${kind}-file" type="file" accept="${cfg.accept}" style="display:none"
       onchange="onLocalFile('${kind}',this)"><label for="${kind}-file">${cfg.chooseLabel}</label></span></div>`;
-  const availList = avail.length ? avail.map(a => availRow(kind, a)).join("")
+  const availList = avail.length ? avail.map(a => availRow(kind, a, busy)).join("")
     : `<p class="empty">${t("no_compat")}</p>`;
   const cols = `<div class="cols2">
     <div class="wcol">
@@ -703,7 +710,6 @@ function workshopBody(kind) {
       <div class="colhead"><span class="sub-h">${t("available")}</span><span class="cnt">${avail.length}</span></div>
       <div class="sub-sub">${t("src_clr")}</div>
       <div class="wlist">${availList}</div></div></div>`;
-  const busy = !!STATE.busy[kind];  // a remote download is in flight → sweep items, lock actions
   const writeLabel = busy ? t("writing") : WRITE_SVG + (p.dirty ? t("write") : t("nothing"));
   const wplan = `<div class="wplan">
     <div class="stat"><b>${p.un}</b>${t("wp_unchanged")}</div>
@@ -729,9 +735,9 @@ async function stageAdd(kind, name) {
   if (!a || STATE.busy[kind] || STATE.stage[kind].some(x => x.name === name && !x.deleted)) return;
   const remote = kind === "apps" && /^https?:\/\//.test(a.url || "") && !a.url.includes("example.invalid");
   if (remote) {
-    // Real app: download the .nwa server-side into memory (temporary). Items show a progress
-    // sweep and "Write" is disabled until it lands.
-    STATE.busy.apps = true;
+    // Real app: download the .nwa server-side into memory (temporary). ONLY this available item
+    // shows the progress fill; "Write" is disabled until it lands.
+    STATE.busy.apps = { op: "download", name };
     renderWorkbench();
     toast(t("downloading", { name }));
     try {
@@ -940,8 +946,8 @@ async function commitStage(kind) {
   const removed = slots.filter(s => s.onDevice && s.deleted).map(s => s.name);
   const added = target.filter(s => !s.onDevice);
   // Lock the workshop straight away: the "Write" button relabels to "Writing…" and disables,
-  // the items sweep (wk-busy) — immediate feedback, and no parallel second commit.
-  STATE.busy[kind] = true; renderWorkbench();
+  // the written items (rw/new) sweep (wk-busy) — immediate feedback, and no parallel second commit.
+  STATE.busy[kind] = { op: "write" }; renderWorkbench();
   try {
     if (kind === "apps") {
       for (const name of removed) await post("/api/apps/uninstall", { name });

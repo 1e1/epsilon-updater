@@ -152,6 +152,70 @@ def test_stage_and_commit_app_reaches_the_device(tmp_path):
         assert not errors
 
 
+def test_write_busy_highlights_only_rewritten_items(tmp_path):
+    """A write must animate ONLY the slots actually being (re)written (rw/new); the frozen "un"
+    prefix and every "Available" card stay still."""
+    with _ui(tmp_path) as (page, errors):
+        page.click("#tab-apps")
+        page.wait_for_selector("#pane-apps", state="visible")
+        r = page.evaluate(
+            """() => {
+                // Device order [A, B]; stage reorders to [A, C, B] so A stays frozen (un),
+                // C is added (new) and B is pushed past the divergence (rw).
+                STATE.apps.device = [{name:'A', size:100, api_level:0}, {name:'B', size:200, api_level:0}];
+                STATE.apps.avail = [{name:'Z', api_level:0, url:'', source:'demo'}];
+                STATE.stage.apps = [
+                  {name:'A', size:100, api_level:0, onDevice:true, deleted:false},
+                  {name:'C', size:150, api_level:0, onDevice:false, deleted:false},
+                  {name:'B', size:200, api_level:0, onDevice:true, deleted:false},
+                ];
+                STATE.busy.apps = { op: 'write' };
+                renderWorkbench();
+                const pane = document.getElementById('pane-apps');
+                const nm = e => e.querySelector('.nm').textContent.replace(/\\s+/g, ' ').trim();
+                return {
+                  oncalcBusy: [...pane.querySelectorAll('.item.oncalc.busy')].map(nm),
+                  availBusy: pane.querySelectorAll('.wcol:nth-child(2) .item.busy').length,
+                  totalBusy: pane.querySelectorAll('.item.busy').length,
+                };
+            }"""
+        )
+        assert r["totalBusy"] == 2  # exactly the two written slots, nothing else
+        assert r["availBusy"] == 0  # no "Available" card animates during a write
+        assert any(x.startswith("C") for x in r["oncalcBusy"])  # new item animates
+        assert any(x.startswith("B") for x in r["oncalcBusy"])  # rewritten item animates
+        assert not any(x.startswith("A") for x in r["oncalcBusy"])  # frozen (un) item does NOT
+        assert not errors
+
+
+def test_download_busy_highlights_only_the_target_available_item(tmp_path):
+    """A remote download must animate ONLY the single Available item in flight — no on-calc card."""
+    with _ui(tmp_path) as (page, errors):
+        page.click("#tab-apps")
+        page.wait_for_selector("#pane-apps", state="visible")
+        r = page.evaluate(
+            """() => {
+                STATE.apps.device = [{name:'A', size:100, api_level:0}];
+                STATE.apps.avail = [
+                  {name:'Alpha', api_level:0, url:'https://ex/alpha.nwa', source:'demo'},
+                  {name:'Beta', api_level:0, url:'https://ex/beta.nwa', source:'demo'},
+                ];
+                STATE.stage.apps = [{name:'A', size:100, api_level:0, onDevice:true, deleted:false}];
+                STATE.busy.apps = { op: 'download', name: 'Beta' };
+                renderWorkbench();
+                const pane = document.getElementById('pane-apps');
+                const nm = e => e.querySelector('.nm').textContent.replace(/\\s+/g, ' ').trim();
+                return {
+                  busyNames: [...pane.querySelectorAll('.item.busy')].map(nm),
+                  oncalcBusy: pane.querySelectorAll('.item.oncalc.busy').length,
+                };
+            }"""
+        )
+        assert r["oncalcBusy"] == 0  # nothing on the calculator animates during a download
+        assert len(r["busyNames"]) == 1 and r["busyNames"][0].startswith("Beta")
+        assert not errors
+
+
 def test_serial_reveal_and_calc_name_are_wired(tmp_path):
     with _ui(tmp_path) as (page, errors):
         page.wait_for_selector("#serial-btn")
