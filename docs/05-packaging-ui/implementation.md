@@ -39,6 +39,8 @@ Navigateur système  ──HTTP 127.0.0.1──▶  Serveur local (stdlib http.s
   - `index.html` — structure + CSS (design validé) + sélecteur de langue FR/EN.
   - `calc.js` — **rendu SVG fidèle** des deux familles (matrice réelle `keys.inc` :
     graphique blanc/écran couleur/alpha ; scientifique charbon/écran monochrome large).
+    Icônes d'applications redessinées en vectoriel ; **écrans sans texte** par défaut
+    (i18n : seuls illustrations et symboles maths restent — flag interne `DEFAULT_TEXTLESS`).
   - `i18n.js` — dictionnaires **FR/EN** + `t(key, params)` ; langue auto-détectée
     (`navigator.language`), mémorisée (`localStorage`), basculable à chaud.
   - `app.js` — fetch de l'API, rendu, install firmware / app / `.nwa` local, mode classe
