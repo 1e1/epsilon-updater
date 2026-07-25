@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .. import ensure_suffix
 from ._session_base import SessionBase
 
 
@@ -67,7 +68,7 @@ class ScriptsMixin(SessionBase):
         if not i.storage_ram:
             raise ValueError("this model has no Python scripts (no storage)")
         addr, size = i.storage_ram
-        full = name if name.endswith(".py") else name + ".py"
+        full = ensure_suffix(name, ".py")
         rec = next(
             (
                 r
@@ -85,16 +86,33 @@ class ScriptsMixin(SessionBase):
 
     @staticmethod
     def _scripts_available() -> list[dict]:
-        """Illustrative catalogue of *available* Python scripts (cloud / local / remote).
+        """Catalogue of *available* Python scripts: the bundled community catalogue merged with the
+        user's own generic sources (local ``.py`` files + a ``_urls.txt`` list under the user
+        scripts dir). Mirrors the app catalogue; an EMPTY bundled list is expected."""
+        from urllib.parse import urlparse
 
-        Sample metadata only — the real flow lists the user's own local files and the public
-        scripts on my.numworks.com/python. Mirrors the illustrative app catalogue."""
-        return [
-            {"name": "devoir.py", "size": 640, "source": "local"},
-            {"name": "hex.py", "size": 10240, "source": "my.numworks.com/python/…/hex.py"},
-            {"name": "stats_bac.py", "size": 1433, "source": "NumWorks cloud"},
-            {"name": "tri_fusion.py", "size": 820, "source": "NumWorks cloud"},
-        ]
+        from ..apps.sources import aggregate, user_scripts_dir
+        from ..scripts import bundled_scripts
+
+        out: list[dict] = list(bundled_scripts())
+        seen = {s.get("name") for s in out}
+        for it in aggregate(user_scripts_dir(), [".py"]):
+            if it.name in seen:
+                continue
+            seen.add(it.name)
+            entry: dict = {
+                "name": it.name,
+                "size": it.size or 0,
+                "source": (
+                    "local file"
+                    if it.origin == "local"
+                    else (urlparse(it.url).hostname or "remote")
+                ),
+            }
+            if it.url:
+                entry["url"] = it.url
+            out.append(entry)
+        return out
 
     def _write_scripts(self, keep_pred) -> dict:
         from ..scripts import read_storage, write_storage
@@ -112,7 +130,7 @@ class ScriptsMixin(SessionBase):
     def push_script(self, name: str, code: str, auto_import: bool = True) -> dict:
         from ..formats.storage import make_python
 
-        full = name if name.endswith(".py") else name + ".py"
+        full = ensure_suffix(name, ".py")
         return self._write_scripts(
             lambda recs, extra: (
                 extra.append(make_python(name, code, auto_import))
@@ -121,7 +139,7 @@ class ScriptsMixin(SessionBase):
         )
 
     def delete_script(self, name: str) -> dict:
-        full = name if name.endswith(".py") else name + ".py"
+        full = ensure_suffix(name, ".py")
         return self._write_scripts(lambda recs, extra: [r for r in recs if r.fullname != full])
 
     def set_scripts(self, items: list[dict]) -> dict:

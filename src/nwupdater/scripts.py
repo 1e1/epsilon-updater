@@ -8,8 +8,27 @@ See docs/01-specs/scripts-and-device-pairing.md §3.
 
 from __future__ import annotations
 
+import json
+from importlib import resources
+from pathlib import Path
+
 from .formats import storage as S
 from .formats.storage import Record
+
+
+def bundled_scripts() -> list[dict]:
+    """Load the bundled community-scripts catalogue (``data/community-scripts.json``).
+
+    Mirrors :meth:`nwupdater.apps.store.AppStore.bundled` (importlib.resources with a filesystem
+    fallback). An EMPTY list is expected: there is no official public scripts API, so the real
+    sources are the user's own files + ``_urls.txt`` under the user scripts dir.
+    """
+    try:
+        raw = resources.files("nwupdater").joinpath("data/community-scripts.json").read_text()
+    except (ModuleNotFoundError, FileNotFoundError, AttributeError):
+        raw = (Path(__file__).parent / "data" / "community-scripts.json").read_text()
+    data = json.loads(raw)
+    return list(data.get("scripts", []))
 
 
 class StorageWriteError(RuntimeError):

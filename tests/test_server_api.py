@@ -374,6 +374,21 @@ def test_add_store_app_synthesizes_for_placeholder_url():
     assert r["ok"] and r["name"] == "Tetris"
 
 
+def test_scripts_available_aggregates_user_sources(tmp_path, monkeypatch):
+    # The bundled scripts catalogue is empty by design; `available` reflects the user's own generic
+    # sources (local .py + a _urls.txt list) under the user scripts dir.
+    d = tmp_path / "scripts"
+    d.mkdir()
+    (d / "hello.py").write_text("print(1)\n")
+    (d / "_urls.txt").write_text("https://host.example/pub/util.py\n")
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(d))
+    s = Session(model_name="n0110")
+    by_name = {a["name"]: a for a in s.scripts()["available"]}
+    assert by_name["hello.py"]["source"] == "local file"
+    assert by_name["util.py"]["url"] == "https://host.example/pub/util.py"
+    assert by_name["util.py"]["source"] == "host.example"
+
+
 def test_open_app_stream_ssrf_guard():
     import pytest
 

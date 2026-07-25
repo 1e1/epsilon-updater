@@ -52,7 +52,7 @@ fallback_version = "0.0.0+unknown"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"nwupdater" = ["py.typed"]
+"nwupdater" = ["py.typed", "data/*.json"]
 "nwupdater.catalog" = ["data/*.json"]
 "nwupdater.apps" = ["data/*.json"]
 "nwupdater.server" = ["web/*"]
