@@ -230,9 +230,7 @@ class SessionBase:
             else None
         )
         ram = (
-            i.external_apps_ram
-            if (i.external_apps_ram and i.external_apps_ram != (0, 0))
-            else None
+            i.external_apps_ram if (i.external_apps_ram and i.external_apps_ram != (0, 0)) else None
         )
         return {
             "connected": True,
@@ -250,9 +248,7 @@ class SessionBase:
             "external_apps_flash": (
                 [f"0x{region[0]:08x}", f"0x{region[1]:08x}"] if region else None
             ),
-            "external_apps_ram": (
-                [f"0x{ram[0]:08x}", f"0x{ram[1]:08x}"] if ram else None
-            ),
+            "external_apps_ram": ([f"0x{ram[0]:08x}", f"0x{ram[1]:08x}"] if ram else None),
             "slot_info_valid": i.slot_info_valid,
             "capabilities": caps.to_dict(),
         }

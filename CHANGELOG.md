@@ -6,6 +6,18 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [1.0.0-rc.6] - 2026-07-25
+
+### Ajouté
+
+- **Installation d'apps `.nwa` distribuées (relink à l'installation)** : un `.nwa` publié est un
+  **ELF relogeable**, pas un blob AppInfo plat — il faut le **lier aux adresses flash/RAM de
+  l'appareil** avant de le flasher. Le link est délégué à `nwlink nwa-bin` (**hors ligne**),
+  alimenté par les paramètres cible résolus en DFU, puis flashé par notre moteur DFU
+  (`apps/link.py` : `is_relocatable_nwa`, `LinkTarget.from_identity`, `link_nwa`, `ensure_linked` ;
+  trampoline EADK dérivé de l'`UserlandHeader`, avec garde `trampoline_word_looks_valid`). Validé
+  sur **N0120 réelle** (RPN s'installe et se lance).
+
 ### Corrigé
 
 - **Statut « officiel » / examen — correction majeure (l'affirmation rc5 était fausse)** :

@@ -110,7 +110,9 @@ class UserlandHeader:
     storage_addr_ram: int
     storage_size_ram: int
     external_apps_flash: tuple[int, int]
-    external_apps_ram: tuple[int, int]  # (start, end) RAM window the external apps' .bss/.data live in
+    external_apps_ram: tuple[
+        int, int
+    ]  # (start, end) RAM window the external apps' .bss/.data live in
     device_name_flash: tuple[int, int]  # (start, end) of the device-name string in flash
     valid: bool
 
