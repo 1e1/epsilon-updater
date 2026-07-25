@@ -27,13 +27,17 @@ Légende : **[V1]** = dans cette livraison · **[HORS V1]** = explicitement repo
   n'atteignent **jamais** le DOM (les handlers sont indexés par ligne, pas par serial).
 - **Tests** : `tests/test_classroom_roster.py` + les tests Parc de `tests/test_ui_logic.py`.
 
+**Réserves 2.0.0-rc levées** (depuis la première rédaction de cette section) :
+
+- **Parc visible sans appareil** — ✅ `renderTabs` (`app.js`) affiche l'onglet **Parc** en mode
+  classe **même sans calculatrice branchée** (onglet *device-INDEPENDENT*) ; seuls System / Apps /
+  Scripts se masquent hors-ligne, conformément au §1.
+- **Captures d'écran** — ✅ capture « mode classe » régénérée sur l'onglet Parc, plus un script
+  Playwright de régénération (`docs/screenshots/`).
+
 **Reste ouvert** :
 
-- **Onglet Parc « connecté uniquement »** : la barre d'onglets et les panneaux se masquent quand
-  aucune calculatrice n'est branchée (`index.html`), alors que le §1 veut le Parc visible **sans
-  appareil**.
-- **Captures d'écran** en attente (§8, Phase 4).
-- **« Flasher toute la classe »** reste **[HORS V1]** (§9), exploré séparément dans
+- **« Flasher toute la classe »** — **[HORS V1]** (§9), exploré séparément dans
   `docs/06-classroom-2.0/flash-whole-class.md`.
 
 ---
