@@ -29,14 +29,47 @@ def _fmt_region(region):
 
 
 def _version() -> str:
+    """Best-effort tool version for diagnostic reports.
+
+    Resolution order:
+      1. installed package metadata (baked from the git tag at build time by setuptools-scm);
+      2. a *live* ``git describe`` when running from a source checkout, so a dev build
+         self-identifies down to the commit — and flags a dirty tree — in a bug report;
+      3. the baked ``__version__`` fallback.
+    """
     try:
         from importlib.metadata import version
 
         return version("nwupdater")
     except Exception:
-        from . import __version__
+        pass
 
-        return __version__
+    # Source checkout: the baked value can be stale (editable installs don't regenerate it on
+    # each commit), so prefer the live git position. Only shell out when a .git dir is present,
+    # which skips it for frozen apps / installed wheels where git is absent anyway.
+    import pathlib
+
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    if (repo / ".git").exists():
+        import subprocess
+
+        try:
+            out = subprocess.run(
+                ["git", "describe", "--tags", "--always", "--dirty"],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if out.returncode == 0 and out.stdout.strip():
+                return out.stdout.strip()
+        except Exception:
+            pass
+
+    from . import __version__
+
+    return __version__
 
 
 def diagnose(

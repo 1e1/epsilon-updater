@@ -36,11 +36,17 @@ nwupdater = "nwupdater.cli:main"
 nwupdater-capture = "nwupdater.tools.capture_cli:main"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.dynamic]
-version = { attr = "nwupdater.__version__" }
+[tool.setuptools_scm]
+# The git tag is the single source of truth for the version — no manual bump. setuptools-scm
+# derives it and bakes it into src/nwupdater/_version.py at build/install time (git-ignored).
+# On a tag vX.Y.Z you get X.Y.Z; N commits past it you get the next version's .devN+g<hash>.
+# A bare source tree that was never built has no tag context, hence the sentinel below — but
+# diagnose._version() prefers a live `git describe` in that case, so dev runs still self-identify.
+version_file = "src/nwupdater/_version.py"
+fallback_version = "0.0.0+unknown"
 
 [tool.setuptools.packages.find]
 where = ["src"]

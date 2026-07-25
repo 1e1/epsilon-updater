@@ -1,9 +1,16 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 *.egg-info/
 build/
 dist/
+
+# Claude Code local state (agent worktrees, settings) — never commit
+.claude/
+
+# version stamped by setuptools-scm at build time (derived from the git tag)
+src/nwupdater/_version.py
 .venv/
 venv/
 

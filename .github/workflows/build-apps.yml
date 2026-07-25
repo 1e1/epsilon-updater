@@ -34,6 +34,8 @@ jobs:
     continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # setuptools-scm needs tags + history to stamp the shipped version
 
       - uses: actions/setup-python@v6
         with:
