@@ -23,6 +23,34 @@ from ..formats import headers
 from ..formats import storage as _storage
 from ..models import MODELS, Model
 
+# A small, generic sample of pre-installed on-calc content for the populated demo device, so the
+# web workshops render with real rows offline (no hardware, no network). Names are generic
+# categories only — never a specific catalogue/product. Apps are api_level 0 (the demo device's
+# EXTERNAL_APPS_API_LEVEL) with realistic sizes; each carries a real, decodable icon.
+_DEMO_APPS: tuple[tuple[str, int], ...] = (
+    ("Periodic", 60 * 1024),  # periodic table (1 sector)
+    ("Chess", 132 * 1024),  # game spanning several sectors
+    ("Snake", 28 * 1024),  # classic game (1 sector)
+)
+# (name, code, auto_import) — a few short Python scripts for the graphing demo's storage.
+_DEMO_SCRIPTS: tuple[tuple[str, bool, str], ...] = (
+    (
+        "mandelbrot",
+        True,
+        "from math import *\n\n\ndef mandelbrot(n):\n  return [complex(0, 0) for _ in range(n)]\n",
+    ),
+    (
+        "parabola",
+        False,
+        "from matplotlib.pyplot import *\n\n\nfor x in range(-10, 11):\n  plot(x, x * x)\nshow()\n",
+    ),
+    (
+        "collatz",
+        False,
+        "def steps(n):\n  c = 0\n  while n > 1:\n    n = n // 2 if n % 2 == 0 else 3 * n + 1\n    c += 1\n  return c\n",
+    ),
+)
+
 
 def _layout_descriptor(mem) -> str:
     """A realistic DfuSe layout string for a model's writable flash.
@@ -128,6 +156,7 @@ class VirtualDfuDevice:
         product_string: str = "NumWorks Calculator",
         serial: str | None = None,
         alt_settings: bool = False,
+        preinstalled_apps: bool = False,
     ):
         self.idVendor = C.USB_VID
         self.idProduct = C.PID_EPSILON
@@ -189,6 +218,9 @@ class VirtualDfuDevice:
             # Advertised like real hardware: alt 0 @Flash, alt 1 @SRAM. DfuClient reads this to
             # route each write to the alt whose region owns the address.
             self.alt_regions = [(C.ALT_FLASH, self.memory_layout), (C.ALT_SRAM, sram_layout)]
+        # Populate the external-apps region with a realistic sample (demo mode) — off by default
+        # so the low-level manager/protocol tests keep a blank region to append into.
+        self._preinstalled_apps = preinstalled_apps
         self._install_platform_info(os_version, commit)
 
     # -- platforminfo preload ------------------------------------------------------
@@ -241,12 +273,32 @@ class VirtualDfuDevice:
             self.memory.write(
                 mem.sram_origin + 0x1000,
                 _storage.encode_storage(
-                    [
-                        _storage.make_python("mandelbrot", "from math import *\n", True),
-                        _storage.make_python("suites", "def u(n):\n  return 2 * n\n", False),
-                    ]
+                    [_storage.make_python(n, code, ai) for n, ai, code in _DEMO_SCRIPTS]
                 ),
             )
+        # Demo mode also seeds the external-apps region so the Apps workshop renders populated.
+        if apps_start and self._preinstalled_apps:
+            self._install_demo_apps(apps_start, apps_end)
+
+    def _install_demo_apps(self, start: int, end: int) -> None:
+        """Lay out the generic sample apps from the region start, each sector-aligned (exactly like
+        the OS iterator / :func:`formats.nwa.iter_apps`), writing the same self-describing .nwa
+        bytes a real calculator would carry — including a real, decodable icon. Never overflows the
+        region."""
+        from ..formats.appicon import demo_icon_lz4
+        from ..formats.nwa import APPINFO_SIZE, build_nwa
+
+        off = start
+        for name, size in _DEMO_APPS:
+            icon = demo_icon_lz4(name)
+            body = max(256, size - APPINFO_SIZE - len(name) - 1 - len(icon))
+            blob = build_nwa(name, api_level=0, code=b"\x00" * body, icon=icon)
+            sector = C.EXTERNAL_APP_SECTOR
+            span = ((len(blob) + sector - 1) // sector) * sector
+            if off + span > end:
+                break
+            self.memory.write(off, blob)
+            off += span
 
     # -- pyusb-compatible control endpoint ----------------------------------------
     def ctrl_transfer(
@@ -412,11 +464,13 @@ def virtual_calculator(
     commit: str | None = None,
     serial: str | None = None,
     alt_settings: bool = False,
+    preinstalled_apps: bool = False,
 ) -> VirtualDfuDevice:
     """Convenience factory. ``model_name`` is e.g. 'n0110', 'n0120', 'n0200'. ``os_version`` /
     ``commit`` default when None (so callers can forward an optional CLI arg directly).
     ``alt_settings`` models the real per-backend DFU alt-settings (Flash / SRAM) so write-routing
-    is exercised."""
+    is exercised. ``preinstalled_apps`` seeds the external-apps region with a realistic sample
+    (graphing models only) so the demo Apps workshop renders populated."""
     bcd = next((b for b, m in MODELS.items() if m.name == model_name), None)
     if bcd is None:
         raise ValueError(
@@ -428,4 +482,5 @@ def virtual_calculator(
         commit=commit or "abc1234",
         serial=serial,
         alt_settings=alt_settings,
+        preinstalled_apps=preinstalled_apps,
     )

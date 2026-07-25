@@ -158,8 +158,33 @@ def test_scripts_absent_on_scientific():
     assert s.scripts()["has_scripts"] is False
 
 
+@pytest.mark.parametrize("model", ["n0110", "n0120"])
+def test_demo_graphing_device_is_populated(model):
+    # The 'explore a demo' graphing device ships realistic on-calc content so BOTH workshops
+    # render populated offline: non-empty installed apps (each with a decodable icon) + scripts.
+    s = Session(model_name=model)
+    installed = s.installed_apps_on_device()["installed"]
+    assert installed, "demo apps region should not be empty"
+    assert all(a["api_level"] == 0 for a in installed)
+    assert all(a["name"] and a["size"] > 0 for a in installed)
+    assert all(a["icon"] for a in installed)  # real, decodable icons
+    d = s.scripts()
+    assert d["has_scripts"] and d["scripts"]
+
+
+def test_demo_scientific_has_no_apps_region():
+    # A scientifique demo (N0200) has no external-apps region, so the Apps workshop is absent and
+    # nothing is (or can be) installed — while firmware update still works elsewhere.
+    s = Session(model_name="n0200")
+    assert s.identity()["has_external_apps"] is False
+    assert s.apps()["has_external_apps"] is False
+    assert s.installed_apps_on_device()["installed"] == []
+    assert s.scripts()["has_scripts"] is False
+
+
 def test_apps_device_truth_push_uninstall_reorder():
-    s = Session(model_name="n0110")
+    s = Session(connect=False)
+    s.attach_demo("n0110", preinstalled_apps=False)  # blank region: manage apps from empty
     s.push_app("a.nwa", build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
     s.push_app("b.nwa", build_nwa("Beta", api_level=0, code=b"\x02" * 100))
     assert [x["name"] for x in s.installed_apps_on_device()["installed"]] == ["Alpha", "Beta"]
@@ -176,7 +201,8 @@ def test_export_app_saves_to_local_library_and_flags_it(tmp_path, monkeypatch):
     import base64
 
     monkeypatch.setenv("NWUPDATER_APPS_DIR", str(tmp_path))
-    s = Session(model_name="n0110")
+    s = Session(connect=False)
+    s.attach_demo("n0110", preinstalled_apps=False)  # blank region: Alpha is the only app
     s.push_app("a.nwa", build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
     # Nothing in the local library yet → not flagged.
     assert s.installed_apps_on_device()["installed"][0]["local"] is False

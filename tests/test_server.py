@@ -326,9 +326,13 @@ def test_apps_routes(server):
 
     b64 = base64.b64encode(build_nwa("Beta", api_level=0, code=b"\x02" * 128)).decode()
     assert _post(server, "/api/apps/inspect", {"data_b64": b64})["size"] > 0
+    # The demo device ships with pre-installed apps; add + push land after them.
     assert _post(server, "/api/apps/add", {"name": "DemoApp"})["ok"] is True
     assert _post(server, "/api/apps/push", {"filename": "b.nwa", "data_b64": b64})["ok"] is True
-    assert _post(server, "/api/apps/reorder", {"order": ["DemoApp", "Beta"]})["ok"] is True
+    installed = [a["name"] for a in _get(server, "/api/apps/installed")["installed"]]
+    assert {"DemoApp", "Beta"} <= set(installed)
+    # A reorder must be a full permutation of everything installed (pre-installed apps included).
+    assert _post(server, "/api/apps/reorder", {"order": installed[::-1]})["ok"] is True
     assert _post(server, "/api/apps/uninstall", {"name": "DemoApp"})["ok"] is True
 
 

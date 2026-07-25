@@ -95,15 +95,22 @@ class SessionBase:
         *,
         os_version: str | None = None,
         commit: str | None = None,
+        preinstalled_apps: bool = True,
     ) -> dict:
-        """Attach an in-memory virtual device — only ever on an explicit user/dev request."""
+        """Attach an in-memory virtual device — only ever on an explicit user/dev request.
+
+        The demo presents a realistic, populated calculator (pre-installed apps + Python scripts)
+        so the whole UI, including both workshops, is exercisable offline. ``preinstalled_apps``
+        can be turned off for a blank device (e.g. exercising app-management from empty)."""
         from ..testing.virtual_dfu import virtual_calculator
 
         dm, dov, dcm = self._demo_defaults
         name = model_name or dm
         if os_version is None:  # UI demo picker: pick a version on the device's own family line
             os_version = self._demo_os_for(name, dov)
-        self.device = virtual_calculator(name, os_version=os_version, commit=commit or dcm)
+        self.device = virtual_calculator(
+            name, os_version=os_version, commit=commit or dcm, preinstalled_apps=preinstalled_apps
+        )
         self.bcd = self.device.bcdDevice
         self.client = DfuClient(self.device, sleep=lambda *_: None)
         self.virtual = True

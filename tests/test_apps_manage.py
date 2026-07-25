@@ -109,3 +109,25 @@ def test_reorder_must_be_a_permutation():
     mgr.push(build_nwa("Alpha", api_level=0, code=b"\x01" * 100))
     with pytest.raises(AppError):
         mgr.reorder(["Alpha", "Ghost"])
+
+
+def test_preinstalled_demo_apps_are_enumerable_and_valid():
+    # The populated demo device lays out generic sample apps sector-aligned from the region start;
+    # they must enumerate exactly like installed apps and stay manageable (push appends after them).
+    dev = virtual_calculator("n0110", preinstalled_apps=True)
+    cli = DfuClient(dev, sleep=lambda *_: None)
+    ident = read_identity(cli, dev.bcdDevice)
+    mgr = AppManager(cli, ident.external_apps_flash, device_api_level=0)
+    seeded = mgr.installed()
+    assert len(seeded) >= 2
+    assert all(a.api_level == 0 and a.name for a in seeded)
+    mgr.push(build_nwa("Extra", api_level=0, code=b"\x09" * 100))
+    assert [m.name for m in mgr.installed()] == [a.name for a in seeded] + ["Extra"]
+
+
+def test_preinstalled_apps_noop_on_scientific():
+    # N0200 has no external-apps region: preinstalled_apps is a no-op, nothing enumerates.
+    dev = virtual_calculator("n0200", preinstalled_apps=True)
+    cli = DfuClient(dev, sleep=lambda *_: None)
+    ident = read_identity(cli, dev.bcdDevice)
+    assert AppManager(cli, ident.external_apps_flash, device_api_level=0).installed() == []
