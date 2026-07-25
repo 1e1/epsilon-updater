@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 
-from . import DISCLAIMER_SHORT
+from . import DISCLAIMER_SHORT, ensure_suffix
 from .cli_device import _open_device
 from .dfu.identity import read_identity
 from .models import describe_bcd
@@ -300,15 +300,25 @@ def _cmd_apps(args) -> int:
             print(f"    {m.name:16s} API {m.api_level}  ({len(m.blob)} B)")
         return 0
 
-    # list the catalog + client-side compatibility
+    # list the catalog + client-side compatibility. Merge the user's own generic sources (local
+    # .nwa files + a _urls.txt list under the user apps dir) so the CLI sees exactly what the web
+    # UI aggregates (server/_session_base.py) — otherwise user apps are GUI-only.
     store = AppStore.load(args.store_file) if args.store_file else AppStore.bundled()
+    try:
+        from .apps.sources import app_entries, user_apps_dir
+
+        store.entries.extend(app_entries(user_apps_dir()))
+    except OSError:
+        pass
     compat = store.compatible(
         family=ident.family, device_api_level=args.api_level, has_external_apps=has_region
     )
     print(f"calc      : {ident.model_name} ({ident.family}) OS {ident.os_version or '?'}")
     print(f"catalog   : {len(store)} apps — {len(compat)} compatible (API level {args.api_level})")
     for e in compat:
-        print(f"    {e.name:12s} v{e.version:5s} — {e.description}")
+        origin = e.source or e.url
+        origin = f"  [{origin}]" if origin else ""
+        print(f"    {e.name:12s} v{e.version:5s} — {e.description}{origin}")
     if not has_region:
         print("    (no external-apps region on this model)")
 
@@ -351,7 +361,7 @@ def _cmd_scripts(args) -> int:
     pys = python_scripts(records)
 
     if args.pull:
-        want = args.pull if args.pull.endswith(".py") else args.pull + ".py"
+        want = ensure_suffix(args.pull, ".py")
         rec = next((r for r in pys if r.fullname == want), None)
         if rec is None:
             print(f"script not found: {args.pull}", file=sys.stderr)
@@ -385,6 +395,47 @@ def _cmd_scripts(args) -> int:
         print(
             f"    {r.fullname:20s} {len(r.code):5d} B  [{'auto-import' if r.auto_import else '—'}]"
         )
+    return 0
+
+
+def _cmd_sources(args) -> int:
+    """Print the resolved app + script sources: the bundled catalogues, plus the user's own
+    generic sources (local files + a ``_urls.txt`` list) under the user apps/scripts dirs."""
+    from .apps.sources import read_url_list, scan_local, user_apps_dir, user_scripts_dir
+    from .apps.store import AppStore
+    from .scripts import bundled_scripts
+
+    def _bundled_line(name: str, url: str, source: str) -> str:
+        return f"    {name:16s} {url or ('(' + (source or 'bundled') + ')')}"
+
+    def _user_sources(directory, ext: str) -> None:
+        print(f"  user directory: {directory}")
+        local = scan_local(directory, [ext])
+        print("    local files:")
+        for it in local:
+            print(f"      {it.name}  ({it.size} B)")
+        if not local:
+            print("      (none)")
+        urls = read_url_list(directory / "_urls.txt")
+        print("    _urls.txt:")
+        for u in urls:
+            print(f"      {u}")
+        if not urls:
+            print("      (none)")
+
+    entries = AppStore.bundled().entries
+    print("App sources")
+    print(f"  bundled catalog: {len(entries)} app(s)")
+    for e in entries:
+        print(_bundled_line(e.name, e.url, e.source))
+    _user_sources(user_apps_dir(), ".nwa")
+
+    scripts = bundled_scripts()
+    print("\nScript sources")
+    print(f"  bundled catalog: {len(scripts)} script(s)")
+    for s in scripts:
+        print(_bundled_line(s.get("name", ""), s.get("url", ""), s.get("source", "")))
+    _user_sources(user_scripts_dir(), ".py")
     return 0
 
 

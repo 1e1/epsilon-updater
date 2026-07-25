@@ -45,6 +45,26 @@ def test_scientific_virtual_identify():
     assert cli.main(["identify", "--virtual", "n0200"]) == 0
 
 
+def test_sources_lists_bundled_and_user(tmp_path, monkeypatch, capsys):
+    # `sources` needs no device: it prints the bundled catalogues plus the user's own generic
+    # sources (local files + _urls.txt) for both apps and scripts.
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "_urls.txt").write_text("https://host.example/cool.nwa\n")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "hello.py").write_text("print(1)\n")
+    monkeypatch.setenv("NWUPDATER_APPS_DIR", str(apps))
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(scripts))
+
+    assert cli.main(["sources"]) == 0
+    out = capsys.readouterr().out
+    assert "App sources" in out and "Script sources" in out
+    assert "RPN" in out  # a bundled app-catalog entry
+    assert "https://host.example/cool.nwa" in out  # user apps _urls.txt entry
+    assert "hello.py" in out  # user local script file
+
+
 def test_identify_real_without_pyusb_exits(monkeypatch):
     # No --virtual and pyusb unavailable → a clean SystemExit(2), not a traceback.
     real_import = builtins.__import__

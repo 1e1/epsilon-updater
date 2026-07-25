@@ -24,6 +24,7 @@ from .cli_commands import (
     _cmd_pair,
     _cmd_preload,
     _cmd_scripts,
+    _cmd_sources,
     _cmd_ui,
 )
 
@@ -237,6 +238,11 @@ def main(argv=None) -> int:
         "--yes", "-y", action="store_true", help="skip the confirmation prompt before writing"
     )
     p_scr.set_defaults(func=_cmd_scripts)
+
+    p_src = sub.add_parser(
+        "sources", help="list the resolved app + script sources (bundled catalog + user files/URLs)"
+    )
+    p_src.set_defaults(func=_cmd_sources)
 
     args = parser.parse_args(argv)
     return args.func(args)
