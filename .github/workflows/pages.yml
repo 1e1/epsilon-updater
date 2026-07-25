@@ -6,13 +6,9 @@ name: pages
 # client-side from the latest GitHub Release, so the page needs no rebuild when a release ships.
 
 on:
+  # Redeploy the public page on every push to main (the default / public branch).
   push:
-    branches: [ main, develop ]
-    paths:
-      - "site/**"
-      - "docs/screenshots/**"
-      - "src/nwupdater/server/web/logo.svg"
-      - ".github/workflows/pages.yml"
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
