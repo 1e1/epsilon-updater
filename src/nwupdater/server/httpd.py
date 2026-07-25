@@ -198,6 +198,9 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                     self._stream_app(session)
                 elif path == "/api/device/name":
                     self._locked_json(session.device_name)
+                elif path == "/api/roster":
+                    # Local file + bundled-snapshot read; no device I/O, so no I/O lock needed.
+                    self._json(session.roster())
                 elif path == "/api/sources":
                     self._json(session.sources())
                 elif path.startswith("/api/"):

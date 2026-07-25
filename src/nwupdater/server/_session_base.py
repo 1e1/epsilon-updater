@@ -115,6 +115,12 @@ class SessionBase:
         self.model = MODELS.get(self.bcd)
         self.connected = True
         self._last_boot_address = None
+        self._after_scan()
+
+    def _after_scan(self) -> None:
+        """Extension point run after a successful attach. The base is a no-op so device attach
+        never depends on the mixin order; ``RosterMixin`` overrides it to enrol the scanned
+        calculator into the local roster under classroom policy."""
 
     def detach(self) -> dict:
         self.device = self.client = self.model = self.bcd = None

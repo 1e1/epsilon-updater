@@ -13,11 +13,19 @@ from ._session_base import SessionBase
 from ._session_catalog import CatalogMixin
 from ._session_firmware import FirmwareMixin
 from ._session_names import NamesMixin
+from ._session_roster import RosterMixin
 from ._session_scripts import ScriptsMixin
 
 
 class Session(
-    CatalogMixin, AppsMixin, AuthMixin, FirmwareMixin, ScriptsMixin, NamesMixin, SessionBase
+    CatalogMixin,
+    AppsMixin,
+    AuthMixin,
+    FirmwareMixin,
+    ScriptsMixin,
+    NamesMixin,
+    RosterMixin,
+    SessionBase,
 ):
     """The updater session: device lifecycle + catalogue + apps + auth + firmware + scripts +
-    local calculator naming."""
+    local calculator naming + the classroom roster (local fleet register)."""
