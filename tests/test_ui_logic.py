@@ -271,20 +271,70 @@ def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path):
                   tabShown: getComputedStyle(document.getElementById('tab-parc')).display !== 'none',
                   selected: document.getElementById('tab-parc').getAttribute('aria-selected'),
                   rows: pane.querySelectorAll('.parc-tbl tbody tr').length,
-                  text: pane.innerText,
+                  names: [...pane.querySelectorAll('.pnm')].map(e => e.value),
+                  phs: [...pane.querySelectorAll('.pnm')].map(e => e.placeholder),
                   html: pane.innerHTML,
                 };
             }"""
         )
         assert r["tabShown"] is True and r["selected"] == "true"
         assert r["rows"] == 2  # the default "Toutes" bucket shows every calculator
-        assert "Poste 3" in r["text"] and "calc N0120" in r["text"]  # name + fallback default
+        # The name is an editable input (value); the unnamed calc shows its fallback as a placeholder.
+        assert "Poste 3" in r["names"] and "calc N0120" in r["phs"]
         # The serial (inside the internal key) is never rendered — not even in an attribute.
         assert "SECRETAAA" not in r["html"] and "SECRETBBB" not in r["html"]
-        # Clicking the "Seconde A" class filters to its single calculator.
-        page.click(".parc-rail .clsbtn:has-text('Seconde A')")
+        # Clicking the "Seconde A" class filters to its single calculator. Target the label span
+        # (always visible, left-aligned) — the hover-revealed rename/delete tools sit on the right.
+        page.click(".parc-rail .clsbtn:has-text('Seconde A') .nm")
         assert page.eval_on_selector_all(".parc-tbl tbody tr", "els => els.length") == 1
         # Back to individual mode: the Parc tab hides and falls back to System.
         page.click("#mode-individual")
         assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") == "none"
+        assert not errors
+
+
+def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
+    """The Parc edit affordances (rename, move, create/delete class, multi-select) drive the real
+    roster endpoints; the serial never reaches the DOM (handlers key on the row index)."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+    from nwupdater import device_names as N
+
+    # Seed a fleet in the store the server reads (same config dir) BEFORE the page loads.
+    R.upsert_on_scan("n0110", "SECRETUI01", firmware="16.4.4", family="graphique")
+    R.upsert_on_scan("n0120", "SECRETUI02", firmware="16.4.4", family="graphique")
+    N.set_name("n0110", "SECRETUI01", "Poste 1")
+    with _ui(tmp_path) as (page, errors):
+        page.evaluate("async () => { STATE.roster = await api('/api/roster'); setMode('classroom'); }")
+        page.wait_for_selector("#pane-parc.on .parc-tbl")
+        # Two editable name inputs; the seeded name is joined from the name store.
+        page.wait_for_function("document.querySelectorAll('#pane-parc .pnm').length === 2")
+        assert page.eval_on_selector_all("#pane-parc .pnm", "els => els.some(e => e.value === 'Poste 1')")
+        # The serial is never rendered — not as text, not in an attribute (handlers use row indices).
+        html = page.inner_html("#pane-parc")
+        assert "SECRETUI01" not in html and "SECRETUI02" not in html
+        # Every edit handler is wired.
+        assert page.evaluate(
+            "() => ['parcRename','parcRowMove','parcRowDelete','parcBulkMove','parcBulkDelete',"
+            "'parcDeleteClass','parcAddClass','parcClassRename','parcDragStart'].every("
+            "f => typeof window[f] === 'function')"
+        )
+        # Create a class from the rail input → it appears as a bucket.
+        page.fill("#parc-newclass", "Seconde A")
+        page.click("#pane-parc .cls-add .ib")
+        page.wait_for_function(
+            "[...document.querySelectorAll('#pane-parc .clsbtn .nm')].some(e => e.textContent === 'Seconde A')"
+        )
+        # Move the first calculator into it via the row dropdown → the server count reflects it.
+        page.select_option("#pane-parc tbody tr:first-child .pc-act .mv", "Seconde A")
+        page.wait_for_function("STATE.roster.counts && STATE.roster.counts['Seconde A'] === 1")
+        # Multi-select all → the bulk bar appears.
+        page.check("#pane-parc thead input[type=checkbox]")
+        page.wait_for_selector("#pane-parc .parc-bulk")
+        # Delete the (now non-empty) class → inline confirm → confirm re-files its member to unfiled.
+        page.evaluate("() => parcDeleteClass('Seconde A')")
+        page.wait_for_selector("#pane-parc .cls-confirm")
+        page.click("#pane-parc .cls-confirm .btn.danger")
+        page.wait_for_function("!STATE.roster.classes.includes('Seconde A')")
+        assert page.evaluate("() => STATE.roster.unfiled_count === 2")  # both back to unfiled
         assert not errors
