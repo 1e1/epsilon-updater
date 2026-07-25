@@ -22,9 +22,11 @@ let STATE = {
   // per-workshop op descriptor while busy (still truthy): false | {op:"write"} | {op:"download", name}
   busy: { apps: false, scripts: false },
   // classroom roster ("Parc"): the joined fleet register + the selected class filter
-  // ("__all__" | "__unfiled__" | a class name), the multi-select set (keys), a pending
-  // delete-class confirmation, and the class currently being renamed inline.
-  roster: null, parcClass: "__all__", parcSel: [], parcConfirm: null, parcRenamingClass: null,
+  // ("__all__" | "__unfiled__" | a class name), the name-filter text, the multi-select set (keys),
+  // a pending delete-class confirmation, the class being renamed inline, and the calculator whose
+  // name is being edited inline (both entered by double-click).
+  roster: null, parcClass: "__all__", parcFilter: "", parcSel: [], parcConfirm: null,
+  parcRenamingClass: null, parcEditingKey: null,
 };
 // Optional deep-link / reproducible-capture overrides (all are already user-settable prefs):
 // ?lang=fr|en · ?theme=light|dark · ?mode=individual|classroom. They never auto-connect a device.
@@ -84,6 +86,9 @@ async function load() {
   STATE.mode = (qm === "individual" || qm === "classroom") ? qm : (localStorage.getItem("nwmode") || "individual");
   if (STATE.mode === "classroom") STATE.tab = "parc";  // the roster is the classroom's home
   STATE.demoModels = await api("/api/device/demo-models").catch(() => null);
+  // Tell the server our mode BEFORE reading the roster: classroom policy is what lets a scan enrol
+  // the connected calculator, so setting it first means the roster we fetch already includes it.
+  await postMode();
   STATE.identity = await api("/api/identity");
   if (STATE.identity && STATE.identity.connected) await loadConnected();
   else {
@@ -290,13 +295,23 @@ function renderModeButtons() {
   // in but Classroom is the active toggle). No separate header chip → no layout shift.
   $("mode-individual").classList.toggle("conn", authed);
 }
-function setMode(m) {
+async function setMode(m) {
   STATE.mode = m; localStorage.setItem("nwmode", m);
   // The roster is the classroom's home; leaving classroom drops off the (now hidden) Parc tab.
   if (m === "classroom") STATE.tab = "parc";
   else if (STATE.tab === "parc") STATE.tab = "system";
   // renderAll handles every case — including classroom WITHOUT a device (the Parc stays usable).
   renderAll();
+  // Push the mode to the server (capability policy). Switching INTO classroom enrols a connected
+  // calculator, so refresh the roster afterwards to reflect it in the Parc.
+  await postMode();
+  STATE.roster = await api("/api/roster").catch(() => STATE.roster);
+  renderTabs(); if (STATE.mode === "classroom") renderParc();
+}
+// POST the current mode → the server's capability policy (classroom gates roster enrolment).
+// Best-effort: an older server without the endpoint just leaves the policy untouched.
+async function postMode() {
+  try { await post("/api/mode", { mode: STATE.mode }); } catch (e) { /* ignore */ }
 }
 function renderSystem() {
   renderModeButtons();
@@ -749,12 +764,45 @@ function renderWorkbench() {
   if (hasPy) $("pane-scripts").innerHTML = workshopBody("scripts");
 }
 
-// -- roster ("Parc") — classroom-only, read-only in this phase ------------------
-// Two panes: a classes rail (Toutes / Sans classe / each class, with counts) and a calculator
-// table (type icon · name · known firmware + up-to-date chip · last scan). The serial stays the
-// internal key server-side and is NEVER rendered here. Rename / move / delete / drag / multi-select
-// are later phases; the render is structured so an actions column can drop in.
+// -- roster ("Parc") — classroom-only fleet register ---------------------------
+// Two panes: a classes rail (Toutes / Sans classe / each class, folder-iconed, with counts) and a
+// calculator table (checkbox · type · name · known firmware chip · distribution · last scan ·
+// hover trash). The serial stays the internal key server-side and is NEVER rendered here — every
+// row handler keys on the ROW INDEX and resolves the key from STATE.roster at action time.
 const CLASS_ALL = "__all__", CLASS_UNFILED = "__unfiled__";
+// rail bucket glyphs (currentColor SVG): folder = a real class, inbox = "Sans classe", stack = "Toutes"
+const FOLDER_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M1.8 4.4c0-.6.4-1 1-1h3l1.4 1.6h5c.6 0 1 .4 1 1v5.6c0 .6-.4 1-1 1H2.8c-.6 0-1-.4-1-1V4.4Z"/></svg>`;
+const INBOX_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.4 8.6 3.7 3.6h8.6l1.3 5v3c0 .6-.4 1-1 1H3.4c-.6 0-1-.4-1-1v-3Z"/><path d="M2.4 8.7h3l.8 1.5h3.6l.8-1.5h3" stroke-linecap="round"/></svg>`;
+const STACK_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2 2 5l6 3 6-3-6-3Z"/><path d="M2 8.5 8 11.5l6-3" stroke-linecap="round"/></svg>`;
+const TRASH_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.2 4.5V3.2c0-.4.3-.7.7-.7h2.2c.4 0 .7.3.7.7v1.3M5 4.5l.5 8c0 .5.4.9.9.9h3.2c.5 0 .9-.4.9-.9l.5-8"/></svg>`;
+// distribution action glyphs (recensement · firmware · apps · scripts) — reuse the tab iconography
+const DIST_SVG = {
+  recensement: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="2.5" width="9" height="11" rx="1.2"/><path d="M6 2.2v1.4h4V2.2M5.9 6.6h4.2M5.9 9h4.2M5.9 11.3h2.6"/></svg>`,
+  firmware: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1"/><path d="M6.6 2v2.4M9.4 2v2.4M6.6 11.6V14M9.4 11.6V14M2 6.6h2.4M2 9.4h2.4M11.6 6.6H14M11.6 9.4H14" stroke-linecap="round"/></svg>`,
+  apps: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1.1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1.1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1.1"/></svg>`,
+  scripts: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4 3 8l2.5 4M10.5 4 13 8l-2.5 4"/></svg>`,
+};
+const DIST_ORDER = ["recensement", "firmware", "apps", "scripts"];
+// i18n keys via a lookup rather than string concatenation, so every label resolves through a real,
+// literal key — the i18n test scans for literal t() calls and dynamic keys would slip past it.
+const DIST_KEY = {
+  recensement: "roster_dist_recensement", firmware: "roster_dist_firmware",
+  apps: "roster_dist_apps", scripts: "roster_dist_scripts",
+  ok: "roster_dist_ok", change: "roster_dist_change", error: "roster_dist_error",
+};
+// Distribution cell: one outcome-coloured glyph per action that was part of the last pass
+// (green=nominal · orange=change · red=error), skipping actions ABSENT from it; "—" until a batch
+// records anything (roster field `last_dist`, filled in a later phase).
+function parcDistCell(dist) {
+  if (!dist || typeof dist !== "object") return `<span class="dist-none">—</span>`;
+  const cells = DIST_ORDER.map(a => {
+    const o = dist[a];  // "ok" | "change" | "error" | undefined (absent from the last pass)
+    if (o !== "ok" && o !== "change" && o !== "error") return "";
+    const lbl = t(DIST_KEY[a]) + " · " + t(DIST_KEY[o]);
+    return `<span class="dist-ic ${o}" role="img" title="${esc(lbl)}" aria-label="${esc(lbl)}">${DIST_SVG[a]}</span>`;
+  }).join("");
+  return cells || `<span class="dist-none">—</span>`;
+}
 function parcTypeCell(family) {
   const label = t(family === "scientifique" ? "fam_s" : "fam_g");
   const glyph = buildCalc({ variant: variantOf(family), mode: "icon" });
@@ -773,13 +821,29 @@ function fmtRelative(iso) {
   try { return new Intl.RelativeTimeFormat(LANG, { numeric: "auto" }).format(val, unit); }
   catch (e) { return new Date(then).toLocaleDateString(LANG); }
 }
-function selectParcClass(id) { STATE.parcClass = id; STATE.parcConfirm = null; renderParc(); }
-// Rows filtered for the currently-selected bucket (Toutes / Sans classe / a class).
-function parcRows() {
+function selectParcClass(id) {
+  STATE.parcClass = id; STATE.parcConfirm = null; STATE.parcEditingKey = null; renderParc();
+}
+// Class name single/double-click discrimination: a single click SELECTS the class after a short
+// delay; a double click CANCELS that and enters inline rename. The delay is required — selecting
+// re-renders the rail, which would otherwise swallow the second click of the double-click.
+let PARC_CLASSCLICK = null;
+function parcClassClick(id) {
+  if (PARC_CLASSCLICK) clearTimeout(PARC_CLASSCLICK);
+  PARC_CLASSCLICK = setTimeout(() => { PARC_CLASSCLICK = null; selectParcClass(id); }, reduced ? 0 : 220);
+}
+function parcClassDblClick(cls) {
+  if (PARC_CLASSCLICK) { clearTimeout(PARC_CLASSCLICK); PARC_CLASSCLICK = null; }
+  if (cls) parcClassRename(cls);
+}
+// Rows for the selected bucket (Toutes / Sans classe / a class), then narrowed by the name filter.
+function parcVisibleRows() {
   const r = STATE.roster; if (!r) return [];
-  const sel = STATE.parcClass || CLASS_ALL, rows = r.calculators || [];
-  if (sel === CLASS_UNFILED) return rows.filter(c => !c.class);
-  if (sel !== CLASS_ALL) return rows.filter(c => c.class === sel);
+  const sel = STATE.parcClass || CLASS_ALL, q = (STATE.parcFilter || "").trim().toLowerCase();
+  let rows = r.calculators || [];
+  if (sel === CLASS_UNFILED) rows = rows.filter(c => !c.class);
+  else if (sel !== CLASS_ALL) rows = rows.filter(c => c.class === sel);
+  if (q) rows = rows.filter(c => (c.name || c.default || "").toLowerCase().includes(q));
   return rows;
 }
 // <option>s for a "Move to…" <select>: a disabled placeholder, "Sans classe", then each class.
@@ -798,85 +862,119 @@ function renderParc() {
   const r = STATE.roster;
   if (!r) { el.innerHTML = `<div class="parc-main"><p class="parc-empty">${t("roster_empty")}</p></div>`; return; }
   const sel = STATE.parcClass || CLASS_ALL;
-  // -- classes rail: each real class is a drop target + gets rename/delete tools --------------
-  const railBtn = (id, label, count, pressed, cls) => {
-    if (cls && STATE.parcRenamingClass === cls) {  // inline rename: the button becomes an input
+  // -- classes rail: folder/inbox-iconed buckets + a right-aligned count pill; NO per-row buttons.
+  //    A real class discriminates single-click (select) from double-click (inline rename) ---------
+  const railBtn = (id, label, count, pressed, cls, icon) => {
+    if (cls && STATE.parcRenamingClass === cls) {  // inline rename (double-click): the row → an input
       return `<div class="clsedit"><input id="parc-clsedit" value="${esc(cls)}" aria-label="${t("roster_rename_class")}"
         onkeydown="if(event.key==='Enter')parcClassRenameCommit('${jsStr(cls)}',this);else if(event.key==='Escape')parcClassRenameCancel()"
         onblur="parcClassRenameCommit('${jsStr(cls)}',this)"></div>`;
     }
     const dnd = `ondragover="parcRailOver(event)" ondragleave="this.classList.remove('drop-hot')" ondrop="parcRailDrop(event,'${jsStr(id)}')"`;
-    const tools = cls ? `<span class="cls-tools">
-      <button class="ib xs" ${NODRAG} title="${t("roster_rename_class")}" aria-label="${t("roster_rename_class")} ${esc(cls)}" onclick="event.stopPropagation();parcClassRename('${jsStr(cls)}')">${PENCIL_SVG}</button>
-      <button class="ib xs" ${NODRAG} title="${t("roster_delete")}" aria-label="${t("roster_delete")} ${esc(cls)}" onclick="event.stopPropagation();parcDeleteClass('${jsStr(cls)}')">✕</button></span>` : "";
-    return `<button class="clsbtn" aria-pressed="${pressed}" ${dnd} onclick="selectParcClass('${jsStr(id)}')">
-      <span class="nm">${esc(label)}</span><span class="cnt">${count}</span>${tools}</button>`;
+    const click = cls
+      ? `onclick="parcClassClick('${jsStr(id)}')" ondblclick="parcClassDblClick('${jsStr(cls)}')" title="${t("roster_rename_hint")}"`
+      : `onclick="selectParcClass('${jsStr(id)}')"`;
+    return `<button class="clsbtn" aria-pressed="${pressed}" ${dnd} ${click}>
+      <span class="cls-ic" aria-hidden="true">${icon}</span><span class="nm">${esc(label)}</span><span class="cnt">${count}</span></button>`;
   };
   let rail = `<h4>${t("roster_classes")}</h4>`;
-  rail += railBtn(CLASS_ALL, t("roster_class_all"), r.total || 0, sel === CLASS_ALL, null);
-  rail += railBtn(CLASS_UNFILED, t("roster_unfiled"), r.unfiled_count || 0, sel === CLASS_UNFILED, null);
-  (r.classes || []).forEach(c => rail += railBtn(c, c, (r.counts && r.counts[c]) || 0, sel === c, c));
+  rail += railBtn(CLASS_ALL, t("roster_class_all"), r.total || 0, sel === CLASS_ALL, null, STACK_SVG);
+  rail += railBtn(CLASS_UNFILED, t("roster_unfiled"), r.unfiled_count || 0, sel === CLASS_UNFILED, null, INBOX_SVG);
+  (r.classes || []).forEach(c => rail += railBtn(c, c, (r.counts && r.counts[c]) || 0, sel === c, c, FOLDER_SVG));
   rail += `<div class="cls-add">
     <input id="parc-newclass" type="text" placeholder="${esc(t("roster_new_class"))}" aria-label="${t("roster_add_class")}"
       onkeydown="if(event.key==='Enter')parcAddClass()">
     <button class="ib" title="${t("roster_add_class")}" aria-label="${t("roster_add_class")}" onclick="parcAddClass()">＋</button></div>`;
+  // -- main: view actions (delete the SELECTED class — icon only, next to a future batch button),
+  //    an optional 2-choice confirm (move vs purge), the Phase-3 multi-select bulk bar, then the
+  //    calculator table -----------------------------------------------------------------------------
+  const realClass = sel !== CLASS_ALL && sel !== CLASS_UNFILED;
+  let main = `<div class="parc-actions">
+    <button class="ib danger-ib" ${realClass ? "" : "disabled"} title="${t("roster_delete_class")}"
+      aria-label="${t("roster_delete_class")}" onclick="parcDeleteClass('${jsStr(realClass ? sel : "")}')">${TRASH_SVG}</button></div>`;
   if (STATE.parcConfirm) {
-    const c = STATE.parcConfirm;
-    rail += `<div class="cls-confirm" role="alertdialog" aria-label="${t("roster_delete")}">
+    const c = STATE.parcConfirm;  // a non-empty class → offer the two choices (move vs purge)
+    main += `<div class="cls-confirm" role="alertdialog" aria-label="${t("roster_delete_class")}">
       <p>${t("roster_delete_class_confirm", { c: esc(c.name), n: c.count })}</p>
       <div class="row"><button class="btn ghost sm" onclick="parcDeleteCancel()">${t("roster_cancel")}</button>
-        <button class="btn sm danger" onclick="parcDeleteConfirm()">${t("roster_confirm")}</button></div></div>`;
+        <button class="btn sm confirm-move" onclick="parcDeleteConfirm('move')">${t("roster_delete_class_move")}</button>
+        <button class="btn sm danger confirm-purge" onclick="parcDeleteConfirm('purge')">${t("roster_delete_class_purge", { n: c.count })}</button></div></div>`;
   }
-  // -- calculator table: checkbox · type · editable name · firmware · last scan · actions ------
-  const rows = parcRows(), selKeys = new Set(STATE.parcSel || []);
+  const rows = parcVisibleRows(), selKeys = new Set(STATE.parcSel || []);
   const nsel = rows.filter(c => selKeys.has(c.key)).length;
-  let main = "";
-  if (nsel) {
+  if (nsel) {  // Phase-3 multi-select bulk bar (checkboxes + drag already wired)
     main += `<div class="parc-bulk" role="region" aria-label="${t("roster_bulk_selected", { n: nsel })}">
       <span class="n">${t("roster_bulk_selected", { n: nsel })}</span>
       <select class="mv" aria-label="${t("roster_move_to")}" onchange="parcBulkMove(this)">${parcMoveOptions()}</select>
       <button class="btn ghost sm" onclick="parcBulkDelete()">${t("roster_delete")}</button></div>`;
   }
-  if (!rows.length) {
-    main += `<p class="parc-empty">${t(sel === CLASS_ALL ? "roster_empty" : "roster_empty_class")}</p>`;
+  if (!(r.calculators || []).length) {
+    main += `<p class="parc-empty">${t("roster_empty")}</p>`;
   } else {
-    const allSel = rows.every(c => selKeys.has(c.key));
+    const allSel = rows.length > 0 && rows.every(c => selKeys.has(c.key));
     const head = `<thead><tr>
       <th class="pc-sel"><input type="checkbox" ${allSel ? "checked" : ""} aria-label="${t("roster_select_all")}" onchange="parcSelectAll(this.checked)"></th>
-      <th class="pc-type">${t("roster_col_type")}</th><th>${t("roster_col_name")}</th>
-      <th>${t("roster_known_fw")}</th><th>${t("roster_col_lastscan")}</th>
-      <th class="pc-act">${t("roster_col_actions")}</th></tr></thead>`;
-    const body = rows.map(c => {
-      const i = r.calculators.indexOf(c), label = esc(c.name || c.default || ""), checked = selKeys.has(c.key);
-      const fw = c.known_firmware ? "Epsilon " + esc(c.known_firmware) : "—";
-      let chip = "";
-      if (c.up_to_date === true) chip = `<span class="fwchip ok">${t("uptodate")}</span>`;
-      else if (c.up_to_date === false) chip = `<span class="fwchip upd">${t("roster_update")}</span>`;
-      // Handlers key on the ROW INDEX, never the calculator key: the serial lives INSIDE the key,
-      // and must never reach the DOM (privacy, §6). The key is resolved from STATE.roster on action.
-      return `<tr draggable="true"${checked ? ' class="sel"' : ""} ondragstart="parcDragStart(event,${i})" ondragend="parcDragEnd()">
-        <td class="pc-sel"><input type="checkbox" ${checked ? "checked" : ""} ${NODRAG} aria-label="${label}" onchange="parcToggleSel(${i},this.checked)"></td>
-        <td class="pc-type">${parcTypeCell(c.family)}</td>
-        <td class="parc-nm"><input class="pnm" ${NODRAG} value="${esc(c.name || "")}" placeholder="${esc(c.default || "")}"
-          aria-label="${t("roster_col_name")}" onkeydown="if(event.key==='Enter')this.blur()" onchange="parcRename(${i},this)"></td>
-        <td><span class="fwcell">${fw}${chip}</span></td>
-        <td class="parc-lastscan">${esc(fmtRelative(c.last_scan))}</td>
-        <td class="pc-act">
-          <select class="mv" ${NODRAG} aria-label="${t("roster_move_to")}" onchange="parcRowMove(${i},this)">${parcMoveOptions()}</select>
-          <button class="ib" ${NODRAG} title="${t("roster_delete")}" aria-label="${t("roster_delete")} ${label}" onclick="parcRowDelete(${i})">✕</button></td></tr>`;
-    }).join("");
-    main += `<table class="parc-tbl">${head}<tbody>${body}</tbody></table>`;
+      <th class="pc-type">${t("roster_col_type")}</th>
+      <th class="pc-name">${t("roster_col_name")}<input class="pc-filter-in" type="text" value="${esc(STATE.parcFilter || "")}"
+        placeholder="${esc(t("roster_filter"))}" aria-label="${t("roster_filter_name")}" ${NODRAG} oninput="parcFilter(this.value)"></th>
+      <th>${t("roster_known_fw")}</th><th class="pc-dist-h">${t("roster_col_dist")}</th>
+      <th>${t("roster_col_lastscan")}</th><th class="pc-act">${t("roster_col_actions")}</th></tr></thead>`;
+    main += `<table class="parc-tbl">${head}<tbody id="parc-tbody">${parcTbodyHTML()}</tbody></table>`;
   }
   el.innerHTML = `<aside class="parc-rail">${rail}</aside><div class="parc-main">${main}</div>`;
+  const ed = $("parc-nameedit"); if (ed) { ed.focus(); ed.select(); }  // focus a just-opened name editor
+}
+// One <tr> per calculator. Handlers key on the ROW INDEX, never the key: the serial lives INSIDE
+// the key (privacy) and must never reach the DOM.
+function parcRowHTML(c) {
+  const r = STATE.roster, i = r.calculators.indexOf(c);
+  const checked = (STATE.parcSel || []).includes(c.key), label = esc(c.name || c.default || "");
+  const fw = c.known_firmware ? "Epsilon " + esc(c.known_firmware) : "—";
+  let chip = "";
+  if (c.up_to_date === true) chip = `<span class="fwchip ok">${t("uptodate")}</span>`;
+  else if (c.up_to_date === false) chip = `<span class="fwchip upd">${t("roster_update")}</span>`;
+  // Name: a display label; DOUBLE-CLICK (or Enter when focused) swaps to an inline input. No timer
+  // is needed here — a single click on the row does not re-render it (unlike the class rail).
+  const nameCell = STATE.parcEditingKey === c.key
+    ? `<input class="pnm" id="parc-nameedit" ${NODRAG} value="${esc(c.name || "")}" placeholder="${esc(c.default || "")}"
+        aria-label="${t("roster_col_name")}" onkeydown="if(event.key==='Enter')this.blur();else if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}" onblur="parcRename(${i},this)">`
+    : `<span class="pnm-txt${c.name ? "" : " ph"}" tabindex="0" ${NODRAG} title="${t("roster_rename_hint")}"
+        ondblclick="parcNameEdit(${i})" onkeydown="if(event.key==='Enter')parcNameEdit(${i})">${c.name ? esc(c.name) : esc(c.default || "")}</span>`;
+  return `<tr draggable="true"${checked ? ' class="sel"' : ""} ondragstart="parcDragStart(event,${i})" ondragend="parcDragEnd()">
+    <td class="pc-sel"><input type="checkbox" ${checked ? "checked" : ""} ${NODRAG} aria-label="${label}" onchange="parcToggleSel(${i},this.checked)"></td>
+    <td class="pc-type">${parcTypeCell(c.family)}</td>
+    <td class="parc-nm">${nameCell}</td>
+    <td><span class="fwcell">${fw}${chip}</span></td>
+    <td class="pc-dist">${parcDistCell(c.last_dist)}</td>
+    <td class="parc-lastscan">${esc(fmtRelative(c.last_scan))}</td>
+    <td class="pc-act">
+      <select class="mv" ${NODRAG} aria-label="${t("roster_move_to")}" onchange="parcRowMove(${i},this)">${parcMoveOptions()}</select>
+      <button class="ib trash" ${NODRAG} title="${t("roster_delete")}" aria-label="${t("roster_delete")} ${label}" onclick="parcRowDelete(${i})">${TRASH_SVG}</button></td></tr>`;
+}
+// The tbody rows (or an empty-state row). Rebuilt on its own by parcFilter so the header filter
+// input keeps focus while typing.
+function parcTbodyHTML() {
+  const rows = parcVisibleRows();
+  if (!rows.length) {
+    const msg = (STATE.parcFilter || "").trim() ? t("roster_no_match") : t("roster_empty_class");
+    return `<tr class="parc-emptyrow"><td colspan="7"><p class="parc-empty">${esc(msg)}</p></td></tr>`;
+  }
+  return rows.map(parcRowHTML).join("");
+}
+// Name filter (in the "Nom" header): rebuild ONLY the tbody so the input never loses focus.
+function parcFilter(v) {
+  STATE.parcFilter = v;
+  const tb = $("parc-tbody"); if (tb) tb.innerHTML = parcTbodyHTML();
 }
 
-// -- roster mutations (Phase 2-3) — all go through the SSRF/CSRF-guarded local endpoints --------
+// -- roster mutations (Phases 2-3) — all go through the SSRF/CSRF-guarded local endpoints --------
 const parcClassValue = (v) => (v === CLASS_UNFILED || !v ? null : v);
 async function reloadRoster() {
   STATE.roster = await api("/api/roster").catch(() => STATE.roster);
-  // Drop selections/pending state that no longer refer to existing rows.
+  // Drop selections / an open name editor that no longer refer to existing rows.
   const live = new Set((STATE.roster && STATE.roster.calculators || []).map(c => c.key));
   STATE.parcSel = (STATE.parcSel || []).filter(k => live.has(k));
+  if (STATE.parcEditingKey && !live.has(STATE.parcEditingKey)) STATE.parcEditingKey = null;
   renderTabs(); renderParc();
 }
 async function parcDo(fn, okMsg) {  // shared error/toast wrapper for a mutation
@@ -886,9 +984,14 @@ async function parcDo(fn, okMsg) {  // shared error/toast wrapper for a mutation
 // Resolve a row index back to its "model:serial" key (kept out of the DOM). Robust to a stale
 // index after a concurrent reload: returns undefined, and the callers no-op.
 const parcKey = (i) => ((STATE.roster && STATE.roster.calculators[i]) || {}).key;
+// Double-click opens the inline name editor; blur / Enter commits, Escape reverts (see parcRowHTML).
+function parcNameEdit(i) { const key = parcKey(i); if (!key) return; STATE.parcEditingKey = key; renderParc(); }
 function parcRename(i, inp) {
-  const key = parcKey(i); if (!key) return;
-  return parcDo(() => post("/api/roster/rename", { key, name: inp.value.trim() }), () => t("roster_renamed"));
+  const key = parcKey(i); STATE.parcEditingKey = null;
+  if (!key) { renderParc(); return; }
+  const name = inp.value.trim(), cur = ((STATE.roster.calculators[i] || {}).name) || "";
+  if (name === cur) { renderParc(); return; }  // unchanged (or reverted via Escape) → just leave edit
+  return parcDo(() => post("/api/roster/rename", { key, name }), () => t("roster_renamed"));
 }
 function parcRowMove(i, sel) {
   const key = parcKey(i); if (!key) return;
@@ -905,7 +1008,7 @@ function parcToggleSel(i, on) {
 }
 function parcSelectAll(on) {
   const s = new Set(STATE.parcSel || []);
-  parcRows().forEach(c => on ? s.add(c.key) : s.delete(c.key));
+  parcVisibleRows().forEach(c => on ? s.add(c.key) : s.delete(c.key));
   STATE.parcSel = [...s]; renderParc();
 }
 function parcBulkMove(sel) {
@@ -929,20 +1032,26 @@ function parcClassRenameCancel() { STATE.parcRenamingClass = null; renderParc();
 async function parcClassRenameCommit(from, inp) {
   const to = inp.value.trim(); STATE.parcRenamingClass = null;
   if (!to || to === from) { renderParc(); return; }
+  if (STATE.parcClass === from) STATE.parcClass = to;  // keep the renamed class selected
   await parcDo(() => post("/api/roster/class/rename", { from, to }), () => t("roster_class_saved"));
 }
+// Delete the class named `name` (the currently-selected one). Empty ⇒ gone directly; non-empty ⇒
+// the server asks, and the 2-choice confirm (move vs purge) is shown.
 async function parcDeleteClass(name) {
+  if (!name) return;
   try {
     const r = await post("/api/roster/class/delete", { name });
     if (r && r.needs_confirm) { STATE.parcConfirm = { name, count: r.count }; renderParc(); return; }
+    if (STATE.parcClass === name) STATE.parcClass = CLASS_ALL;
     await reloadRoster(); toast(t("roster_class_deleted"));
   } catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 function parcDeleteCancel() { STATE.parcConfirm = null; renderParc(); }
-async function parcDeleteConfirm() {
+async function parcDeleteConfirm(mode) {  // mode: "move" (→ Sans classe) | "purge" (delete the calcs)
   const c = STATE.parcConfirm; if (!c) return;
   STATE.parcConfirm = null;
-  await parcDo(() => post("/api/roster/class/delete", { name: c.name, confirm: true }), () => t("roster_class_deleted"));
+  if (STATE.parcClass === c.name) STATE.parcClass = CLASS_ALL;  // the filtered class is going away
+  await parcDo(() => post("/api/roster/class/delete", { name: c.name, mode }), () => t("roster_class_deleted"));
 }
 
 // -- drag-and-drop: drag one (or the whole selection) onto a rail bucket ------------------------

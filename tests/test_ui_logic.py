@@ -248,45 +248,55 @@ def test_serial_reveal_and_calc_name_are_wired(tmp_path):
         assert not errors
 
 
-def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path):
+def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path, monkeypatch):
     """The "Parc" tab appears only in classroom mode, renders the classes rail + calculator table
-    from STATE.roster, filters by class, and NEVER puts a serial in the DOM."""
+    from the roster, filters by class (single-click, with the click/dblclick discrimination delay),
+    and NEVER puts a serial in the DOM."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+    from nwupdater import device_names as N
+
+    # Seed a two-calculator fleet BEFORE the page loads: one named + filed, one unnamed + unfiled.
+    R.upsert_on_scan("n0110", "SECRETAAA111", firmware="25.2.0", family="graphique")
+    R.upsert_on_scan("n0120", "SECRETBBB222", firmware="19.0.0", family="graphique")
+    N.set_name("n0110", "SECRETAAA111", "Poste 3")
+    R.move(["n0110:SECRETAAA111"], "Seconde A")
     with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector(
+            "#serial-btn"
+        )  # the connected UI has fully loaded (no in-flight GETs)
         # Individual mode: the Parc tab is hidden.
         assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") == "none"
+        # Detach the fixture's demo device so switching to classroom enrols nothing extra; the Parc
+        # then reflects exactly the seeded fleet.
+        page.evaluate(
+            "async () => { stopPoll(); await post('/api/device/detach');"
+            " STATE.identity = { connected:false }; setMode('classroom'); }"
+        )
+        page.wait_for_selector("#pane-parc.on .parc-tbl")
+        page.wait_for_function(
+            "document.querySelectorAll('#pane-parc .parc-tbl tbody tr').length === 2"
+        )
         r = page.evaluate(
             """() => {
-                STATE.roster = { schema:1, classes:['Seconde A'], counts:{'Seconde A':1},
-                  unfiled_count:1, total:2, calculators:[
-                    {key:'n0110:SECRETAAA', name:'Poste 3', default:'calc N0110', model:'n0110',
-                     family:'graphique', class:'Seconde A', known_firmware:'23.2.4', up_to_date:true,
-                     last_scan:'2026-07-20T09:00:00+00:00'},
-                    {key:'n0120:SECRETBBB', name:null, default:'calc N0120', model:'n0120',
-                     family:'graphique', class:null, known_firmware:'19.0.0', up_to_date:false,
-                     last_scan:'2026-07-24T09:00:00+00:00'},
-                  ]};
-                setMode('classroom');
                 const pane = document.getElementById('pane-parc');
                 return {
                   tabShown: getComputedStyle(document.getElementById('tab-parc')).display !== 'none',
                   selected: document.getElementById('tab-parc').getAttribute('aria-selected'),
-                  rows: pane.querySelectorAll('.parc-tbl tbody tr').length,
-                  names: [...pane.querySelectorAll('.pnm')].map(e => e.value),
-                  phs: [...pane.querySelectorAll('.pnm')].map(e => e.placeholder),
+                  names: [...pane.querySelectorAll('.pnm-txt')].map(e => e.textContent),
                   html: pane.innerHTML,
                 };
             }"""
         )
         assert r["tabShown"] is True and r["selected"] == "true"
-        assert r["rows"] == 2  # the default "Toutes" bucket shows every calculator
-        # The name is an editable input (value); the unnamed calc shows its fallback as a placeholder.
-        assert "Poste 3" in r["names"] and "calc N0120" in r["phs"]
+        # Names are display labels (double-click to edit); the unnamed calc shows its fallback.
+        assert "Poste 3" in r["names"] and "calc N0120" in r["names"]
         # The serial (inside the internal key) is never rendered — not even in an attribute.
-        assert "SECRETAAA" not in r["html"] and "SECRETBBB" not in r["html"]
-        # Clicking the "Seconde A" class filters to its single calculator. Target the label span
-        # (always visible, left-aligned) — the hover-revealed rename/delete tools sit on the right.
+        assert "SECRETAAA111" not in r["html"] and "SECRETBBB222" not in r["html"]
+        # Single-clicking the "Seconde A" class name filters to its calculator. The select is
+        # delayed (click/dblclick discrimination) so wait for the filtered tbody.
         page.click(".parc-rail .clsbtn:has-text('Seconde A') .nm")
-        assert page.eval_on_selector_all(".parc-tbl tbody tr", "els => els.length") == 1
+        page.wait_for_function("document.querySelectorAll('.parc-tbl tbody tr').length === 1")
         # Back to individual mode: the Parc tab hides and falls back to System.
         page.click("#mode-individual")
         assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") == "none"
@@ -294,8 +304,9 @@ def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path):
 
 
 def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
-    """The Parc edit affordances (rename, move, create/delete class, multi-select) drive the real
-    roster endpoints; the serial never reaches the DOM (handlers key on the row index)."""
+    """The Parc edit affordances (double-click rename, per-row move, create/delete class with the
+    move/purge confirm, multi-select) drive the real roster endpoints; the serial never reaches the
+    DOM (handlers key on the row index)."""
     monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
     from nwupdater import classroom_roster as R
     from nwupdater import device_names as N
@@ -305,20 +316,34 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
     R.upsert_on_scan("n0120", "SECRETUI02", firmware="16.4.4", family="graphique")
     N.set_name("n0110", "SECRETUI01", "Poste 1")
     with _ui(tmp_path) as (page, errors):
-        page.evaluate("async () => { STATE.roster = await api('/api/roster'); setMode('classroom'); }")
+        page.wait_for_selector(
+            "#serial-btn"
+        )  # the connected UI has fully loaded (no in-flight GETs)
+        # Detach the demo device so classroom mode enrols nothing extra, then switch mode.
+        page.evaluate(
+            "async () => { stopPoll(); await post('/api/device/detach');"
+            " STATE.identity = { connected:false }; setMode('classroom'); }"
+        )
         page.wait_for_selector("#pane-parc.on .parc-tbl")
-        # Two editable name inputs; the seeded name is joined from the name store.
-        page.wait_for_function("document.querySelectorAll('#pane-parc .pnm').length === 2")
-        assert page.eval_on_selector_all("#pane-parc .pnm", "els => els.some(e => e.value === 'Poste 1')")
+        page.wait_for_function("document.querySelectorAll('#pane-parc tbody tr').length === 2")
+        # Names are display labels (double-click to edit); the seeded name is joined from the store.
+        assert page.eval_on_selector_all(
+            "#pane-parc .pnm-txt", "els => els.some(e => e.textContent === 'Poste 1')"
+        )
         # The serial is never rendered — not as text, not in an attribute (handlers use row indices).
         html = page.inner_html("#pane-parc")
         assert "SECRETUI01" not in html and "SECRETUI02" not in html
         # Every edit handler is wired.
         assert page.evaluate(
-            "() => ['parcRename','parcRowMove','parcRowDelete','parcBulkMove','parcBulkDelete',"
-            "'parcDeleteClass','parcAddClass','parcClassRename','parcDragStart'].every("
-            "f => typeof window[f] === 'function')"
+            "() => ['parcRename','parcNameEdit','parcRowMove','parcRowDelete','parcBulkMove',"
+            "'parcBulkDelete','parcDeleteClass','parcAddClass','parcClassRename','parcFilter',"
+            "'parcDragStart'].every(f => typeof window[f] === 'function')"
         )
+        # Inline rename by double-clicking the name label → edit → the name store records it.
+        page.dblclick("#pane-parc .pnm-txt:has-text('Poste 1')")
+        page.fill("#parc-nameedit", "Poste 9")
+        page.eval_on_selector("#parc-nameedit", "el => el.blur()")
+        page.wait_for_function("STATE.roster.calculators.some(c => c.name === 'Poste 9')")
         # Create a class from the rail input → it appears as a bucket.
         page.fill("#parc-newclass", "Seconde A")
         page.click("#pane-parc .cls-add .ib")
@@ -328,15 +353,59 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
         # Move the first calculator into it via the row dropdown → the server count reflects it.
         page.select_option("#pane-parc tbody tr:first-child .pc-act .mv", "Seconde A")
         page.wait_for_function("STATE.roster.counts && STATE.roster.counts['Seconde A'] === 1")
-        # Multi-select all → the bulk bar appears.
+        # Multi-select all → the bulk bar appears (Phase-3 selection is already wired).
         page.check("#pane-parc thead input[type=checkbox]")
         page.wait_for_selector("#pane-parc .parc-bulk")
-        # Delete the (now non-empty) class → inline confirm → confirm re-files its member to unfiled.
+        # Delete the (now non-empty) class → the 2-choice confirm → "move" re-files its member.
         page.evaluate("() => parcDeleteClass('Seconde A')")
         page.wait_for_selector("#pane-parc .cls-confirm")
-        page.click("#pane-parc .cls-confirm .btn.danger")
+        page.click("#pane-parc .cls-confirm .confirm-move")
         page.wait_for_function("!STATE.roster.classes.includes('Seconde A')")
         assert page.evaluate("() => STATE.roster.unfiled_count === 2")  # both back to unfiled
+        assert not errors
+
+
+def test_parc_name_filter_and_class_double_click_rename(tmp_path, monkeypatch):
+    """The "Nom" header filter narrows only the tbody and keeps its own focus; double-clicking a
+    class name enters inline rename (single-click still selects, via the discrimination delay)."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+    from nwupdater import device_names as N
+
+    R.upsert_on_scan("n0110", "SERALPHA", firmware="16.4.4", family="graphique")
+    R.upsert_on_scan("n0120", "SERBRAVO", firmware="16.4.4", family="graphique")
+    N.set_name("n0110", "SERALPHA", "Alpha")
+    N.set_name("n0120", "SERBRAVO", "Bravo")
+    R.create_class("Seconde A")
+    with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector(
+            "#serial-btn"
+        )  # the connected UI has fully loaded (no in-flight GETs)
+        page.evaluate(
+            "async () => { stopPoll(); await post('/api/device/detach');"
+            " STATE.identity = { connected:false }; setMode('classroom'); }"
+        )
+        page.wait_for_selector("#pane-parc.on .parc-tbl")
+        page.wait_for_function("document.querySelectorAll('#pane-parc tbody tr').length === 2")
+        # Type in the header filter → only the tbody narrows, and the input keeps focus.
+        page.fill(".pc-filter-in", "brav")
+        page.wait_for_function("document.querySelectorAll('#pane-parc tbody tr').length === 1")
+        assert page.evaluate(
+            "() => document.activeElement === document.querySelector('.pc-filter-in')"
+        )
+        assert page.eval_on_selector_all(
+            "#pane-parc .pnm-txt", "els => els.map(e => e.textContent)"
+        ) == ["Bravo"]
+        # Clear the filter → both rows return.
+        page.fill(".pc-filter-in", "")
+        page.wait_for_function("document.querySelectorAll('#pane-parc tbody tr').length === 2")
+        # Double-click the class name → inline rename input; committing renames it on the server.
+        page.dblclick(".parc-rail .clsbtn:has-text('Seconde A') .nm")
+        page.wait_for_selector("#parc-clsedit")
+        page.fill("#parc-clsedit", "Terminale S")
+        page.eval_on_selector("#parc-clsedit", "el => el.blur()")
+        page.wait_for_function("STATE.roster.classes.includes('Terminale S')")
+        assert page.evaluate("() => !STATE.roster.classes.includes('Seconde A')")
         assert not errors
 
 
@@ -349,12 +418,16 @@ def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
 
     R.upsert_on_scan("n0110", "SEROFFLINE1", firmware="16.4.4", family="graphique")
     with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector(
+            "#serial-btn"
+        )  # the connected UI has fully loaded (no in-flight GETs)
         page.evaluate(
             """async () => {
-                stopPoll();  // pin the simulated disconnect (the server still holds a demo device)
+                stopPoll();  // pin the simulated disconnect
+                await post('/api/device/detach');  // no connected device → nothing auto-enrols
+                STATE.identity = { connected:false };  // the calculator is unplugged
+                await setMode('classroom');
                 [STATE.roster, STATE.cache] = await Promise.all([api('/api/roster'), api('/api/cache')]);
-                setMode('classroom');
-                STATE.identity = { connected:false };  // simulate the calculator being unplugged
                 renderAll();
             }"""
         )
@@ -370,11 +443,13 @@ def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
         # System pane: the firmware-flash card hides without a device; the cache card shows.
         page.click("#tab-system")
         assert page.eval_on_selector("#flash-card", "el => getComputedStyle(el).display") == "none"
-        assert page.eval_on_selector("#classroom-card", "el => getComputedStyle(el).display") != "none"
+        assert (
+            page.eval_on_selector("#classroom-card", "el => getComputedStyle(el).display") != "none"
+        )
         # Back on the Parc: the seeded calculator is listed and editable (disk-only, offline).
         page.click("#tab-parc")
-        assert page.eval_on_selector_all("#pane-parc .pnm", "els => els.length") == 1
-        assert page.evaluate("() => typeof parcRename === 'function'")
+        assert page.eval_on_selector_all("#pane-parc .pnm-txt", "els => els.length") == 1
+        assert page.evaluate("() => typeof parcNameEdit === 'function'")
         assert not errors
 
 
@@ -395,7 +470,9 @@ def test_account_reachable_without_a_device_in_individual(tmp_path, monkeypatch)
         page.wait_for_selector("#window[data-conn='0']")
         assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") != "none"
         page.click("#tab-system")
-        assert page.eval_on_selector("#account-card", "el => getComputedStyle(el).display") != "none"
+        assert (
+            page.eval_on_selector("#account-card", "el => getComputedStyle(el).display") != "none"
+        )
         assert page.eval_on_selector("#flash-card", "el => getComputedStyle(el).display") == "none"
         assert page.query_selector("#auth-email") is not None  # the login form is available offline
         assert not errors

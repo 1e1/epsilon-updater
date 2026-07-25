@@ -279,7 +279,10 @@
     padding:7px 9px; border-radius:8px; cursor:pointer; text-align:left; }
   .clsbtn:hover { background:var(--card); }
   .clsbtn[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-ink); }
-  .clsbtn .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .clsbtn .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .clsbtn .cls-ic { display:inline-flex; color:var(--muted); flex:none; }
+  .clsbtn .cls-ic svg { width:15px; height:15px; display:block; }
+  .clsbtn[aria-pressed="true"] .cls-ic { color:var(--accent-ink); }
   .clsbtn .cnt { font-size:11px; color:var(--muted); background:var(--card); border-radius:999px;
     padding:1px 7px; font-variant-numeric:tabular-nums; flex:none; }
   .clsbtn[aria-pressed="true"] .cnt { color:var(--accent-ink); }
@@ -317,11 +320,36 @@
   .ib.xs { width:20px; height:20px; border-radius:6px; }
   .ib.xs svg { width:11px; height:11px; }
   .btn.danger { background:var(--err); border-color:var(--err); color:#fff; }
-  .clsbtn .cls-tools { display:none; gap:2px; flex:none; }
-  .clsbtn:hover .cls-tools, .clsbtn:focus-within .cls-tools { display:inline-flex; }
-  .clsbtn .cls-tools .ib { background:transparent; border-color:transparent; }
-  .clsbtn .cls-tools .ib:hover { background:var(--card); border-color:var(--line); }
   .clsbtn.drop-hot { background:var(--accent-soft); outline:2px dashed var(--accent); outline-offset:-2px; }
+  /* view actions (top of the Parc): the icon-only delete-class button lives here, next to where a
+     future "batch mode" button will sit */
+  .parc-actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-bottom:10px; min-height:26px; }
+  .ib.danger-ib { color:var(--muted); }
+  .ib.danger-ib:hover:not(:disabled) { color:var(--err); border-color:var(--err); }
+  /* name cell: a display label by default (double-click swaps to the .pnm input) */
+  .pnm-txt { display:inline-block; min-width:90px; font-size:12.5px; font-weight:600; color:var(--ink);
+    border:1px solid transparent; border-radius:6px; padding:4px 6px; cursor:text; }
+  .pnm-txt:hover { border-color:var(--line); }
+  .pnm-txt.ph { color:var(--muted); font-weight:500; }
+  /* name filter lives in the "Nom" header; typing rebuilds only the tbody so focus is kept */
+  .parc-tbl .pc-name { min-width:150px; }
+  .pc-filter-in { display:block; margin-top:6px; width:100%; max-width:180px; font:inherit; font-size:11px;
+    font-weight:400; text-transform:none; letter-spacing:0; padding:4px 8px; border-radius:7px;
+    border:1px solid var(--line-strong); background:var(--card); color:var(--ink); }
+  /* distribution: 4 outcome-coloured action glyphs (recensement · firmware · apps · scripts) */
+  .parc-tbl .pc-dist { white-space:nowrap; }
+  .pc-dist .dist-none { color:var(--muted); }
+  .pc-dist .dist-ic { display:inline-flex; margin-right:5px; }
+  .pc-dist .dist-ic:last-child { margin-right:0; }
+  .pc-dist .dist-ic svg { width:14px; height:14px; display:block; }
+  .pc-dist .dist-ic.ok { color:var(--ok); }
+  .pc-dist .dist-ic.change { color:var(--accent); }
+  .pc-dist .dist-ic.error { color:var(--err); }
+  /* trash is revealed only on row hover / keyboard focus; the move dropdown stays visible (a11y) */
+  .parc-tbl .pc-act .trash { opacity:0; transition:opacity .12s; }
+  .parc-tbl tr:hover .pc-act .trash,
+  .parc-tbl tr:focus-within .pc-act .trash { opacity:1; }
+  @media (prefers-reduced-motion: reduce) { .parc-tbl .pc-act .trash { transition:none; } }
   .cls-add { display:flex; gap:5px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
   .cls-add input { flex:1; min-width:0; font:inherit; font-size:12px; padding:6px 8px; border-radius:7px;
     border:1px solid var(--line-strong); background:var(--card); color:var(--ink); }
