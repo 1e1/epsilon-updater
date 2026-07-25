@@ -6,6 +6,27 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Corrigé
+
+- **Statut « officiel » / examen — correction majeure (l'affirmation rc5 était fausse)** :
+  l'analyse du firmware Epsilon + du flux WebUSB officiel, **confirmée sur N0120 réelle**, établit
+  que « officiel » est une **signature Ed25519 vérifiée par le bootloader au démarrage à froid**,
+  **entièrement hors ligne** (aucune attestation réseau). Le bandeau « UNOFFICIAL SOFTWARE » vu en
+  rc5 venait du **saut DFU** (`leave`, le « boot » in-app) utilisé pour booter — **pas** des octets
+  du slot. Flasher l'**image officielle signée** puis **redémarrer à froid** (RESET) rend l'appareil
+  **officiel** : la mise à jour hors ligne vers un firmware conforme examen **est donc faisable**
+  (image officielle signée + boot à froid, pas le saut DFU). Un firmware non signé reste « non
+  officiel » (signature non forgeable). Nouvelle spec :
+  [`docs/01-specs/firmware-authenticity.md`](docs/01-specs/firmware-authenticity.md).
+
+### Modifié
+
+- **Interface — orientation post-flash** : les messages `confirm_flash`, `exam_warn`, `fw_reboot`
+  (FR/EN) orientent désormais vers un **démarrage à froid (RESET)** après un flash pour conserver le
+  statut officiel, au lieu d'affirmer (à tort) que tout flash rend l'appareil non conforme examen.
+  `DISCLAIMER.md`, `README.md` et `docs/03-transfer-install/implementation.md` corrigés en
+  conséquence.
+
 ## [1.0.0-rc.5] - 2026-07-25
 
 ### Ajouté

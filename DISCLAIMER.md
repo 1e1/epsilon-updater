@@ -20,13 +20,17 @@ direct ou indirect, résultant de son utilisation.
 **Public mineur :** les calculatrices étant des outils scolaires, toute opération de flashage
 réalisée par un mineur doit se faire **sous la supervision d'un adulte**.
 
-**Logiciel « non officiel » & examens :** flasher un firmware avec cet outil — **même l'image
-officielle** — fait afficher à la calculatrice le bandeau **« UNOFFICIAL SOFTWARE »** et la rend
-**non conforme aux exigences de certains examens** (l'appareil n'ayant pas été mis à jour via le
-flux signé officiel de NumWorks, son contrôle d'authenticité la marque « non officielle »).
-Constaté sur une N0120 réelle. Pour restaurer l'état officiel, mettez-la à jour via
-**my.numworks.com**. **N'utilisez pas cet outil pour flasher une calculatrice destinée à un
-examen surveillé.**
+**Logiciel « non officiel » & examens :** le statut « officiel » (donc la conformité au mode
+examen) est une **signature Ed25519 vérifiée par le bootloader à chaque démarrage à froid**,
+**entièrement hors ligne** (aucune attestation réseau). Flasher l'**image officielle signée**
+avec cet outil puis **redémarrer à froid** (bouton RESET, ou extinction) restaure l'état
+**officiel** — le bootloader re-vérifie la signature. En revanche, le **« boot » in-app** (saut
+DFU) fait afficher **temporairement** le bandeau **« UNOFFICIAL SOFTWARE »** : le noyau, sans la
+clé, ne peut pas vérifier un slot atteint par saut ; un **démarrage à froid efface ce bandeau**.
+Un firmware **modifié ou non signé** reste « non officiel » — la signature ne peut pas être
+forgée. Constaté sur une N0120 réelle. **Pour un examen surveillé à enjeu, n'utilisez que l'image
+officielle, vérifiez le statut de l'appareil après un démarrage à froid, et confirmez au besoin
+auprès de l'établissement ou de NumWorks.**
 
 « NumWorks » et « Epsilon » sont des marques de leurs détenteurs respectifs, mentionnées à
 des fins d'interopérabilité uniquement.
@@ -46,12 +50,16 @@ liability for any hardware damage, data loss or other harm resulting from its us
 **Minors:** as calculators are school tools, any flashing performed by a minor should be done
 **under adult supervision**.
 
-**"Unofficial software" & exams:** flashing firmware with this tool — **even the official
-image** — makes the calculator display the **"UNOFFICIAL SOFTWARE"** banner and renders it
-**non-compliant with some exams' requirements** (not having been updated through NumWorks'
-official signed flow, its authenticity check flags it as unofficial). Observed on a real N0120.
-To restore official status, update it via **my.numworks.com**. **Do not use this tool to flash a
-calculator intended for a proctored exam.**
+**"Unofficial software" & exams:** the "official" status (hence exam-mode compliance) is an
+**Ed25519 signature verified by the bootloader at every cold boot**, **entirely offline** (no
+network attestation). Flashing the **official signed image** with this tool and then
+**cold-booting** (RESET button, or power-cycle) restores **official** status — the bootloader
+re-verifies the signature. By contrast, the **in-app "boot"** (DFU jump) shows the
+**"UNOFFICIAL SOFTWARE"** banner **transiently**: the kernel, lacking the key, cannot verify a
+slot entered by a jump; a **cold boot clears it**. **Modified or unsigned** firmware stays
+"unofficial" — the signature cannot be forged. Observed on a real N0120. **For a high-stakes
+proctored exam, use only the official image, verify the device's status after a cold boot, and
+confirm with your institution or NumWorks if in doubt.**
 
 "NumWorks" and "Epsilon" are trademarks of their respective owners, referenced for
 interoperability purposes only.

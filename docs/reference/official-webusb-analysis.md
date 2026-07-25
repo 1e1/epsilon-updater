@@ -19,6 +19,13 @@ Le stack se lit dans deux artefacts publics que NumWorks a essaimés / la commun
 > Workshop. Toute structure ci-dessous est **recoupée avec `epsilon`** (autorité). Citations JS =
 > `Fichier:ligne` de la version lue en juillet 2026.
 
+> **Attestation : aucune (hors ligne).** Recherche `fetch`/`XMLHttpRequest`/`WebSocket`/`http(s)://`
+> dans tout le flux : rien de réseau pendant le flash (seuls des `navigator.usb.*`). Le seul contact
+> serveur = le **téléchargement** du `.dfu` pré-signé (protégé par compte). L'authenticité
+> (« officiel » / mode examen) est vérifiée **on-device par le bootloader** (signature Ed25519 du
+> slot, au boot à froid) — détail dans
+> [../01-specs/firmware-authenticity.md](../01-specs/firmware-authenticity.md).
+
 ## Architecture en 3 couches (= la nôtre)
 
 ```

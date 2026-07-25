@@ -165,7 +165,13 @@ class FirmwareMixin(SessionBase):
         """Send DFU detach + jump so the calculator reboots on the freshly-flashed slot.
 
         On real hardware the USB handle drops as the device resets (expected). Requires a
-        prior install in this session."""
+        prior install in this session.
+
+        NB: this is a DFU *jump*, not a cold boot. The running kernel cannot verify the slot's
+        signature, so it marks the jumped-into userland ``ThirdParty`` and the calc shows
+        "UNOFFICIAL SOFTWARE" *transiently*. For official status (and exam mode) the user must
+        **cold-boot** (RESET button / power-cycle) so the bootloader re-verifies the signature —
+        see docs/01-specs/firmware-authenticity.md."""
         addr = self._last_boot_address
         if not addr:
             raise ValueError("no freshly installed firmware to boot")
