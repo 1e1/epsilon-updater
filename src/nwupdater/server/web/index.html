@@ -133,8 +133,11 @@
   @media (max-width:620px){ .panes{ position:static; } .pane{ position:static; } }
 
   .nodev-main { display:none; position:absolute; inset:0; align-items:center; justify-content:center; padding:24px; }
-  .window[data-conn="0"] .tabbar, .window[data-conn="0"] .panes { display:none; }
-  .window[data-conn="0"] .nodev-main { display:flex; }
+  /* Disconnected: hide the workspace and show the "connect a calculator" screen — EXCEPT in
+     classroom mode, where the Parc (a local, device-independent fleet register) stays usable. */
+  .window[data-conn="0"]:not([data-mode="classroom"]) .tabbar,
+  .window[data-conn="0"]:not([data-mode="classroom"]) .panes { display:none; }
+  .window[data-conn="0"]:not([data-mode="classroom"]) .nodev-main { display:flex; }
   .nodev { text-align:center; max-width:340px; }
   .nodev .ico { font-size:34px; opacity:.7; }
   .nodev h3 { font-size:15px; margin:10px 0 4px; }

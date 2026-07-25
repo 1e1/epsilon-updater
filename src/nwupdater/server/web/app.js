@@ -86,7 +86,7 @@ async function load() {
   STATE.demoModels = await api("/api/device/demo-models").catch(() => null);
   STATE.identity = await api("/api/identity");
   if (STATE.identity && STATE.identity.connected) await loadConnected();
-  else renderAll();
+  else { STATE.roster = await api("/api/roster").catch(() => null); renderAll(); }  // Parc is device-independent
   startPoll();  // always on: catches a plug-in while disconnected AND an unplug while connected
 }
 
@@ -184,10 +184,15 @@ function renderAll() {
   $("src-pop-foot").textContent = t("src_foot");
   renderModeButtons();
   const conn = !!(STATE.identity && STATE.identity.connected);
-  $("window").dataset.conn = conn ? "1" : "0";
+  const cls = STATE.mode === "classroom";
+  const w = $("window"); w.dataset.conn = conn ? "1" : "0"; w.dataset.mode = STATE.mode;
   renderRail();
   if (conn) { renderSystem(); renderWorkbench(); renderParc(); setTab(STATE.tab); }
-  else renderNoDevMain();
+  else if (cls) {
+    // Classroom without a device: the Parc (a local, device-independent fleet register) stays
+    // usable — view/rename/file the fleet before any calculator is plugged in (all disk-only).
+    renderTabs(); renderParc(); setTab("parc");
+  } else renderNoDevMain();
 }
 
 function renderNoDevMain() {
@@ -249,22 +254,25 @@ function setTab(tab) {
   });
 }
 function renderTabs() {
+  const conn = !!(STATE.identity && STATE.identity.connected);
   const hasApps = !!(STATE.apps && STATE.apps.hasRegion);
   const hasPy = !!(STATE.scripts && STATE.scripts.hasScripts);
   const cls = STATE.mode === "classroom";
-  // The "Parc" (roster) tab is classroom-only — the fleet home. Workshops follow the HARDWARE
-  // (QSPI apps region / Python storage) — hide the tab when absent.
+  // The "Parc" (roster) tab is classroom-only — the fleet home, device-INDEPENDENT (P3), so it
+  // shows even with no calculator. System/Apps/Scripts need a connected device (they follow the
+  // HARDWARE: QSPI apps region / Python storage), so they hide when disconnected.
   $("tab-parc").style.display = cls ? "" : "none";
-  $("tab-apps").style.display = hasApps ? "" : "none";
-  $("tab-scripts").style.display = hasPy ? "" : "none";
+  $("tab-system").style.display = conn ? "" : "none";
+  $("tab-apps").style.display = (conn && hasApps) ? "" : "none";
+  $("tab-scripts").style.display = (conn && hasPy) ? "" : "none";
   $("tab-parc-cnt").textContent = (cls && STATE.roster) ? String(STATE.roster.total || 0) : "";
   $("tab-apps-cnt").textContent = hasApps ? String(STATE.apps.device.length) : "";
   $("tab-scripts-cnt").textContent = hasPy ? String(STATE.scripts.device.length) : "";
   // The "update available" signal is a pulsing dot on the System tab (not a text pill).
   const up = !!(STATE.catalog && STATE.catalog.up_to_date);
   $("updot").style.display = (STATE.catalog && !up) ? "block" : "none";
-  if ((STATE.tab === "apps" && !hasApps) || (STATE.tab === "scripts" && !hasPy)
-      || (STATE.tab === "parc" && !cls)) setTab("system");
+  if ((STATE.tab === "apps" && !(conn && hasApps)) || (STATE.tab === "scripts" && !(conn && hasPy))
+      || (STATE.tab === "parc" && !cls) || (STATE.tab === "system" && !conn)) setTab(cls ? "parc" : "system");
 }
 
 // -- account & mode ------------------------------------------------------------
@@ -278,12 +286,11 @@ function renderModeButtons() {
 }
 function setMode(m) {
   STATE.mode = m; localStorage.setItem("nwmode", m);
-  if (STATE.identity && STATE.identity.connected) {
-    renderSystem(); renderWorkbench(); renderParc();
-    // The roster is the classroom's home; leaving classroom drops off the (now hidden) Parc tab.
-    if (m === "classroom") setTab("parc");
-    else if (STATE.tab === "parc") setTab("system");
-  } else renderModeButtons();
+  // The roster is the classroom's home; leaving classroom drops off the (now hidden) Parc tab.
+  if (m === "classroom") STATE.tab = "parc";
+  else if (STATE.tab === "parc") STATE.tab = "system";
+  // renderAll handles every case — including classroom WITHOUT a device (the Parc stays usable).
+  renderAll();
 }
 function renderSystem() {
   renderModeButtons();

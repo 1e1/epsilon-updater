@@ -338,3 +338,33 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
         page.wait_for_function("!STATE.roster.classes.includes('Seconde A')")
         assert page.evaluate("() => STATE.roster.unfiled_count === 2")  # both back to unfiled
         assert not errors
+
+
+def test_parc_usable_without_a_device_in_classroom(tmp_path, monkeypatch):
+    """Decouple (plan §1): the Parc is device-independent (P3), so classroom mode shows and edits
+    it with NO calculator connected — the workspace is not hidden behind "plug one in"."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    from nwupdater import classroom_roster as R
+
+    R.upsert_on_scan("n0110", "SEROFFLINE1", firmware="16.4.4", family="graphique")
+    with _ui(tmp_path) as (page, errors):
+        page.evaluate(
+            """async () => {
+                STATE.roster = await api('/api/roster');
+                setMode('classroom');
+                STATE.identity = { connected:false };  // simulate the calculator being unplugged
+                renderAll();
+            }"""
+        )
+        # The Parc stays: its pane renders the fleet, the "connect a calculator" screen does not show.
+        page.wait_for_selector("#pane-parc.on .parc-tbl")
+        assert page.eval_on_selector("#window", "el => el.dataset.conn") == "0"
+        assert page.eval_on_selector(".nodev-main", "el => getComputedStyle(el).display") == "none"
+        assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") != "none"
+        # Device-dependent tabs are hidden without a calculator.
+        assert page.eval_on_selector("#tab-system", "el => getComputedStyle(el).display") == "none"
+        assert page.eval_on_selector("#tab-apps", "el => getComputedStyle(el).display") == "none"
+        # The seeded calculator is listed and editable (rename is disk-only, works offline).
+        assert page.eval_on_selector_all("#pane-parc .pnm", "els => els.length") == 1
+        assert page.evaluate("() => typeof parcRename === 'function'")
+        assert not errors
