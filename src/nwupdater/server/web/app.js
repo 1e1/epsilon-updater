@@ -21,6 +21,9 @@ let STATE = {
   apps: null, scripts: null, stage: { apps: [], scripts: [] }, hist: { apps: [], scripts: [] },
   // per-workshop op descriptor while busy (still truthy): false | {op:"write"} | {op:"download", name}
   busy: { apps: false, scripts: false },
+  // classroom roster ("Parc"): the joined fleet register + the selected class filter
+  // ("__all__" | "__unfiled__" | a class name). Read-only in this phase.
+  roster: null, parcClass: "__all__",
 };
 // Optional deep-link / reproducible-capture overrides (all are already user-settable prefs):
 // ?lang=fr|en · ?theme=light|dark · ?mode=individual|classroom. They never auto-connect a device.
@@ -78,6 +81,7 @@ const DROP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 async function load() {
   const qm = QS.get("mode");
   STATE.mode = (qm === "individual" || qm === "classroom") ? qm : (localStorage.getItem("nwmode") || "individual");
+  if (STATE.mode === "classroom") STATE.tab = "parc";  // the roster is the classroom's home
   STATE.demoModels = await api("/api/device/demo-models").catch(() => null);
   STATE.identity = await api("/api/identity");
   if (STATE.identity && STATE.identity.connected) await loadConnected();
@@ -100,6 +104,7 @@ async function loadConnected() {
   STATE.scripts = { hasScripts: sc.has_scripts, device: sc.scripts || [],
                     avail: sc.available || [], capacity: sc.capacity || 0 };
   STATE.name = await api("/api/device/name").catch(() => null);  // user calc name (local store)
+  STATE.roster = await api("/api/roster").catch(() => null);  // classroom fleet register ("Parc")
   STATE.sources = null;  // lazily fetched for the Sources popover on first open
   initStage("apps"); initStage("scripts");
   renderAll();
@@ -164,6 +169,7 @@ function renderAll() {
   $("quit-btn").title = t("quit"); $("quit-btn").setAttribute("aria-label", t("quit"));
   $("mode-individual-label").textContent = t("mode_individual");
   $("mode-classroom-label").textContent = t("mode_classroom");
+  $("tab-parc-label").textContent = t("parc");
   $("tab-system-label").textContent = t("tab_system");
   $("tab-apps-label").textContent = t("tab_apps");
   $("tab-scripts-label").textContent = t("tab_scripts");
@@ -179,7 +185,7 @@ function renderAll() {
   const conn = !!(STATE.identity && STATE.identity.connected);
   $("window").dataset.conn = conn ? "1" : "0";
   renderRail();
-  if (conn) { renderSystem(); renderWorkbench(); }
+  if (conn) { renderSystem(); renderWorkbench(); renderParc(); setTab(STATE.tab); }
   else renderNoDevMain();
 }
 
@@ -235,7 +241,7 @@ function renderRail() {
 // -- tabs ----------------------------------------------------------------------
 function setTab(tab) {
   STATE.tab = tab;
-  ["system", "apps", "scripts"].forEach(k => {
+  ["parc", "system", "apps", "scripts"].forEach(k => {
     const tb = $("tab-" + k), pn = $("pane-" + k);
     if (tb) tb.setAttribute("aria-selected", k === tab);
     if (pn) pn.classList.toggle("on", k === tab);
@@ -244,15 +250,20 @@ function setTab(tab) {
 function renderTabs() {
   const hasApps = !!(STATE.apps && STATE.apps.hasRegion);
   const hasPy = !!(STATE.scripts && STATE.scripts.hasScripts);
-  // Workshops follow the HARDWARE (QSPI apps region / Python storage) — hide the tab when absent.
+  const cls = STATE.mode === "classroom";
+  // The "Parc" (roster) tab is classroom-only — the fleet home. Workshops follow the HARDWARE
+  // (QSPI apps region / Python storage) — hide the tab when absent.
+  $("tab-parc").style.display = cls ? "" : "none";
   $("tab-apps").style.display = hasApps ? "" : "none";
   $("tab-scripts").style.display = hasPy ? "" : "none";
+  $("tab-parc-cnt").textContent = (cls && STATE.roster) ? String(STATE.roster.total || 0) : "";
   $("tab-apps-cnt").textContent = hasApps ? String(STATE.apps.device.length) : "";
   $("tab-scripts-cnt").textContent = hasPy ? String(STATE.scripts.device.length) : "";
   // The "update available" signal is a pulsing dot on the System tab (not a text pill).
   const up = !!(STATE.catalog && STATE.catalog.up_to_date);
   $("updot").style.display = (STATE.catalog && !up) ? "block" : "none";
-  if ((STATE.tab === "apps" && !hasApps) || (STATE.tab === "scripts" && !hasPy)) setTab("system");
+  if ((STATE.tab === "apps" && !hasApps) || (STATE.tab === "scripts" && !hasPy)
+      || (STATE.tab === "parc" && !cls)) setTab("system");
 }
 
 // -- account & mode ------------------------------------------------------------
@@ -266,8 +277,12 @@ function renderModeButtons() {
 }
 function setMode(m) {
   STATE.mode = m; localStorage.setItem("nwmode", m);
-  if (STATE.identity && STATE.identity.connected) { renderSystem(); renderWorkbench(); }
-  else renderModeButtons();
+  if (STATE.identity && STATE.identity.connected) {
+    renderSystem(); renderWorkbench(); renderParc();
+    // The roster is the classroom's home; leaving classroom drops off the (now hidden) Parc tab.
+    if (m === "classroom") setTab("parc");
+    else if (STATE.tab === "parc") setTab("system");
+  } else renderModeButtons();
 }
 function renderSystem() {
   renderModeButtons();
@@ -714,6 +729,74 @@ function renderWorkbench() {
   const hasPy = STATE.scripts && STATE.scripts.hasScripts;
   if (hasApps) $("pane-apps").innerHTML = workshopBody("apps");
   if (hasPy) $("pane-scripts").innerHTML = workshopBody("scripts");
+}
+
+// -- roster ("Parc") — classroom-only, read-only in this phase ------------------
+// Two panes: a classes rail (Toutes / Sans classe / each class, with counts) and a calculator
+// table (type icon · name · known firmware + up-to-date chip · last scan). The serial stays the
+// internal key server-side and is NEVER rendered here. Rename / move / delete / drag / multi-select
+// are later phases; the render is structured so an actions column can drop in.
+const CLASS_ALL = "__all__", CLASS_UNFILED = "__unfiled__";
+function parcTypeCell(family) {
+  const label = t(family === "scientifique" ? "fam_s" : "fam_g");
+  const glyph = buildCalc({ variant: variantOf(family), mode: "icon" });
+  return `<span class="pc-ic" title="${label}" role="img" aria-label="${label}">${glyph}</span>`;
+}
+// Locale-aware relative time (no extra i18n strings): "hier"/"yesterday", "il y a 3 j"/"3 d ago".
+function fmtRelative(iso) {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (isNaN(then)) return "—";
+  const sec = Math.round((then - Date.now()) / 1000), abs = Math.abs(sec);
+  let unit = "second", val = sec;
+  if (abs >= 86400) { unit = "day"; val = Math.round(sec / 86400); }
+  else if (abs >= 3600) { unit = "hour"; val = Math.round(sec / 3600); }
+  else if (abs >= 60) { unit = "minute"; val = Math.round(sec / 60); }
+  try { return new Intl.RelativeTimeFormat(LANG, { numeric: "auto" }).format(val, unit); }
+  catch (e) { return new Date(then).toLocaleDateString(LANG); }
+}
+function selectParcClass(id) { STATE.parcClass = id; renderParc(); }
+function renderParc() {
+  const el = $("pane-parc"); if (!el) return;
+  if (STATE.mode !== "classroom") { el.innerHTML = ""; return; }
+  const r = STATE.roster;
+  if (!r) { el.innerHTML = `<div class="parc-main"><p class="parc-empty">${t("roster_empty")}</p></div>`; return; }
+  const sel = STATE.parcClass || CLASS_ALL;
+  const railBtn = (id, label, count, pressed) =>
+    `<button class="clsbtn" aria-pressed="${pressed}" onclick="selectParcClass('${jsStr(id)}')">
+      <span class="nm">${esc(label)}</span><span class="cnt">${count}</span></button>`;
+  let rail = `<h4>${t("roster_classes")}</h4>`;
+  rail += railBtn(CLASS_ALL, t("roster_class_all"), r.total || 0, sel === CLASS_ALL);
+  rail += railBtn(CLASS_UNFILED, t("roster_unfiled"), r.unfiled_count || 0, sel === CLASS_UNFILED);
+  (r.classes || []).forEach(c =>
+    rail += railBtn(c, c, (r.counts && r.counts[c]) || 0, sel === c));
+  // filter the calculators for the selected bucket
+  let rows = r.calculators || [];
+  if (sel === CLASS_UNFILED) rows = rows.filter(c => !c.class);
+  else if (sel !== CLASS_ALL) rows = rows.filter(c => c.class === sel);
+  let main;
+  if (!rows.length) {
+    main = `<p class="parc-empty">${t(sel === CLASS_ALL ? "roster_empty" : "roster_empty_class")}</p>`;
+  } else {
+    const head = `<thead><tr>
+      <th class="pc-type">${t("roster_col_type")}</th><th>${t("roster_col_name")}</th>
+      <th>${t("roster_known_fw")}</th><th>${t("roster_col_lastscan")}</th></tr></thead>`;
+    const body = rows.map(c => {
+      const name = c.name || c.default || "";
+      const fw = c.known_firmware ? "Epsilon " + esc(c.known_firmware) : "—";
+      let chip = "";
+      if (c.up_to_date === true) chip = `<span class="fwchip ok">${t("uptodate")}</span>`;
+      else if (c.up_to_date === false) chip = `<span class="fwchip upd">${t("roster_update")}</span>`;
+      // NB: c.key holds "model:serial" — intentionally NOT rendered (serial stays private).
+      return `<tr>
+        <td class="pc-type">${parcTypeCell(c.family)}</td>
+        <td class="parc-nm">${esc(name)}</td>
+        <td><span class="fwcell">${fw}${chip}</span></td>
+        <td class="parc-lastscan">${esc(fmtRelative(c.last_scan))}</td></tr>`;
+    }).join("");
+    main = `<table class="parc-tbl">${head}<tbody>${body}</tbody></table>`;
+  }
+  el.innerHTML = `<aside class="parc-rail">${rail}</aside><div class="parc-main">${main}</div>`;
 }
 async function stageAdd(kind, name) {
   const a = (kind === "apps" ? STATE.apps.avail : STATE.scripts.avail).find(x => x.name === name);

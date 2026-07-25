@@ -261,6 +261,42 @@
   .wplan .stat { font-size:10.5px; color:var(--muted); } .wplan .stat b { display:block; font-size:14px; color:var(--ink); font-family:var(--mono); }
   .wplan .spacer { flex:1; }
 
+  /* -- roster ("Parc") — classes rail + calculator table ------------------------- */
+  .pane.roster.on { display:flex; overflow:hidden; padding:0; }
+  @media (max-width:620px){ .pane.roster.on { flex-direction:column; } }
+  .parc-rail { width:210px; flex:none; border-right:1px solid var(--line); background:var(--panel);
+    padding:14px 12px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; }
+  @media (max-width:620px){ .parc-rail { width:auto; border-right:0; border-bottom:1px solid var(--line); } }
+  .parc-rail h4 { font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    margin:0 0 7px; font-weight:700; }
+  .clsbtn { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+    border:0; background:transparent; color:var(--ink); font:inherit; font-size:12.5px; font-weight:600;
+    padding:7px 9px; border-radius:8px; cursor:pointer; text-align:left; }
+  .clsbtn:hover { background:var(--card); }
+  .clsbtn[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-ink); }
+  .clsbtn .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .clsbtn .cnt { font-size:11px; color:var(--muted); background:var(--card); border-radius:999px;
+    padding:1px 7px; font-variant-numeric:tabular-nums; flex:none; }
+  .clsbtn[aria-pressed="true"] .cnt { color:var(--accent-ink); }
+  .parc-main { flex:1; min-width:0; overflow-y:auto; padding:14px 16px; }
+  .parc-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .parc-tbl th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); font-weight:700; padding:0 10px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .parc-tbl td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .parc-tbl tbody tr:last-child td { border-bottom:0; }
+  .parc-tbl tbody tr:hover td { background:var(--panel); }
+  .parc-tbl .pc-type { width:1%; }
+  .parc-nm { font-weight:600; }
+  .pc-ic { width:30px; height:30px; display:inline-grid; place-items:center; }
+  .pc-ic svg { width:28px; height:28px; display:block; }
+  .fwcell { display:inline-flex; align-items:center; gap:7px; flex-wrap:wrap; font-variant-numeric:tabular-nums; }
+  .fwchip { display:inline-flex; align-items:center; font-size:9px; font-weight:700; padding:2px 7px;
+    border-radius:999px; text-transform:uppercase; letter-spacing:.04em; }
+  .fwchip.ok { background:var(--ok-soft); color:var(--ok); }
+  .fwchip.upd { background:var(--accent-soft); color:var(--accent-ink); }
+  .parc-lastscan { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .parc-empty { color:var(--muted); font-size:13px; padding:30px 8px; text-align:center; }
+
   /* -- status bar ---------------------------------------------------------------- */
   .statusbar { height:30px; flex:none; display:flex; align-items:center; gap:12px; padding:0 14px;
     background:var(--chrome); border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
@@ -320,6 +356,9 @@
 
     <section class="main">
       <div class="tabbar" role="tablist" aria-label="sections">
+        <button class="tab" role="tab" id="tab-parc" aria-selected="false" aria-controls="pane-parc" onclick="setTab('parc')" style="display:none">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4" width="12" height="8" rx="1.5"/><path d="M2 7h12"/></svg>
+          <span id="tab-parc-label"></span><span class="cnt" id="tab-parc-cnt"></span></button>
         <button class="tab" role="tab" id="tab-system" aria-selected="true" aria-controls="pane-system" onclick="setTab('system')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8h3l1.5-4 3 8L13 8h1" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span id="tab-system-label"></span><span class="updot" id="updot" style="display:none" title="update available"></span></button>
@@ -357,6 +396,7 @@
           <div class="card2" id="classroom-card" style="display:none"></div>
         </div>
 
+        <div class="pane roster" id="pane-parc" role="tabpanel" aria-labelledby="tab-parc"></div>
         <div class="pane workshop" id="pane-apps" role="tabpanel" aria-labelledby="tab-apps"></div>
         <div class="pane workshop" id="pane-scripts" role="tabpanel" aria-labelledby="tab-scripts"></div>
       </div>

@@ -246,3 +246,45 @@ def test_serial_reveal_and_calc_name_are_wired(tmp_path):
         page.wait_for_function("STATE.name && STATE.name.name === 'Lab bench'", timeout=8000)
         assert page.input_value("#calc-name") == "Lab bench"
         assert not errors
+
+
+def test_parc_tab_is_classroom_only_renders_roster_and_hides_serial(tmp_path):
+    """The "Parc" tab appears only in classroom mode, renders the classes rail + calculator table
+    from STATE.roster, filters by class, and NEVER puts a serial in the DOM."""
+    with _ui(tmp_path) as (page, errors):
+        # Individual mode: the Parc tab is hidden.
+        assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") == "none"
+        r = page.evaluate(
+            """() => {
+                STATE.roster = { schema:1, classes:['Seconde A'], counts:{'Seconde A':1},
+                  unfiled_count:1, total:2, calculators:[
+                    {key:'n0110:SECRETAAA', name:'Poste 3', default:'calc N0110', model:'n0110',
+                     family:'graphique', class:'Seconde A', known_firmware:'23.2.4', up_to_date:true,
+                     last_scan:'2026-07-20T09:00:00+00:00'},
+                    {key:'n0120:SECRETBBB', name:null, default:'calc N0120', model:'n0120',
+                     family:'graphique', class:null, known_firmware:'19.0.0', up_to_date:false,
+                     last_scan:'2026-07-24T09:00:00+00:00'},
+                  ]};
+                setMode('classroom');
+                const pane = document.getElementById('pane-parc');
+                return {
+                  tabShown: getComputedStyle(document.getElementById('tab-parc')).display !== 'none',
+                  selected: document.getElementById('tab-parc').getAttribute('aria-selected'),
+                  rows: pane.querySelectorAll('.parc-tbl tbody tr').length,
+                  text: pane.innerText,
+                  html: pane.innerHTML,
+                };
+            }"""
+        )
+        assert r["tabShown"] is True and r["selected"] == "true"
+        assert r["rows"] == 2  # the default "Toutes" bucket shows every calculator
+        assert "Poste 3" in r["text"] and "calc N0120" in r["text"]  # name + fallback default
+        # The serial (inside the internal key) is never rendered — not even in an attribute.
+        assert "SECRETAAA" not in r["html"] and "SECRETBBB" not in r["html"]
+        # Clicking the "Seconde A" class filters to its single calculator.
+        page.click(".parc-rail .clsbtn:has-text('Seconde A')")
+        assert page.eval_on_selector_all(".parc-tbl tbody tr", "els => els.length") == 1
+        # Back to individual mode: the Parc tab hides and falls back to System.
+        page.click("#mode-individual")
+        assert page.eval_on_selector("#tab-parc", "el => getComputedStyle(el).display") == "none"
+        assert not errors
