@@ -213,7 +213,10 @@ def main(argv=None) -> int:
     p_ui.add_argument("--port", type=int, default=8765, help="listen port")
     p_ui.add_argument("--no-browser", action="store_true", help="do not open the browser")
     p_ui.add_argument(
-        "--single-instance", action="store_true", help="reuse an already-running instance"
+        "--single-instance",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="reuse an already-running instance instead of starting another (default: on)",
     )
     p_ui.add_argument(
         "--idle-timeout", type=float, default=0, help="auto-stop after N s idle (0=disabled)"

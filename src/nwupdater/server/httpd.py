@@ -353,60 +353,83 @@ def serve(
     single_instance: bool = False,
     idle_timeout: float | None = None,
 ) -> None:
-    # Single instance: if one is already running, just reopen the browser there.
+    # Single instance: whoever wins the OS lock is *the* instance. A launch that loses it points
+    # the browser at the running instance and bows out — never a second server (they would split
+    # the UI state and fight over the calculator's USB handle). The lock, not a check-then-act on
+    # the JSON file, is what makes rapid repeated launches safe.
+    lock = None
     if single_instance:
-        existing = instance.existing_url()
-        if existing:
-            print(f"Already running: {existing}")
-            if open_browser:
-                try:
-                    webbrowser.open(existing)
-                except Exception:
-                    pass
+        lock = instance.InstanceLock()
+        if not lock.acquire():
+            existing = instance.wait_for_url()
+            if existing:
+                print(f"Already running: {existing}")
+                if open_browser:
+                    try:
+                        webbrowser.open(existing)
+                    except Exception:
+                        pass
+            else:
+                print("Another instance is starting — try again in a moment.")
             return
 
-    # Local libraries where exported apps/scripts land (and are matched against for the
-    # "already on the computer" state). Created empty on launch so both exist and can be browsed.
     try:
-        from ..apps.sources import user_apps_dir, user_scripts_dir
-
-        user_apps_dir().mkdir(parents=True, exist_ok=True)
-        user_scripts_dir().mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-
-    control: dict = {"last": time.time()}
-    httpd = make_server(session, host=host, port=port, control=control)
-    actual_port = httpd.server_address[1]  # resolves port 0 to the OS-chosen port
-    control["shutdown"] = lambda: threading.Thread(target=httpd.shutdown, daemon=True).start()
-    # Bind stays on the loopback IP (local-only, robust) but display the friendlier "localhost".
-    display_host = "localhost" if host in ("127.0.0.1", "::1") else host
-    url = f"http://{display_host}:{actual_port}/"
-    if single_instance:
-        instance.write(url, actual_port)
-
-    ident = session.identity()
-    where = (
-        "no calculator — connect one or explore a demo from the page"
-        if not ident.get("connected")
-        else f"{ident['model']}{' (demo)' if session.virtual else ''}"
-    )
-    print(f"nwupdater UI : {url}  (device: {where})")
-    print('Close the tab and click "Quit", or press Ctrl+C to stop.')
-    if idle_timeout and idle_timeout > 0:
-        print(f"Auto-shutdown after {int(idle_timeout)}s of inactivity.")
-        threading.Thread(target=_idle_watcher, args=(control, idle_timeout), daemon=True).start()
-    if open_browser:
+        # Local libraries where exported apps/scripts land (and are matched against for the
+        # "already on the computer" state). Created empty on launch so both exist and can be
+        # browsed.
         try:
-            webbrowser.open(url)
-        except Exception:
+            from ..apps.sources import user_apps_dir, user_scripts_dir
+
+            user_apps_dir().mkdir(parents=True, exist_ok=True)
+            user_scripts_dir().mkdir(parents=True, exist_ok=True)
+        except OSError:
             pass
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nstopped.")
-    finally:
-        control["stopping"] = True
-        httpd.server_close()
+
+        control: dict = {"last": time.time()}
+        try:
+            httpd = make_server(session, host=host, port=port, control=control)
+        except OSError:
+            # Fixed port already taken by an unrelated process (we hold the lock, so it is not us)
+            # — fall back to an OS-chosen free port rather than failing to launch.
+            if port == 0:
+                raise
+            httpd = make_server(session, host=host, port=0, control=control)
+        actual_port = httpd.server_address[1]  # resolves port 0 to the OS-chosen port
+        control["shutdown"] = lambda: threading.Thread(target=httpd.shutdown, daemon=True).start()
+        # Bind stays on the loopback IP (local-only, robust) but display the friendlier
+        # "localhost".
+        display_host = "localhost" if host in ("127.0.0.1", "::1") else host
+        url = f"http://{display_host}:{actual_port}/"
         if single_instance:
-            instance.clear()
+            instance.write(url, actual_port)
+
+        ident = session.identity()
+        where = (
+            "no calculator — connect one or explore a demo from the page"
+            if not ident.get("connected")
+            else f"{ident['model']}{' (demo)' if session.virtual else ''}"
+        )
+        print(f"nwupdater UI : {url}  (device: {where})")
+        print('Close the tab and click "Quit", or press Ctrl+C to stop.')
+        if idle_timeout and idle_timeout > 0:
+            print(f"Auto-shutdown after {int(idle_timeout)}s of inactivity.")
+            threading.Thread(
+                target=_idle_watcher, args=(control, idle_timeout), daemon=True
+            ).start()
+        if open_browser:
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nstopped.")
+        finally:
+            control["stopping"] = True
+            httpd.server_close()
+            if single_instance:
+                instance.clear()
+    finally:
+        if lock is not None:
+            lock.release()

@@ -149,6 +149,31 @@ def test_single_instance_detection(server, tmp_path, monkeypatch):
     assert not (tmp_path / "inst.json").exists()
 
 
+def test_instance_lock_is_exclusive(tmp_path):
+    """The OS lock admits exactly one holder — the mutual exclusion behind single-instance."""
+    from nwupdater.server import instance
+
+    lock_path = tmp_path / "inst.lock"
+    first, second = instance.InstanceLock(lock_path), instance.InstanceLock(lock_path)
+    assert first.acquire() is True  # first launch wins
+    assert second.acquire() is False  # a concurrent launch is refused while the first holds it
+    first.release()
+    assert second.acquire() is True  # released -> the next launch can take over
+    second.release()
+
+
+def test_wait_for_url_polls_until_live(server, tmp_path, monkeypatch):
+    """A launch that lost the lock finds the running instance's URL (and never a dead one)."""
+    from nwupdater.server import instance
+
+    monkeypatch.setattr(instance, "INSTANCE_FILE", tmp_path / "inst.json")
+    instance.write(server + "/", 0)
+    assert instance.wait_for_url(attempts=3, delay=0.01) == server + "/"
+    instance.write("http://127.0.0.1:1/", 0)  # nothing answering there
+    assert instance.wait_for_url(attempts=2, delay=0.01) is None
+    assert (tmp_path / "inst.json").exists()  # loser must not clear the holder's record
+
+
 def _raw(port, request: str) -> str:
     """Send a verbatim HTTP request over a raw socket (so literal '..' path segments and a
     lying Content-Length reach the server unmodified) and return the full response text."""
