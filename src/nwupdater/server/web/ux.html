@@ -197,6 +197,36 @@
       <span>matrice complète : <code>docs/05-packaging-ui/ui-prerequisites.md</code></span>
     </div>
 
+    <!-- ============ FONDATIONS ============ -->
+    <h2 class="sec">Fondations — jetons</h2>
+    <p class="sec-sub">Source unique : les variables <code>:root</code> d'<code>index.html</code>. Papier chaud, <b>un seul accent</b> (ambre), sémantiques distinctes (vert/bleu/rouge), clair &amp; sombre.</p>
+    <div class="spec">
+      <div class="spec-head"><h3>Couleur</h3><span class="anchor">index.html :root</span></div>
+      <p class="spec-desc">L'accent ne sert <b>jamais</b> à signaler un état — c'est le rôle du vert/bleu/rouge. Chaque teinte vive a un fond doux (<code>-soft</code>) + une encre (<code>-ink</code>).</p>
+      <div class="spec-demo" style="gap:14px 16px">
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--bg);border:1px solid var(--line-strong)"></div><figcaption>--bg</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--panel);border:1px solid var(--line-strong)"></div><figcaption>--panel</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--card);border:1px solid var(--line-strong)"></div><figcaption>--card</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--accent)"></div><figcaption>--accent</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--ok)"></div><figcaption>--ok</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--blue)"></div><figcaption>--blue</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--err)"></div><figcaption>--err</figcaption></figure>
+        <figure class="sz"><div style="width:56px;height:40px;border-radius:8px;background:var(--line-strong)"></div><figcaption>--line</figcaption></figure>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="spec-head"><h3>Typographie</h3><span class="anchor">--sans / --mono</span></div>
+      <p class="spec-desc">Police <b>système</b> (natif, sans webfont) ; <b>mono tabulaire</b> pour la donnée alignée (série, versions, dates).</p>
+      <div class="spec-demo col" style="gap:3px;align-items:flex-start">
+        <div style="font-size:22px;font-weight:730;letter-spacing:-.02em">Parc de calculatrices</div>
+        <div style="font-size:15px;font-weight:680">Firmware connu</div>
+        <div style="font-size:13px;font-weight:600">Calculatrice de Léa</div>
+        <div style="font-size:12.5px;color:var(--muted)">Traitée automatiquement à chaque branchement.</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700">Sur la calculatrice</div>
+        <div style="font-family:var(--mono);font-size:12px">Epsilon 23.2.4 · il y a 2 min</div>
+      </div>
+    </div>
+
     <!-- ============ RENDUS CALC ============ -->
     <h2 class="sec">Rendus calculatrice — calc.js</h2>
     <p class="sec-sub">Trois modes, une seule fonction : <code>buildCalc({variant, mode})</code>. Finition
@@ -337,6 +367,41 @@
         <div class="toast err"><span class="tk"></span>Échec : calculatrice débranchée</div>
       </div>
     </div>
+
+    <!-- ============ ICÔNES ============ -->
+    <h2 class="sec">Icônes</h2>
+    <p class="sec-sub">Trait <code>1.4</code> · <code>viewBox 16</code> · <code>currentColor</code>. Une action = une icône, réutilisée partout (la corbeille = supprimer, du rail à la table). Les 4 icônes <b>recensement · firmware · apps · scripts</b> pilotent la colonne Distribution du parc (vert/orange/rouge).</p>
+    <div class="spec">
+      <div class="spec-head"><h3>Inventaire</h3><span class="anchor">app.js · calc.js</span></div>
+      <div class="spec-demo" style="gap:16px 20px;color:var(--ink)">
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.2" r="2.6"/><path d="M3.4 12.6a4.6 4.6 0 0 1 9.2 0" stroke-linecap="round"/></svg><figcaption>individuel</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5" cy="6" r="2"/><circle cx="11" cy="6" r="2"/><path d="M1.8 12.4a3.4 3.4 0 0 1 6.4 0M7.8 12.4a3.4 3.4 0 0 1 6.4 0" stroke-linecap="round"/></svg><figcaption>classe</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8h3l1.5-4 3 8L13 8h1" stroke-linecap="round" stroke-linejoin="round"/></svg><figcaption>système</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="2" width="10" height="12" rx="1.5"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke-linecap="round"/></svg><figcaption>recensement</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8.5 2 3 9h4l-.5 5L13 7H9l-.5-5Z"/></svg><figcaption>firmware</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><figcaption>apps</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4 3 8l2.5 4M10.5 4 13 8l-2.5 4"/></svg><figcaption>scripts</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v7m0 0 2.6-2.6M8 9 5.4 6.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5h10" stroke-linecap="round"/></svg><figcaption>installer</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="10.6" width="10.4" height="3" rx="1"/><path d="M8 2.4v6.2M5.4 6 8 8.6 10.6 6"/></svg><figcaption>écrire</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.4V3.6M5.2 6.4 8 3.6l2.8 2.8"/><path d="M2.8 11.2v1.1a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.1"/></svg><figcaption>exporter</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.8 4.2h4l1.2 1.4h7.2v6.2a1 1 0 0 1-1 1H2.8a1 1 0 0 1-1-1V4.2Z"/></svg><figcaption>classe (dossier)</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9.5 3.6 4h8.8L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3Z"/><path d="M2 9.5h3.2l1 1.6h3.6l1-1.6H14" stroke-linejoin="round"/></svg><figcaption>sans classe</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3 13 5.5 5.8 12.7 3 13.4l.7-2.8Z"/></svg><figcaption>renommer</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8"/></svg><figcaption>supprimer</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="m11 11 3 3" stroke-linecap="round"/></svg><figcaption>filtrer</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></svg><figcaption>révéler</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.2v9.6a.6.6 0 0 0 .9.5l7.8-4.8a.6.6 0 0 0 0-1L4.9 2.7a.6.6 0 0 0-.9.5Z"/></svg><figcaption>lancer (play)</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg><figcaption>arrêt</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.4V3.1"/><path d="M6.4 4.7 8 3l1.6 1.7"/><circle cx="8" cy="13.5" r="1.35" fill="currentColor" stroke="none"/><path d="M8 7.2 10.6 5.8"/><circle cx="11.3" cy="5.4" r="1.15" fill="currentColor" stroke="none"/><path d="M8 9.6 5.6 8.3"/><rect x="3.3" y="7" width="2.3" height="2.3" rx=".4" fill="currentColor" stroke="none"/></svg><figcaption>usb / scan</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 8.5l3 3 6-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg><figcaption>succès</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.5 1.8 13h12.4L8 2.5Z"/><path d="M8 6.6v2.6M8 11.1v.1" stroke-linecap="round"/></svg><figcaption>alerte</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg><figcaption>fermer</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 5l3 3-3 3"/></svg><figcaption>flèche / suite</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 2.5H3.5A1.5 1.5 0 0 0 2 4v8a1.5 1.5 0 0 0 1.5 1.5H6"/><path d="M10 11l3-3-3-3M13 8H6"/></svg><figcaption>quitter</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="7" width="9" height="6" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg><figcaption>local / verrou</figcaption></figure>
+        <figure class="sz"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 3v2.4h-2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><figcaption>rafraîchir</figcaption></figure>
+      </div>
+    </div>
   </div>
 
   <footer>calc.js · index.html (tokens) · plan Classroom 2.0 §5 — thème clair / sombre</footer>
@@ -401,6 +466,7 @@
 
   // ----- prereq badges (source de vérité : docs/05-packaging-ui/ui-prerequisites.md) -----
   var PREREQ = {
+    "Couleur":"P0", "Typographie":"P0", "Inventaire":"P0",
     "Icône famille":"P0", "Vignette écran":"P0", "Appareil complet":"P0", "Onglets":"P0",
     "Parc complet":"P3", "États de ligne":"P3", "Barre groupée":"P3", "Pastilles":"P0",
     "Boutons":"P0", "Notifications":"P0"
