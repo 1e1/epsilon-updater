@@ -194,6 +194,12 @@ class VirtualDfuDevice:
     # -- platforminfo preload ------------------------------------------------------
     def _install_platform_info(self, os_version: str, commit: str) -> None:
         mem = self.model.memory
+        if self.model.opaque_firmware:
+            # N02xx: the bootloader exposes a read-only FirmwareHeader (magic 0xFACECAFE) at
+            # 0x080040C0 carrying the version — this is what identity reads (no Epsilon headers).
+            from ..formats import platform_info
+
+            self.memory.write(C.N0200_FIRMWARE_HEADER_ADDR, platform_info.pack(os_version, commit))
         if mem.external_flash_origin is not None:
             slot_origin = mem.external_flash_origin
             kernel_hdr_addr = slot_origin + 8

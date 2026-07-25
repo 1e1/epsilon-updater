@@ -65,6 +65,12 @@ def read_identity(
 
     client.make_idle()
 
+    if model and model.opaque_firmware:
+        # N02xx: no Epsilon SlotInfo/headers. The firmware version lives in the read-only
+        # FirmwareHeader (magic 0xFACECAFE) the bootloader exposes at 0x080040C0.
+        _read_firmware_header(client, ident)
+        return ident
+
     base = (
         sram_origin
         if sram_origin is not None
@@ -101,3 +107,20 @@ def _read_userland_header(client: DfuClient, addr: int, ident: CalculatorIdentit
     ident.external_apps_flash = user.external_apps_flash
     ram_s, ram_e = user.external_apps_ram
     ident.external_apps_ram = (ram_s, ram_e) if ram_e > ram_s else None
+
+
+def _read_firmware_header(client: DfuClient, ident: CalculatorIdentity) -> None:
+    """N02xx: read the read-only FirmwareHeader (magic 0xFACECAFE @ 0x080040C0) for the version.
+
+    The Scientifique firmware payload is encrypted/opaque, but the bootloader exposes a small
+    header block carrying the software version + patch level (a git short hash)."""
+    from ..formats import platform_info
+
+    try:
+        raw = client.read(C.N0200_FIRMWARE_HEADER_ADDR, C.PLATFORM_INFO_SIZE)
+    except Exception:
+        return
+    fw = platform_info.parse(raw)
+    if fw.valid:
+        ident.os_version = fw.software_version or None
+        ident.commit = fw.patch_level or None

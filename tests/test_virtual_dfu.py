@@ -91,9 +91,12 @@ def test_read_identity_scientifique_n0200():
 
     assert ident.model_name == "n0200"
     assert ident.family == "scientifique"
+    # N02xx: version + patch come from the read-only FirmwareHeader (magic 0xFACECAFE), not from
+    # Epsilon SlotInfo/userland headers (which the opaque payload doesn't carry).
     assert ident.os_version == "1.0.0"
+    assert ident.commit == "deadbee"
     # N02xx has no external QSPI -> no external-apps region
-    assert ident.external_apps_flash == (0, 0)
+    assert ident.external_apps_flash is None
 
 
 def test_write_read_roundtrip_in_external_flash():

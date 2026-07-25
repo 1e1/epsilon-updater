@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import urllib.request
 
@@ -100,7 +101,7 @@ class InstanceLock:
         except OSError:
             return False
         try:
-            if os.name == "nt":
+            if sys.platform == "win32":
                 import msvcrt
 
                 fh.seek(0)
@@ -119,7 +120,7 @@ class InstanceLock:
         if self._fh is None:
             return
         try:
-            if os.name == "nt":
+            if sys.platform == "win32":
                 import msvcrt
 
                 self._fh.seek(0)
