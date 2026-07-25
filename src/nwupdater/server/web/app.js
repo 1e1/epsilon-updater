@@ -106,10 +106,16 @@ async function load() {
 }
 
 async function loadConnected() {
+  // Fast/cached surfaces first (catalog + cache + auth), then PAINT immediately: the device rail and
+  // the System tab (flash/account/cache) show right away instead of waiting on the slow USB reads.
   const [cat, cache, auth] = await Promise.all(
     [api("/api/catalog"), api("/api/cache"), api("/api/auth")]);
   STATE.catalog = cat; STATE.cache = cache; STATE.auth = auth;
   STATE.channel = cat.channel || STATE.channel || "stable";
+  renderAll();
+  // Slower device reads (apps region / installed apps / scripts / roster over USB) load in the
+  // background, then repaint. Once loaded they stay in STATE — switching Classroom↔Individual reuses
+  // this cache (no re-scan); only a fresh connect reads the device again.
   const appsInfo = await api("/api/apps").catch(() => ({ has_external_apps: false, apps: [], api_level: 0 }));
   const installed = await api("/api/apps/installed").catch(() => ({ installed: [] }));
   const reg = STATE.identity.external_apps_flash;
@@ -329,6 +335,7 @@ function renderTabs() {
       || (STATE.tab === "apps" && !(conn && hasApps)) || (STATE.tab === "scripts" && !(conn && hasPy))) {
     setTab("system");
   }
+  renderParcConfirm();  // clears the shared #parc-confirm slot when leaving classroom / no pending delete
 }
 
 // -- account & mode ------------------------------------------------------------
@@ -781,7 +788,6 @@ function workshopBody(kind) {
   const head = `<div class="wkhead">
     <span>${t("used", { used: "<b>" + fmtBytes(p.usedB) + "</b>", total: fmtBytes(cfg.capacity) })}</span>
     <span class="wkhead-r"><span>${t("free", { n: fmtBytes(p.freeB) })}</span>
-      <button class="srcbtn" onclick="openFolder('${kind}')" title="${esc(t("open_folder"))}">${ORIGIN_SVG.local}${t("open_folder")}</button>
       <button class="srcbtn" onclick="toggleSources('${kind}',this)">${ORIGIN_SVG.online}${t("sources")}</button></span></div>`;
   const mov = slots.filter(s => ["rw", "new"].includes(p.status.get(s)));  // writable = reorderable
   const left = slots.length ? slots.map(s => onCalcRow(kind, s, p, mov, busy)).join("")
@@ -926,8 +932,21 @@ function renderParc() {
   if (STATE.mode !== "classroom") return;
   renderClassesRail();
   renderClassroomTabActions();
+  renderParcConfirm();
   renderCalcPane();
   renderDistPane();
+}
+// Delete-class confirmation lives in its own slot under the tabbar (#parc-confirm) so it shows over
+// WHICHEVER classroom tab is active (Calculatrices or Distribution), on a single line.
+function renderParcConfirm() {
+  const el = $("parc-confirm"); if (!el) return;
+  const c = STATE.mode === "classroom" ? STATE.parcConfirm : null;
+  if (!c) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="parc-confirmbar" role="alertdialog" aria-label="${t("roster_delete_class")}">
+    ${DIST_WARN}<span class="q">${t("roster_delete_class_confirm", { c: esc(c.name), n: c.count })}</span>
+    <button class="btn ghost sm" onclick="parcDeleteCancel()">${t("roster_cancel")}</button>
+    <button class="btn sm confirm-move" onclick="parcDeleteConfirm('move')">${t("roster_delete_class_move")}</button>
+    <button class="btn sm danger confirm-purge" onclick="parcDeleteConfirm('purge')">${t("roster_delete_class_purge", { n: c.count })}</button></div>`;
 }
 // -- classes rail (LEFT rail #rail): Toutes (top) · classes (alpha, middle) · Sans classe (bottom) --
 function classRailBtn(id, label, count, pressed, cls, icon) {
@@ -973,15 +992,7 @@ function renderCalcPane() {
   const el = $("pane-parc"); if (!el) return;
   const r = STATE.roster;
   if (!r) { el.innerHTML = `<div class="parc-main"><p class="parc-empty">${t("roster_empty")}</p></div>`; return; }
-  let main = "";
-  if (STATE.parcConfirm) {
-    const c = STATE.parcConfirm;  // a non-empty class → offer the two choices (move vs purge)
-    main += `<div class="cls-confirm" role="alertdialog" aria-label="${t("roster_delete_class")}">
-      <p>${t("roster_delete_class_confirm", { c: esc(c.name), n: c.count })}</p>
-      <div class="row"><button class="btn ghost sm" onclick="parcDeleteCancel()">${t("roster_cancel")}</button>
-        <button class="btn sm confirm-move" onclick="parcDeleteConfirm('move')">${t("roster_delete_class_move")}</button>
-        <button class="btn sm danger confirm-purge" onclick="parcDeleteConfirm('purge')">${t("roster_delete_class_purge", { n: c.count })}</button></div></div>`;
-  }
+  let main = "";  // the delete-class confirm renders in #parc-confirm (renderParcConfirm), not here
   const rows = parcVisibleRows(), selKeys = new Set(STATE.parcSel || []);
   const nsel = rows.filter(c => selKeys.has(c.key)).length;
   if (nsel) {  // multi-select bulk bar (checkboxes + drag)
@@ -1000,7 +1011,7 @@ function renderCalcPane() {
       <th class="pc-name">${t("roster_col_name")}<input class="pc-filter-in" type="text" value="${esc(STATE.parcFilter || "")}"
         placeholder="${esc(t("roster_filter"))}" aria-label="${t("roster_filter_name")}" ${NODRAG} oninput="parcFilter(this.value)"></th>
       <th>${t("roster_known_fw")}</th><th class="pc-dist-h">${t("roster_col_dist")}</th>
-      <th>${t("roster_col_lastscan")}</th><th class="pc-act">${t("roster_col_actions")}</th></tr></thead>`;
+      <th>${t("roster_col_lastscan")}</th></tr></thead>`;
     main += `<table class="parc-tbl">${head}<tbody id="parc-tbody">${parcTbodyHTML()}</tbody></table>`;
   }
   el.innerHTML = `<div class="parc-main">${main}</div>`;
@@ -1164,13 +1175,17 @@ function renderBatch() {
   const steps = batchEnabledSteps().map(m => `<span class="stepchip">${m.ico()}${t(m.key)}</span>`).join("")
     || `<span class="stepchip">${t("batch_no_action")}</span>`;
   const models = (STATE.demoModels || [{ name: "n0110" }]).map(m => `<option value="${m.name}"${m.name === batchModel ? " selected" : ""}>${m.name.toUpperCase()}</option>`).join("");
+  // The "Simuler" affordance is a demo aid — hide it when a REAL calculator is already plugged in
+  // (nothing to simulate); it stays available while waiting or on a virtual/demo device.
+  const realConnected = !!(STATE.identity && STATE.identity.connected && !STATE.identity.virtual);
+  const sim = realConnected ? "" : `<div class="bsim"><select id="batch-model" aria-label="${t("demo_model")}" onchange="batchModel=this.value">${models}</select>
+          <button class="simbtn" onclick="batchSimulate()">${t("batch_simulate")}</button></div>`;
   el.innerHTML = `
     <div class="batch-top"><b>${t("batch_mode")}</b><span class="cls">${esc(STATE.parcClass)}</span><span class="sp"></span></div>
     <div class="batch-body">
       <div class="bwait">
         <div class="brail" id="batch-rail">${batchRailHTML()}</div>
-        <div class="bsim"><select id="batch-model" aria-label="${t("demo_model")}" onchange="batchModel=this.value">${models}</select>
-          <button class="simbtn" onclick="batchSimulate()">${t("batch_simulate")}</button></div>
+        ${sim}
       </div>
       <div class="bright">
         <div class="arm">${DIST_WARN}<span>${t("batch_armed")}</span><span class="sp"></span>
@@ -1252,10 +1267,9 @@ function parcRowHTML(c) {
     <td class="parc-nm">${nameCell}</td>
     <td><span class="fwcell">${fw}${chip}</span></td>
     <td class="pc-dist">${parcDistCell(c.last_dist)}</td>
-    <td class="parc-lastscan">${esc(fmtRelative(c.last_scan))}</td>
-    <td class="pc-act">
-      <select class="mv" ${NODRAG} aria-label="${t("roster_move_to")}" onchange="parcRowMove(${i},this)">${parcMoveOptions()}</select>
-      <button class="ib trash" ${NODRAG} title="${t("roster_delete")}" aria-label="${t("roster_delete")} ${label}" onclick="parcRowDelete(${i})">${TRASH_SVG}</button></td></tr>`;
+    <td class="parc-lastscan">${esc(fmtRelative(c.last_scan))}</td></tr>`;
+  // No per-row Actions column: move a calculator by drag-and-drop onto a class (or the multi-select
+  // bulk bar), and remove it via the bulk bar — matching the maquette.
 }
 // The tbody rows (or an empty-state row). Rebuilt on its own by parcFilter so the header filter
 // input keeps focus while typing.
@@ -1263,7 +1277,7 @@ function parcTbodyHTML() {
   const rows = parcVisibleRows();
   if (!rows.length) {
     const msg = (STATE.parcFilter || "").trim() ? t("roster_no_match") : t("roster_empty_class");
-    return `<tr class="parc-emptyrow"><td colspan="7"><p class="parc-empty">${esc(msg)}</p></td></tr>`;
+    return `<tr class="parc-emptyrow"><td colspan="6"><p class="parc-empty">${esc(msg)}</p></td></tr>`;
   }
   return rows.map(parcRowHTML).join("");
 }
@@ -1298,15 +1312,6 @@ function parcRename(i, inp) {
   const name = inp.value.trim(), cur = ((STATE.roster.calculators[i] || {}).name) || "";
   if (name === cur) { renderParc(); return; }  // unchanged (or reverted via Escape) → just leave edit
   return parcDo(() => post("/api/roster/rename", { key, name }), () => t("roster_renamed"));
-}
-function parcRowMove(i, sel) {
-  const key = parcKey(i); if (!key) return;
-  return parcDo(() => post("/api/roster/move", { keys: [key], class: parcClassValue(sel.value) }),
-    r => t("roster_moved", { n: r.moved }));
-}
-function parcRowDelete(i) {
-  const key = parcKey(i); if (!key) return;
-  return parcDo(() => post("/api/roster/delete", { keys: [key] }), r => t("roster_deleted", { n: r.deleted }));
 }
 function parcToggleSel(i, on) {
   const key = parcKey(i); if (!key) return;

@@ -6,6 +6,28 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0-rc.3] - 2026-07-25
+
+### Corrigé (retours test N0120 réelle)
+
+- **Connexion plus réactive** : le rail appareil + l'onglet Système (flash / compte / cache)
+  s'affichent **immédiatement** ; les lectures USB lentes (apps / scripts / parc) chargent en
+  arrière-plan puis repeignent. Elles restent en cache — basculer Classe↔Individuel **ne rescanne
+  plus** (seule une nouvelle connexion relit l'appareil).
+- **Zone apps parfois « — » / onglet Applications en retard sur Scripts** : lecture DFU durcie —
+  `SlotInfo` et `UserlandHeader` sont relus (jusqu'à 3 tentatives) pour qu'une trame glitchée ne
+  fasse plus disparaître la région d'apps (chemin sain inchangé, 1 lecture).
+- **Mode batch** : la mention « Simuler » disparaît quand une **vraie calculatrice est branchée**
+  (rien à simuler) ; elle reste en attente / sur device virtuel.
+- **Classe · Calculatrices** : suppression de la colonne « Actions » (et du menu déroulant par
+  ligne) — déplacer se fait par glisser-déposer sur une classe ou via la barre de sélection
+  multiple, conformément à la maquette.
+- **Classe · suppression de classe** : la confirmation s'affiche désormais dans une barre **sur une
+  seule ligne, sous la barre d'onglets**, visible depuis Calculatrices **et** Distribution (elle
+  était auparavant rendue dans l'onglet Calculatrices → clic sans effet visible depuis Distribution).
+- **Ateliers Apps/Scripts** : retrait du bouton « Ouvrir le dossier » redondant (le popover
+  « Sources » ouvre déjà les dossiers locaux en cliquant leurs lignes).
+
 ## [2.0.0-rc.2] - 2026-07-25
 
 ### Ajouté

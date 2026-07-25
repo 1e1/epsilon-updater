@@ -76,8 +76,18 @@ def read_identity(
         if sram_origin is not None
         else (model.memory.sram_origin if model else 0x20000000)
     )
-    slot = SlotInfo.unpack(client.read(base, C.SLOT_INFO_SIZE))
-    if slot.valid:
+    # A DFU transfer can occasionally return a bad frame right after attach — retry the SlotInfo
+    # read a few times so a glitch doesn't drop the whole apps region (→ a missing "Apps" tab that
+    # only a rescan would recover). The happy path succeeds on the first read.
+    slot = None
+    for _ in range(3):
+        try:
+            slot = SlotInfo.unpack(client.read(base, C.SLOT_INFO_SIZE))
+        except Exception:
+            slot = None
+        if slot and slot.valid:
+            break
+    if slot and slot.valid:
         ident.slot_info_valid = True
         ident.userland_header_addr = slot.userland_header_addr or None
         _read_kernel_header(client, slot.kernel_header_addr, ident)
@@ -98,8 +108,17 @@ def _read_kernel_header(client: DfuClient, addr: int, ident: CalculatorIdentity)
 def _read_userland_header(client: DfuClient, addr: int, ident: CalculatorIdentity) -> None:
     if not addr:
         return
-    user = UserlandHeader.unpack(client.read(addr, C.USERLAND_HEADER_SIZE))
-    if not user.valid:
+    # Retry a glitchy read so the external-apps region (→ the "Apps" tab) isn't lost to a single
+    # bad DFU frame; the first read succeeds on a healthy transfer.
+    user = None
+    for _ in range(3):
+        try:
+            user = UserlandHeader.unpack(client.read(addr, C.USERLAND_HEADER_SIZE))
+        except Exception:
+            user = None
+        if user and user.valid:
+            break
+    if not user or not user.valid:
         return
     ident.os_version = user.expected_software_version
     st_addr, st_size = user.storage_addr_ram, user.storage_size_ram

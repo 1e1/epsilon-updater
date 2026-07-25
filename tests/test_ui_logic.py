@@ -333,11 +333,12 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
         # The serial is never rendered — not as text, not in an attribute (handlers use row indices).
         html = page.inner_html("#pane-parc")
         assert "SECRETUI01" not in html and "SECRETUI02" not in html
-        # Every edit handler is wired.
+        # Every edit handler is wired (moving/deleting a calc is via drag + the multi-select bulk bar
+        # now — there is no per-row Actions column).
         assert page.evaluate(
-            "() => ['parcRename','parcNameEdit','parcRowMove','parcRowDelete','parcBulkMove',"
-            "'parcBulkDelete','parcDeleteClass','parcAddClass','parcClassRename','parcFilter',"
-            "'parcDragStart'].every(f => typeof window[f] === 'function')"
+            "() => ['parcRename','parcNameEdit','parcBulkMove','parcBulkDelete','parcDeleteClass',"
+            "'parcAddClass','parcClassRename','parcFilter','parcDragStart']"
+            ".every(f => typeof window[f] === 'function')"
         )
         # Inline rename by double-clicking the name label → edit → the name store records it.
         page.dblclick("#pane-parc .pnm-txt:has-text('Poste 1')")
@@ -350,16 +351,20 @@ def test_parc_edit_ui_mutates_via_server(tmp_path, monkeypatch):
         page.wait_for_function(
             "[...document.querySelectorAll('#rail .clsbtn .nm')].some(e => e.textContent === 'Seconde A')"
         )
-        # Move the first calculator into it via the row dropdown → the server count reflects it.
-        page.select_option("#pane-parc tbody tr:first-child .pc-act .mv", "Seconde A")
-        page.wait_for_function("STATE.roster.counts && STATE.roster.counts['Seconde A'] === 1")
-        # Multi-select all → the bulk bar appears (Phase-3 selection is already wired).
-        page.check("#pane-parc thead input[type=checkbox]")
+        # Move a calculator into it via multi-select + the bulk bar → the server count reflects it.
+        page.check("#pane-parc tbody tr:first-child input[type=checkbox]")
         page.wait_for_selector("#pane-parc .parc-bulk")
-        # Delete the (now non-empty) class → the 2-choice confirm → "move" re-files its member.
-        page.evaluate("() => parcDeleteClass('Seconde A')")
-        page.wait_for_selector("#pane-parc .cls-confirm")
-        page.click("#pane-parc .cls-confirm .confirm-move")
+        page.select_option("#pane-parc .parc-bulk .mv", "Seconde A")
+        page.wait_for_function("STATE.roster.counts && STATE.roster.counts['Seconde A'] === 1")
+        # Delete the class FROM THE DISTRIBUTION TAB via the tabbar button → the confirm bar shows
+        # under the tabbar (over the Distribution pane, not hidden in the Calculatrices pane).
+        page.click("#rail .clsbtn:has-text('Seconde A') .nm")
+        page.wait_for_function("STATE.parcClass === 'Seconde A'")
+        page.click("#tab-dist")
+        page.wait_for_selector("#pane-dist.on")
+        page.click("#btn-delclass")
+        page.wait_for_selector("#parc-confirm .parc-confirmbar")
+        page.click("#parc-confirm .confirm-move")
         page.wait_for_function("!STATE.roster.classes.includes('Seconde A')")
         assert page.evaluate("() => STATE.roster.unfiled_count === 2")  # both back to unfiled
         assert not errors
