@@ -137,14 +137,33 @@ def test_fmtbytes_units(tmp_path):
 # -- interaction (option a) ----------------------------------------------------------------
 def test_stage_and_commit_app_reaches_the_device(tmp_path):
     with _ui(tmp_path) as (page, errors):
-        page.wait_for_selector("#apps-card", state="visible")
+        # The workshop lives under the Apps tab now — reveal it first.
+        page.click("#tab-apps")
+        page.wait_for_selector("#pane-apps", state="visible")
         # Stage a bundled catalogue app via its "+" (aria-label = the app name).
-        page.click("#apps-body button.add[aria-label='Tetris']")
+        page.click("#pane-apps button.add[aria-label='Tetris']")
         page.wait_for_function("STATE.stage.apps.some(s => s.name === 'Tetris' && !s.onDevice)")
         # The "Write" button (the non-ghost .btn in the plan bar) is now enabled.
-        commit = page.query_selector("#apps-body .wplan button.btn.sm:not(.ghost)")
+        commit = page.query_selector("#pane-apps .wplan button.btn.sm:not(.ghost)")
         assert commit is not None and commit.is_enabled()
         commit.click()
         # Commit installs to the (demo) device; after refresh the device list holds Tetris.
         page.wait_for_function("STATE.apps.device.some(a => a.name === 'Tetris')", timeout=8000)
+        assert not errors
+
+
+def test_serial_reveal_and_calc_name_are_wired(tmp_path):
+    with _ui(tmp_path) as (page, errors):
+        page.wait_for_selector("#serial-btn")
+        # Serial is blurred by default; clicking the whole value reveals it, clicking again re-blurs.
+        assert "blur" in (page.get_attribute("#serial-btn", "class") or "")
+        page.click("#serial-btn")
+        assert "blur" not in (page.get_attribute("#serial-btn", "class") or "")
+        page.click("#serial-btn")
+        assert "blur" in (page.get_attribute("#serial-btn", "class") or "")
+        # Editable calculator name persists to the local store via POST /api/device/name.
+        page.fill("#calc-name", "Lab bench")
+        page.eval_on_selector("#calc-name", "el => el.blur()")
+        page.wait_for_function("STATE.name && STATE.name.name === 'Lab bench'", timeout=8000)
+        assert "Lab bench" in page.inner_text("#titlebar-text")
         assert not errors

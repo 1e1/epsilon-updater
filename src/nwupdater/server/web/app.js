@@ -17,13 +17,14 @@ const color = (n) => APPCOLORS[(n ? n.charCodeAt(0) : 0) % APPCOLORS.length];
 
 let STATE = {
   identity: null, catalog: null, cache: null, auth: null, lastResult: null,
-  mode: "individual", channel: "stable",
+  mode: "individual", channel: "stable", tab: "system", name: null, sources: null,
   apps: null, scripts: null, stage: { apps: [], scripts: [] }, hist: { apps: [], scripts: [] },
   busy: { apps: false, scripts: false },  // a remote .nwa download is in flight for this workshop
 };
 // Optional deep-link / reproducible-capture overrides (all are already user-settable prefs):
 // ?lang=fr|en · ?theme=light|dark · ?mode=individual|classroom. They never auto-connect a device.
 const QS = new URLSearchParams(location.search);
+let SERIAL_SHOWN = false;  // the rail serial is blurred by default; the whole value toggles it
 
 // -- helpers -------------------------------------------------------------------
 async function api(path, opts) {
@@ -59,6 +60,19 @@ function setLang(l) { LANG = l; localStorage.setItem("nwlang", l); document.docu
 const variantOf = (fam) => fam === "graphique" ? "graphing" : "scientific";
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
+// -- inline icons (currentColor SVG) -------------------------------------------
+const ACCOUNT_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 13.5a5 5 0 0 0-10 0" stroke-linecap="round"/><circle cx="8" cy="5" r="2.6"/></svg>`;
+const FLEET_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4" width="12" height="8" rx="1.5"/><path d="M2 7h12"/></svg>`;
+const CHECK_SM = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 8.5l3 3 6-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const SHIELD_SM = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.8 2 4.3v3.4c0 3.4 2.5 5.6 6 6.5 3.5-.9 6-3.1 6-6.5V4.3L8 1.8Z"/><path d="M5.6 8 7.4 9.8 10.6 6.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const REFRESH_SM = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 3v2.4h-2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Write = down-arrow INTO a tray (into the calculator).
+const WRITE_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4v6.2M5.4 6 8 8.6 10.6 6"/><rect x="2.8" y="10.6" width="10.4" height="3" rx="1"/></svg>`;
+const PENCIL_SVG = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3 13 5.5 5.8 12.7 3 13.4l.7-2.8Z"/></svg>`;
+const CHECK_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 8.5l3 3 6-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const DASH_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h8" stroke-linecap="round"/></svg>`;
+const DROP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`;
+
 // -- load / connection ---------------------------------------------------------
 async function load() {
   const qm = QS.get("mode");
@@ -84,6 +98,8 @@ async function loadConnected() {
   const sc = await api("/api/scripts").catch(() => ({ has_scripts: false, capacity: 0, scripts: [], available: [] }));
   STATE.scripts = { hasScripts: sc.has_scripts, device: sc.scripts || [],
                     avail: sc.available || [], capacity: sc.capacity || 0 };
+  STATE.name = await api("/api/device/name").catch(() => null);  // user calc name (local store)
+  STATE.sources = null;  // lazily fetched for the Sources popover on first open
   initStage("apps"); initStage("scripts");
   renderAll();
 }
@@ -112,7 +128,7 @@ async function onDisconnected() {
   // The cable was pulled: drop to the "no calculator" screen. POLL stays on, so the next ticks
   // hit the rescan branch and re-attach automatically when it is plugged back in.
   STATE.identity = { connected: false };
-  STATE.catalog = STATE.cache = STATE.apps = STATE.scripts = null;
+  STATE.catalog = STATE.cache = STATE.apps = STATE.scripts = STATE.name = STATE.sources = null;
   renderAll();
   toast(t("device_lost"), true);
 }
@@ -141,116 +157,160 @@ async function disconnectDevice() {
 
 // -- top-level render ----------------------------------------------------------
 function renderAll() {
+  // toolbar + statusbar + tab labels (present regardless of connection)
   $("lang-fr").setAttribute("aria-pressed", LANG === "fr");
   $("lang-en").setAttribute("aria-pressed", LANG === "en");
-  $("subtitle").textContent = t("subtitle");
-  $("disclaimer-txt").innerHTML = t("disclaimer");
-  $("quit-btn").textContent = t("quit");
-  $("note-txt").innerHTML = t("note");
-  $("t-accmode").textContent = t("accmode");
-  $("t-update").textContent = t("update");
-  $("t-apps").textContent = t("apps");
-  $("t-scripts").textContent = t("scripts_title");
-  $("mode-individual").textContent = t("mode_individual");
-  $("mode-classroom").textContent = t("mode_classroom");
-  $("chan-stable").textContent = t("chan_stable");
-  $("chan-beta").textContent = t("chan_beta");
-  $("c-supervise-label").textContent = t("supervise_label");
-  $("c-dl-label").textContent = t("dl_label");
-  $("acc-hint").textContent = t("acc_hint");
+  $("quit-btn").title = t("quit"); $("quit-btn").setAttribute("aria-label", t("quit"));
+  $("mode-individual-label").textContent = t("mode_individual");
+  $("mode-classroom-label").textContent = t("mode_classroom");
+  $("tab-system-label").textContent = t("tab_system");
+  $("tab-apps-label").textContent = t("tab_apps");
+  $("tab-scripts-label").textContent = t("tab_scripts");
+  $("flash-title").textContent = t("flash");
+  $("c-risk-label").textContent = t("risk");
+  $("status-local").textContent = t("status_local");
+  $("status-offline-label").textContent = t("offline_ready");
+  $("status-disc").textContent = t("disc");
+  $("status-learn").textContent = t("learn");
+  $("src-pop-title").textContent = t("src_title");
+  $("src-pop-foot").textContent = t("src_foot");
+  renderModeButtons();
   const conn = !!(STATE.identity && STATE.identity.connected);
-  $("stack").style.display = conn ? "" : "none";
-  document.querySelector(".grid").classList.toggle("solo", !conn);
-  renderDeviceCard();
-  if (conn) { renderMode(); renderCatalog(); renderWorkbench(); }
+  $("window").dataset.conn = conn ? "1" : "0";
+  renderRail();
+  updateTitlebar();
+  if (conn) { renderSystem(); renderWorkbench(); }
+  else renderNoDevMain();
 }
 
-function renderDeviceCard() {
-  const el = $("device-card"), i = STATE.identity;
-  if (!i || !i.connected) {
-    el.innerHTML = `<div class="nodev">
-      <div class="ico" aria-hidden="true">🔌</div>
-      <h3>${t("nodev_title")}</h3>
-      <p>${t("nodev_hint")}</p>
-      <div class="row">
-        <button class="btn" onclick="rescanDevice()">${t("rescan")}</button>
-        <div class="demo-pick">
-          <select id="demo-model" aria-label="${t("demo_model")}">${demoModelOptions("n0110")}</select>
-          <button class="btn ghost" onclick="exploreDemo()">${t("demo_btn")}</button>
-        </div>
+function renderNoDevMain() {
+  $("nodev-main").innerHTML = `<div class="ico" aria-hidden="true">🔌</div>
+    <h3>${t("nodev_title")}</h3><p>${t("nodev_hint")}</p>
+    <div class="row">
+      <button class="btn" onclick="rescanDevice()">${t("rescan")}</button>
+      <div class="demo-pick">
+        <select id="demo-model" aria-label="${t("demo_model")}">${demoModelOptions("n0110")}</select>
+        <button class="btn ghost" onclick="exploreDemo()">${t("demo_btn")}</button>
       </div>
-      <p class="hint" style="margin-top:16px"><span class="waitdot"></span>${t("nodev_wait")}</p>
-    </div>`;
+    </div>
+    <p class="hint" style="margin-top:14px"><span class="waitdot"></span>${t("nodev_wait")}</p>`;
+}
+
+function renderRail() {
+  const el = $("rail"), i = STATE.identity;
+  if (!i || !i.connected) {
+    el.innerHTML = `<div class="rail-nodev"><div class="ico" aria-hidden="true">🔌</div>
+      <p>${t("nodev_title")}</p></div>`;
     return;
   }
   const variant = variantOf(i.family), fc = variant === "graphing" ? "g" : "s";
-  el.innerHTML = `<div class="dev-head"><h2>${t("device")}</h2>
-      <button class="gear" title="${t("dev_menu")}" aria-label="${t("dev_menu")}" onclick="disconnectDevice()">⚙</button></div>
-    <div class="calc-slot">${buildCalc(variant)}</div>
-    <dl>
+  const name = STATE.name || { name: null, default: "calc " + (i.model || "").toUpperCase() };
+  const regTip = i.has_external_apps ? t("region_present") : t("region_absent");
+  const regIcon = i.has_external_apps
+    ? `<span class="regok" title="${regTip}" aria-label="${regTip}">${CHECK_ICON}</span>`
+    : `<span class="regno" title="${regTip}" aria-label="${regTip}">${DASH_ICON}</span>`;
+  el.innerHTML = `
+    <div class="calcname">
+      <input class="cn-input" id="calc-name" type="text" value="${esc(name.name || "")}"
+        placeholder="${esc(name.default)}" aria-label="${t("calc_name")}"
+        oninput="onNameInput()" onchange="saveDeviceName()" onblur="saveDeviceName()" onfocus="this.select()">
+      <span class="cn-pencil" aria-hidden="true">${PENCIL_SVG}</span>
+    </div>
+    <div class="calc">${buildCalc(variant)}</div>
+    <dl class="spec">
       <dt>${t("model")}</dt><dd>${esc(i.model)}${i.virtual ? ` <span class="tag imp">${t("demo_tag")}</span>` : ""}</dd>
       <dt>${t("family")}</dt><dd><span class="fam ${fc}">${t(fc === "g" ? "fam_g" : "fam_s")}</span></dd>
       <dt>MCU</dt><dd>${esc(i.mcu || "—")}</dd>
-      <dt>${t("serial")}</dt><dd>${esc(i.serial_number || "—")}</dd>
+      <dt>${t("serial")}</dt>
+      <dd><button class="serial${SERIAL_SHOWN ? "" : " blur"}" id="serial-btn" onclick="toggleSerial()"
+        title="${t("serial_reveal")}" aria-label="${t("serial_reveal")}"><span class="val">${esc(i.serial_number || "—")}</span></button></dd>
       <dt>OS</dt><dd>Epsilon ${esc(i.os_version || "?")}</dd>
-      <dt>bcdDevice</dt><dd>${esc(i.bcd_device)}</dd>
-      <dt>${t("appsregion")}</dt><dd>${i.has_external_apps ? t("region_present") : t("region_absent")}</dd>
+      <dt>${t("appsregion")}</dt><dd>${regIcon}</dd>
     </dl>
-    <p class="hint">${i.virtual ? t("demo_dev_hint") : t("real_hint")}</p>`
-    + (i.virtual ? `<div class="demo-switch"><span>${t("demo_model")}</span>
-      <select id="demo-model2" onchange="switchDemo(this.value)">${demoModelOptions(i.model)}</select></div>` : "");
+    ${i.virtual ? `<div class="demo-switch"><span>${t("demo_model")}</span>
+      <select id="demo-model2" onchange="switchDemo(this.value)">${demoModelOptions(i.model)}</select></div>` : ""}
+    <div class="rail-foot"><button class="btn ghost sm" onclick="disconnectDevice()">${t("dev_menu")}</button></div>`;
+}
+
+function updateTitlebar() {
+  const i = STATE.identity;
+  if (!i || !i.connected) { $("titlebar-text").textContent = "nwupdater"; return; }
+  const nm = (STATE.name && (STATE.name.name || STATE.name.default)) || ("calc " + (i.model || "").toUpperCase());
+  $("titlebar-text").textContent = `nwupdater — ${nm} · Epsilon ${i.os_version || "?"}`;
+}
+
+// -- tabs ----------------------------------------------------------------------
+function setTab(tab) {
+  STATE.tab = tab;
+  ["system", "apps", "scripts"].forEach(k => {
+    const tb = $("tab-" + k), pn = $("pane-" + k);
+    if (tb) tb.setAttribute("aria-selected", k === tab);
+    if (pn) pn.classList.toggle("on", k === tab);
+  });
+}
+function renderTabs() {
+  const hasApps = !!(STATE.apps && STATE.apps.hasRegion);
+  const hasPy = !!(STATE.scripts && STATE.scripts.hasScripts);
+  // Workshops follow the HARDWARE (QSPI apps region / Python storage) — hide the tab when absent.
+  $("tab-apps").style.display = hasApps ? "" : "none";
+  $("tab-scripts").style.display = hasPy ? "" : "none";
+  $("tab-apps-cnt").textContent = hasApps ? String(STATE.apps.device.length) : "";
+  $("tab-scripts-cnt").textContent = hasPy ? String(STATE.scripts.device.length) : "";
+  // The "update available" signal is a pulsing dot on the System tab (not a text pill).
+  const up = !!(STATE.catalog && STATE.catalog.up_to_date);
+  $("updot").style.display = (STATE.catalog && !up) ? "block" : "none";
+  if ((STATE.tab === "apps" && !hasApps) || (STATE.tab === "scripts" && !hasPy)) setTab("system");
 }
 
 // -- account & mode ------------------------------------------------------------
-function setMode(m) { STATE.mode = m; localStorage.setItem("nwmode", m); renderMode(); renderWorkbench(); }
-function renderMode() {
+function renderModeButtons() {
+  const authed = !!(STATE.auth && STATE.auth.authenticated);
   $("mode-individual").setAttribute("aria-pressed", STATE.mode === "individual");
   $("mode-classroom").setAttribute("aria-pressed", STATE.mode === "classroom");
-  const b = $("mode-body");
-  if (STATE.mode === "classroom") {
-    b.innerHTML = `<p class="classroom-intro">${t("classroom_intro")}</p>
-      <div id="cache-body" class="cache"></div>
-      <div class="classroom-row"><button class="btn" onclick="updateCaches()">${t("update_caches")}</button></div>`;
-    renderCache();
-  } else {
-    b.innerHTML = `<div id="auth-body"></div>`;
-    renderAuth();
-  }
+  // Connection state = signed in: tint the Individual toggle green (a green dot shows when signed
+  // in but Classroom is the active toggle). No separate header chip → no layout shift.
+  $("mode-individual").classList.toggle("conn", authed);
+}
+function setMode(m) {
+  STATE.mode = m; localStorage.setItem("nwmode", m);
+  if (STATE.identity && STATE.identity.connected) { renderSystem(); renderWorkbench(); }
+  else renderModeButtons();
+}
+function renderSystem() {
+  renderModeButtons();
+  renderCatalog();
+  const ind = STATE.mode === "individual";
+  $("account-card").style.display = ind ? "" : "none";
+  $("classroom-card").style.display = ind ? "none" : "";
+  $("status-offline").style.display = ind ? "none" : "inline-flex";
+  if (ind) renderAuth(); else renderCache();
 }
 function renderAuth() {
-  const a = STATE.auth || {}, b = $("auth-body");
-  if (!b) return;
-  let status;
-  if (a.authenticated) status = `<span class="auth-ok">${t("auth_in", { d: a.expires_at || "?" })}</span>`;
-  else if (a.expired) status = `<span class="hint" style="margin:0">${t("auth_expired")}</span>`;
-  else status = `<span class="hint" style="margin:0">${t("auth_out")}</span>`;
+  const a = STATE.auth || {}, el = $("account-card");
+  const head = `<h3>${ACCOUNT_ICON}<span>${t("account")}</span></h3>`;
   if (a.authenticated) {
-    b.innerHTML = `<div class="status">${status}</div>
-      <div class="reg-chip">✓ ${t("registered")}</div>
-      <div class="auth-row">
-        <button class="btn sm" onclick="captureSequence()">${t("capture_btn")}</button>
-        <button class="btn ghost sm" onclick="logoutAuth()">${t("auth_logout")}</button>
-      </div>
-      <p class="hint">${t("capture_hint")}</p>`;
+    el.innerHTML = head + `<div class="acct-row">
+        <span class="authok">${CHECK_SM}${t("auth_in", { d: a.expires_at || "?" })}</span>
+        <button class="btn ghost sm" onclick="logoutAuth()">${t("auth_logout")}</button></div>
+      <p class="muted acct-purpose">${t("acct_purpose")}</p>`;
   } else {
-    b.innerHTML = `<div class="status">${status}</div>
+    const status = a.expired ? t("auth_expired") : t("auth_out");
+    el.innerHTML = head + `<p class="muted" style="margin:0 0 9px">${status}</p>
       <div class="auth-row">
         <input id="auth-email" type="email" placeholder="${t("auth_email")}" autocomplete="username">
         <input id="auth-pw" type="password" placeholder="${t("auth_pw")}" autocomplete="current-password">
-        <button class="btn sm" onclick="loginPassword()">${t("auth_login")}</button>
-      </div>
-      <p class="hint">${t("auth_pw_note")}</p>
+        <button class="btn sm" onclick="loginPassword()">${t("auth_login")}</button></div>
       <details class="auth-adv"><summary>${t("auth_adv")}</summary>
-        <p class="hint">${t("auth_hint")}</p>
+        <p class="muted">${t("auth_hint")}</p>
         <div class="auth-row">
           <input id="auth-token" type="password" placeholder="${t("auth_ph")}" autocomplete="off">
-          <button class="btn ghost sm" onclick="loginToken()">${t("auth_save")}</button>
-        </div></details>`;
+          <button class="btn ghost sm" onclick="loginToken()">${t("auth_save")}</button></div></details>
+      <p class="muted acct-purpose">${t("acct_purpose")}</p>`;
   }
 }
 async function _applyLogin(payload) {
   STATE.auth = await post("/api/auth/login", payload);
-  toast(t("auth_saved")); renderAuth(); renderCatalog();
+  toast(t("auth_saved")); renderSystem(); renderWorkbench();
 }
 async function loginPassword() {
   const email = ($("auth-email").value || "").trim(), pw = $("auth-pw").value || "";
@@ -263,42 +323,30 @@ async function loginToken() {
   try { await _applyLogin({ token }); } catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 async function logoutAuth() {
-  try { STATE.auth = await post("/api/auth/logout"); toast(t("auth_gone")); renderAuth(); renderCatalog(); }
+  try { STATE.auth = await post("/api/auth/logout"); toast(t("auth_gone")); renderSystem(); renderWorkbench(); }
   catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
-async function captureSequence() {
-  toast(t("capture_running"));
-  try {
-    const dump = await post("/api/capture");
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
-    const ts = (dump.timestamp || "dump").replace(/[:\-]/g, "").slice(0, 15);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `nwupdater-capture-${ts}.json`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
-    toast(t("capture_done"));
-  } catch (e) { toast(t("fail", { msg: e.message }), true); }
-}
 function renderCache() {
-  const c = STATE.cache, el = $("cache-body");
-  if (!el) return;
-  const entries = (c && c.entries) || [];
+  const el = $("classroom-card"); if (!el) return;
+  const c = STATE.cache, entries = (c && c.entries) || [];
+  const head = `<h3>${FLEET_ICON}<span>${t("fleet")}</span></h3>
+    <div class="cls-head">
+      <span class="offline">${SHIELD_SM}${t("offline_ready")}</span>
+      <button class="btn ghost sm" onclick="updateCaches()">${REFRESH_SM}${t("update_caches")}</button></div>`;
   if (!entries.length) {
-    el.className = "cache";
-    el.innerHTML = `<span class="ct"><b>${t("cache_mode")}</b> — ${t("cache_intro")}</span>`;
+    el.innerHTML = head + `<p class="muted" style="margin:0">${t("cache_intro")}</p>`;
     return;
   }
-  el.className = "cache-list";
-  // Channel badge: beta stands out (imp), stable is muted (un) — so a cached pre-release is
-  // never mistaken for a stable image at a glance.
+  // Channel badge: beta stands out (imp), stable is muted (un) — so a cached pre-release is never
+  // mistaken for a stable image at a glance.
   const chanTag = (e) => e.channel === "beta"
-    ? ` <span class="tag imp">${t("chan_beta")}</span>`
-    : ` <span class="tag un">${t("chan_stable")}</span>`;
-  const rows = entries.map(e => `<div class="cache-row">
-      <span class="cache-nm">${esc(e.model.toUpperCase())} · Epsilon ${esc(e.version)}${chanTag(e)}${
+    ? ` <span class="tag imp">${t("chan_beta")}</span>` : ` <span class="tag un">${t("chan_stable")}</span>`;
+  const rows = entries.map(e => `<div class="cacherow">
+      <span>${esc(e.model.toUpperCase())} · Epsilon ${esc(e.version)}${chanTag(e)}${
         e.real ? "" : ` <span class="tag imp">${t("demo_tag")}</span>`}</span>
-      <span class="cache-sz">${fmtBytes(e.size)}</span></div>`).join("");
-  el.innerHTML = rows + `<div class="cache-foot">
-      <span class="ct">${t("cache_summary", { n: entries.length, d: c.expires_in_days ?? 30 })}</span>
+      <span class="sz">${fmtBytes(e.size)}</span></div>`).join("");
+  el.innerHTML = head + rows + `<div class="cache-foot">
+      <span class="muted">${t("cache_summary", { n: entries.length, d: c.expires_in_days ?? 30 })}</span>
       <button class="btn ghost sm" onclick="clearCache()">${t("clear")}</button></div>`;
 }
 async function updateCaches() {
@@ -314,6 +362,77 @@ async function clearCache() {
   catch (e) { toast(t("fail", { msg: e.message }), true); }
 }
 
+// -- sources popover -----------------------------------------------------------
+let SRC_BTN = null;
+async function ensureSources() {
+  if (!STATE.sources) {
+    STATE.sources = await api("/api/sources").catch(() => ({ apps: [], scripts: [], dirs: {} }));
+  }
+  return STATE.sources;
+}
+function srcIcon(kind) {
+  return kind === "cloud" ? ORIGIN_SVG.cloud : kind === "local" ? ORIGIN_SVG.local : ORIGIN_SVG.online;
+}
+function renderSourcesList(s) {
+  const cls = STATE.mode === "classroom", rows = [];
+  const add = (list, label) => (list || []).forEach(x => {
+    if (cls && x.kind === "cloud") return;  // personal (cloud) sources are hidden in classroom
+    rows.push(`<div class="srcline">${srcIcon(x.kind)}<span class="u">${esc(x.url || x.source || x.label)}</span>`
+      + `<span class="k">${label}</span></div>`);
+  });
+  add(s.apps, t("tab_apps"));
+  add(s.scripts, t("tab_scripts"));
+  if (s.dirs) {
+    if (s.dirs.apps) rows.push(`<div class="srcline">${ORIGIN_SVG.local}<span class="u">${esc(s.dirs.apps)}</span><span class="k">${t("tab_apps")}</span></div>`);
+    if (s.dirs.scripts) rows.push(`<div class="srcline">${ORIGIN_SVG.local}<span class="u">${esc(s.dirs.scripts)}</span><span class="k">${t("tab_scripts")}</span></div>`);
+  }
+  $("src-pop-list").innerHTML = rows.join("") || `<div class="srcline"><span class="u muted">—</span></div>`;
+}
+async function toggleSources(kind, btn) {
+  const pop = $("src-pop");
+  if (pop.classList.contains("on") && SRC_BTN === btn) { pop.classList.remove("on"); SRC_BTN = null; return; }
+  renderSourcesList(await ensureSources());
+  const r = btn.getBoundingClientRect();
+  pop.style.top = (r.bottom + window.scrollY + 8) + "px";
+  pop.style.left = Math.min(r.left + window.scrollX, window.innerWidth - 372) + "px";
+  pop.classList.add("on"); SRC_BTN = btn;
+}
+document.addEventListener("click", (e) => {
+  const pop = $("src-pop");
+  if (pop && pop.classList.contains("on") && !pop.contains(e.target) && !e.target.closest(".srcbtn")) {
+    pop.classList.remove("on"); SRC_BTN = null;
+  }
+});
+
+// -- calculator name (local store) ---------------------------------------------
+function onNameInput() {
+  const inp = $("calc-name"); if (!inp) return;
+  const shown = inp.value.trim() || (STATE.name && STATE.name.default) || "";
+  const i = STATE.identity;
+  if (i && i.connected) $("titlebar-text").textContent = `nwupdater — ${shown} · Epsilon ${i.os_version || "?"}`;
+}
+async function saveDeviceName() {
+  const inp = $("calc-name"); if (!inp) return;
+  const val = inp.value.trim(), cur = (STATE.name && STATE.name.name) || "";
+  if (val === cur) return;  // nothing changed since the last save
+  try {
+    const r = await post("/api/device/name", { name: val });
+    STATE.name = { name: r.name, default: r.default };
+    if (inp === document.activeElement) inp.value = r.name || "";
+    updateTitlebar();
+  } catch (e) { toast(t("fail", { msg: e.message }), true); }
+}
+
+// -- serial reveal -------------------------------------------------------------
+function toggleSerial() {
+  const b = $("serial-btn"); if (!b) return;
+  SERIAL_SHOWN = !SERIAL_SHOWN;
+  b.classList.toggle("blur", !SERIAL_SHOWN);
+}
+
+// -- disclaimer (moved to a slim status-bar line + details) --------------------
+function showDisclaimer() { window.alert(t("disclaimer").replace(/<[^>]+>/g, "")); }
+
 // -- system update -------------------------------------------------------------
 async function setChannel(ch) {
   STATE.channel = ch;
@@ -325,17 +444,16 @@ function renderCatalog() {
   const c = STATE.catalog; if (!c) return;
   $("chan-stable").setAttribute("aria-pressed", STATE.channel === "stable");
   $("chan-beta").setAttribute("aria-pressed", STATE.channel === "beta");
-  $("c-img-hint").textContent = t("img_hint");
   $("c-exam-warn").textContent = t("exam_warn");  // guide: cold-boot (RESET) after flashing keeps official status
   const up = c.up_to_date;
-  $("c-badge").className = "badge " + (up ? "ok" : "up");
-  $("c-badge").textContent = up ? t("uptodate") : t("update_avail");
+  $("updot").style.display = up ? "none" : "block";  // pulsing dot on the System tab
   const srcTag = c.source === "official"
     ? `<span class="tag un" style="margin-left:7px">${t("cat_official")}</span>`
     : `<span class="tag imp" style="margin-left:7px">${t("cat_sample")}</span>`;
   $("c-text").innerHTML = (up ? t("uptodate_txt", { v: esc(c.current) })
     : t("updates_txt", { cur: esc(c.current), n: c.updates.length })) + srcTag;
   $("c-row").style.display = up ? "none" : "flex";
+  $("c-risk").style.display = up ? "none" : "flex";
   // A firmware cached for THIS model can be flashed with no account (classroom / offline). When
   // present, pre-select it and tag the option so it's the obvious one-click choice.
   const ce = cachedEntryForDevice();
@@ -346,7 +464,6 @@ function renderCatalog() {
     + `${(ce && u.version === ce.version) ? " · " + t("cached") : ""}</option>`).join("");
   const isReal = !STATE.identity.virtual;
   $("c-install").textContent = (cachedHit && isReal) ? t("install_cache") : t("install");
-  const slot = STATE.identity.has_external_apps ? t("slot_ab", { slot: "B" }) : t("slot_single");
   const authed = !!(STATE.auth && STATE.auth.authenticated);
   const dl = $("c-download");
   if (isReal) {
@@ -354,13 +471,14 @@ function renderCatalog() {
     // Enable when there's an update AND we can source an image: a cached one (no sign-in) or a
     // signed-in official download.
     $("c-install").disabled = up || (!cachedHit && !authed);
-    $("c-slot").textContent = up ? "" : (cachedHit ? t("slot_cache", { v: ce.version }) : (authed ? slot : t("dl_need_auth")));
+    // The atomic-slot note is gone; keep only the meaningful cache / sign-in hints.
+    $("c-slot").textContent = up ? "" : (cachedHit ? t("slot_cache", { v: ce.version }) : (authed ? "" : t("dl_need_auth")));
   } else {
     $("c-dl-toggle").style.display = up ? "none" : "flex";
     if (dl) { dl.disabled = !authed; if (!authed) dl.checked = false; }
     $("c-dl-label").textContent = authed ? t("dl_label") : t("dl_need_auth");
     $("c-install").disabled = false;
-    $("c-slot").textContent = up ? "" : slot;
+    $("c-slot").textContent = "";
   }
   renderResult();
 }
@@ -397,8 +515,8 @@ async function installFw() {
   }
   const realConsequence = download || isReal;
   if (realConsequence) {
-    if (!$("c-supervise").checked) { toast(t("supervise_need"), true); return; }
-    if (!window.confirm(t("confirm_flash", { v: version }))) return;
+    // No standing supervision checkbox: fold the acknowledgment into the confirmation itself.
+    if (!window.confirm(t("confirm_flash", { v: version }) + "\n\n" + t("supervise_label"))) return;
   }
   btn.disabled = true; btn.textContent = fromCache ? t("installing_cache") : t("installing");
   $("c-meterwrap").className = "meterwrap on"; $("c-meter").className = "meter"; $("c-meter").style.width = "0";
@@ -411,7 +529,7 @@ async function installFw() {
     STATE.lastResult = { version: r.verified_version || version, slot: r.target_slot };
     toast(t("fw_done", { v: r.verified_version || version,
       slot: r.target_slot ? t("fw_slot_b") : "", cache: r.from_cache ? t("fw_from_cache") : "" }));
-    renderDeviceCard(); renderCatalog();
+    renderRail(); updateTitlebar(); renderCatalog(); renderTabs();
   } catch (e) {
     toast(t("fail", { msg: e.message }), true);
   } finally {
@@ -463,9 +581,9 @@ function planFor(kind) {
 }
 // Source glyphs (inline SVG, currentColor): online (remote URL) · cloud (NumWorks) · local (PC).
 const ORIGIN_SVG = {
-  online: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.9 1.7 1.9 10.3 0 12M8 2c-1.9 1.7-1.9 10.3 0 12"/></svg>`,
-  cloud: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M4.7 12.4h6.5a2.6 2.6 0 0 0 .4-5.2A3.5 3.5 0 0 0 4.9 6 2.55 2.55 0 0 0 4.7 12.4Z"/></svg>`,
-  local: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="7.5" rx="1"/><path d="M5.5 13.3h5M8 10.5v2.8"/></svg>`,
+  online: `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.9 1.7 1.9 10.3 0 12M8 2c-1.9 1.7-1.9 10.3 0 12"/></svg>`,
+  cloud: `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M4.7 12.4h6.5a2.6 2.6 0 0 0 .4-5.2A3.5 3.5 0 0 0 4.9 6 2.55 2.55 0 0 0 4.7 12.4Z"/></svg>`,
+  local: `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="3" width="12" height="7.5" rx="1"/><path d="M5.5 13.3h5M8 10.5v2.8"/></svg>`,
 };
 function originIcon(a) {
   const s = (a.source || "").toLowerCase();
@@ -473,11 +591,11 @@ function originIcon(a) {
   if (s.includes("cloud")) return ORIGIN_SVG.cloud;
   return ORIGIN_SVG.online;
 }
-// Export-to-computer glyphs (inline SVG, currentColor): save (down-arrow into a tray) shown when
-// the file is not yet local; have (drive + check) shown when a same-name, same-size copy already
-// sits in the local library. Both states export on click.
+// Export-to-computer glyphs (inline SVG, currentColor): save = UP-arrow out of a tray (upload to
+// the PC — distinct from Write's down-arrow); have = drive + check (a same-name, same-size copy
+// already sits in the local library). Both states export on click.
 const EXPORT_SVG = {
-  save: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4v6.6"/><path d="M5.2 6.3 8 9.1l2.8-2.8"/><path d="M2.8 11.3v1.1a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.1"/></svg>`,
+  save: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.4V3.6M5.2 6.4 8 3.6l2.8 2.8"/><path d="M2.8 11.2v1.1a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.1"/></svg>`,
   have: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.4" width="12" height="7.4" rx="1"/><path d="M5.4 13.2h5.2M8 10.8v2.4"/><path d="M5.7 6.9 7.3 8.5 10.5 5.3"/></svg>`,
 };
 // The export button for an installed item. Two visuals via `s.local`, but the same click action —
@@ -486,12 +604,12 @@ function exportBtn(kind, s) {
   const have = !!s.local;
   const tip = have ? t("export_pc_have") : t("export_pc");
   return `<button class="ib dl${have ? " have" : ""}" title="${tip}" aria-label="${tip} ${esc(s.name)}"
-    onclick="exportItem('${kind}','${jsStr(s.name)}')">${have ? EXPORT_SVG.have : EXPORT_SVG.save}</button>`;
+    onclick="exportItem('${kind}','${jsStr(s.name)}',this)">${have ? EXPORT_SVG.have : EXPORT_SVG.save}</button>`;
 }
 function slotIcon(kind, item) {
   const name = (typeof item === "string" ? item : item.name) || "?";
   const icon = typeof item === "object" && item ? item.icon : null;
-  if (icon) return `<img class="ic" src="${icon}" alt="" width="32" height="32">`;  // real decoded .nwa icon
+  if (icon) return `<img class="ic" src="${icon}" alt="" width="28" height="28">`;  // real decoded .nwa icon
   return kind === "scripts" ? `<div class="ic py">py</div>`
     : `<div class="ic" style="background:${color(name)}">${esc(name[0].toUpperCase())}</div>`;
 }
@@ -533,8 +651,8 @@ function availRow(kind, a) {
   const inStage = STATE.stage[kind].some(x => x.name === nm && !x.deleted);
   const bad = kind === "apps" && a.api_level && a.api_level > (STATE.apps.apiLevel || 0);
   const src = a.source || a.url || "";
-  const meta = `${a.size ? fmtBytes(a.size) + " · " : ""}API ${a.api_level ?? 0}${src ? " · " + esc(src) : ""}`;
-  return `<div class="item"><span class="origin" aria-hidden="true">${originIcon(a)}</span>${slotIcon(kind, a)}
+  const meta = `<span class="origin" aria-hidden="true">${originIcon(a)}</span>${a.size ? fmtBytes(a.size) + " · " : ""}API ${a.api_level ?? 0}${src ? " · " + esc(src) : ""}`;
+  return `<div class="item">${slotIcon(kind, a)}
     <div class="grow"><div class="nm">${esc(nm)}${bad ? ` <span class="mt bad">${t("incompatible", { n: a.api_level })}</span>` : ""}</div>
       <div class="mt">${meta}</div></div>
     <button class="ib add" ${inStage || bad ? "disabled" : ""} title="+" aria-label="${esc(nm)}"
@@ -558,17 +676,16 @@ function workshopBody(kind) {
     <span><i class="seg-new"></i>${t("leg_new")}</span><span><i class="seg-free"></i>${t("leg_free")}</span></div>`;
   const head = `<div class="wkhead">
     <span>${t("used", { used: "<b>" + fmtBytes(p.usedB) + "</b>", total: fmtBytes(cfg.capacity) })}</span>
-    <span>${t("free", { n: fmtBytes(p.freeB) })}</span></div>`;
-  const warn = kind === "apps"
-    ? `<p class="warn">⚠️ ${esc(t("apps_warn"))}</p>` : `<p class="warn">${esc(t("scripts_note"))}</p>`;
+    <span class="wkhead-r"><span>${t("free", { n: fmtBytes(p.freeB) })}</span>
+      <button class="srcbtn" onclick="toggleSources('${kind}',this)">${ORIGIN_SVG.online}${t("sources")}</button></span></div>`;
   const mov = slots.filter(s => ["rw", "new"].includes(p.status.get(s)));  // writable = reorderable
   const left = slots.length ? slots.map(s => onCalcRow(kind, s, p, mov)).join("")
     : `<p class="empty">${t("no_installed")}</p>`;
-  // Drop zone: anchored at the BOTTOM of the LEFT column, always visible (outside the scroll area).
+  // Drop zone: taller, anchored at the BOTTOM of the LEFT column, always visible (outside scroll).
   const drop = `<div class="drop" ondragover="event.preventDefault();this.classList.add('drag-over')"
-    ondragleave="this.classList.remove('drag-over')" ondrop="dropFiles(event,'${kind}')">
-    <input id="${kind}-file" type="file" accept="${cfg.accept}" style="display:none"
-      onchange="onLocalFile('${kind}',this)"><label for="${kind}-file">${cfg.chooseLabel}</label></div>`;
+    ondragleave="this.classList.remove('drag-over')" ondrop="dropFiles(event,'${kind}')">${DROP_SVG}
+    <span><b>${cfg.accept}</b> — <input id="${kind}-file" type="file" accept="${cfg.accept}" style="display:none"
+      onchange="onLocalFile('${kind}',this)"><label for="${kind}-file">${cfg.chooseLabel}</label></span></div>`;
   const availList = avail.length ? avail.map(a => availRow(kind, a)).join("")
     : `<p class="empty">${t("no_compat")}</p>`;
   const cols = `<div class="cols2">
@@ -578,9 +695,10 @@ function workshopBody(kind) {
       <div class="wlist">${left}</div>${drop}</div>
     <div class="wcol">
       <div class="colhead"><span class="sub-h">${t("available")}</span><span class="cnt">${avail.length}</span></div>
-      <div class="sub-sub">${t("src_clr")}</div>${warn}
+      <div class="sub-sub">${t("src_clr")}</div>
       <div class="wlist">${availList}</div></div></div>`;
   const busy = !!STATE.busy[kind];  // a remote download is in flight → sweep items, lock actions
+  const writeLabel = busy ? t("writing") : WRITE_SVG + (p.dirty ? t("write") : t("nothing"));
   const wplan = `<div class="wplan">
     <div class="stat"><b>${p.un}</b>${t("wp_unchanged")}</div>
     <div class="stat"><b>${p.rw + p.nw}</b>${t("wp_rewrite")}</div>
@@ -588,18 +706,17 @@ function workshopBody(kind) {
     <div class="spacer"></div>
     <button class="btn ghost sm" onclick="undoStage('${kind}')" ${(STATE.hist[kind].length && !busy) ? "" : "disabled"}>${t("undo")}</button>
     <button class="btn ghost sm" onclick="resetStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${t("reset")}</button>
-    <button class="btn sm" onclick="commitStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${busy ? t("writing") : (p.dirty ? t("write") : t("nothing"))}</button>
+    <button class="btn sm" onclick="commitStage('${kind}')" ${(p.dirty && !busy) ? "" : "disabled"}>${writeLabel}</button>
   </div>`;
   return `<div class="wk${busy ? " wk-busy" : ""}">${head + bar + legend + cols + wplan}</div>`;
 }
 function renderWorkbench() {
   // Workshops follow the HARDWARE (QSPI apps region / Python storage), in both modes.
+  renderTabs();
   const hasApps = STATE.apps && STATE.apps.hasRegion;
   const hasPy = STATE.scripts && STATE.scripts.hasScripts;
-  $("apps-card").style.display = hasApps ? "" : "none";
-  $("scripts-card").style.display = hasPy ? "" : "none";
-  if (hasApps) $("apps-body").innerHTML = workshopBody("apps");
-  if (hasPy) $("scripts-body").innerHTML = workshopBody("scripts");
+  if (hasApps) $("pane-apps").innerHTML = workshopBody("apps");
+  if (hasPy) $("pane-scripts").innerHTML = workshopBody("scripts");
 }
 async function stageAdd(kind, name) {
   const a = (kind === "apps" ? STATE.apps.avail : STATE.scripts.avail).find(x => x.name === name);
@@ -616,7 +733,7 @@ async function stageAdd(kind, name) {
       const resp = await fetch("/api/apps/download?url=" + encodeURIComponent(a.url));
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       const total = +(resp.headers.get("Content-Length") || 0);
-      const wk = $("apps-body").querySelector(".wk");
+      const wk = $("pane-apps").querySelector(".wk");
       if (total && wk) wk.classList.add("determinate");
       const reader = resp.body.getReader();
       const parts = []; let got = 0;
@@ -651,11 +768,23 @@ async function stageAdd(kind, name) {
     : { name: a.name, size: a.size || 0, auto_import: true, source: a.source, url: a.url, code: a.code || "", onDevice: false, deleted: false });
   renderWorkbench(); toast(t("staged_add", { name }));
 }
-// Pull an installed app/script off the device onto the computer. The server also drops a copy into
-// the local library, so the button flips to "already on the computer" — flipped in place so an
-// in-progress plan (staged adds/removes/reorders) is never reset.
-async function exportItem(kind, name) {
+// Pull an installed app/script off the device onto the computer. The row shows a RIGHT→LEFT
+// progress fill (device→PC — the mirror of the write bar's left→right) while the request runs;
+// the server also drops a copy into the local library, so the button flips to "already on the
+// computer" — flipped in place so an in-progress plan (staged adds/removes/reorders) is never reset.
+async function exportItem(kind, name, btn) {
   if (STATE.busy[kind]) return;  // a write/download is in flight — the workshop is locked
+  const row = btn && btn.closest(".item");
+  let sweep = null;
+  if (row) {
+    row.classList.add("exporting");
+    if (reduced) row.style.setProperty("--exp", "100%");
+    else {
+      let p = 6; row.style.setProperty("--exp", p + "%");
+      sweep = setInterval(() => { p = Math.min(92, p + 7); row.style.setProperty("--exp", p + "%"); }, 90);
+    }
+  }
+  const clearSweep = () => { if (sweep) { clearInterval(sweep); sweep = null; } };
   try {
     const r = await post(kind === "apps" ? "/api/apps/export" : "/api/scripts/export", { name });
     let blob, filename;
@@ -669,6 +798,8 @@ async function exportItem(kind, name) {
       blob = new Blob([r.code || ""], { type: "text/x-python" });
       filename = r.filename || (name.endsWith(".py") ? name : name + ".py");
     }
+    clearSweep();
+    if (row) row.style.setProperty("--exp", "100%");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = filename;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
@@ -678,6 +809,8 @@ async function exportItem(kind, name) {
     renderWorkbench();
     toast(t("exported", { name }));
   } catch (e) {
+    clearSweep();
+    if (row) { row.classList.remove("exporting"); row.style.removeProperty("--exp"); }
     toast(t("fail", { msg: e.message }), true);
   }
 }

@@ -53,11 +53,17 @@ def test_ui_loads_and_renders_identity(tmp_path):
             # The page fetches the identity on load (same-origin, sends Origin): rendering it proves
             # the CSRF-hardened API is reachable from a real browser and that app.js runs.
             page.wait_for_function("document.body.innerText.includes('16.4.4')", timeout=8000)
+            # New desktop shell: connected window, titlebar identity, and the System tab.
+            page.wait_for_selector('#window[data-conn="1"]', timeout=8000)
+            titlebar = page.inner_text("#titlebar-text")
+            tab_system = page.inner_text("#tab-system")
             body = page.inner_text("body")
             browser.close()
     finally:
         httpd.shutdown()
         httpd.server_close()
-    assert "n0110" in body.lower()  # model rendered from /api/identity
+    assert "n0110" in body.lower()  # model rendered from /api/identity (device rail)
     assert "16.4.4" in body  # installed OS version rendered
+    assert "16.4.4" in titlebar and "nwupdater" in titlebar  # titlebar shows the calc + Epsilon OS
+    assert tab_system  # the System/Apps/Scripts tabbar rendered
     assert not errors, f"UI console/page errors: {errors}"
