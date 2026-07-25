@@ -14,7 +14,6 @@ does — this module only enumerates candidates and downloads bytes on demand.
 
 from __future__ import annotations
 
-import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,27 +150,3 @@ def app_entries(directory: Path) -> list[AppEntry]:
             )
         )
     return out
-
-
-class RemoteCache:
-    """On-disk cache of fetched remote files, keyed by URL (classroom-friendly: fetch once)."""
-
-    def __init__(self, cache_dir: Path):
-        self.dir = Path(cache_dir)
-        self.dir.mkdir(parents=True, exist_ok=True)
-
-    def _path(self, url: str) -> Path:
-        return self.dir / (
-            hashlib.sha1(url.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
-            + "_"
-            + (Path(urlparse(url).path).name or "blob")
-        )
-
-    def get(self, url: str, fetcher) -> bytes:
-        """Return the cached bytes for ``url``, fetching via ``fetcher(url) -> bytes`` once."""
-        p = self._path(url)
-        if p.exists():
-            return p.read_bytes()
-        data = fetcher(url)
-        p.write_bytes(data)
-        return data

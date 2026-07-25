@@ -1,6 +1,6 @@
-"""Aggregation of available items: local files + user-listed remote URLs + on-disk cache."""
+"""Aggregation of available items: local files + user-listed remote URLs."""
 
-from nwupdater.apps.sources import RemoteCache, aggregate, read_url_list, remote_items
+from nwupdater.apps.sources import aggregate, read_url_list, remote_items
 
 
 def test_aggregate_local_and_remote(tmp_path):
@@ -55,17 +55,3 @@ def test_app_entries_empty_when_dir_absent(tmp_path):
     from nwupdater.apps.sources import app_entries
 
     assert app_entries(tmp_path / "does-not-exist") == []
-
-
-def test_cache_fetches_once(tmp_path):
-    calls = []
-
-    def fetch(u):
-        calls.append(u)
-        return b"DATA:" + u.encode()
-
-    cache = RemoteCache(tmp_path / "cache")
-    a = cache.get("https://example.com/x.nwa", fetch)
-    b = cache.get("https://example.com/x.nwa", fetch)
-    assert a == b == b"DATA:https://example.com/x.nwa"
-    assert calls == ["https://example.com/x.nwa"]  # fetched once, then served from cache
