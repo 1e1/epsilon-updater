@@ -191,6 +191,6 @@ def test_capture_server_marks_stamps_and_serves_userscript():
         st = _j.load(urllib.request.urlopen(base + "/state"))
         assert st["scenario"] == "pair" and st["web"] == 1
         js = urllib.request.urlopen(base + "/capture.user.js").read().decode()
-        assert "==UserScript==" in js and "numworks.com" in js
+        assert "==UserScript==" in js and "@match" in js and "://*.numworks.com/*" in js
     finally:
         httpd.shutdown()

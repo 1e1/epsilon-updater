@@ -431,7 +431,13 @@ function toggleSerial() {
 }
 
 // -- disclaimer (moved to a slim status-bar line + details) --------------------
-function showDisclaimer() { window.alert(t("disclaimer").replace(/<[^>]+>/g, "")); }
+function showDisclaimer() {
+  // The disclaimer i18n string carries <b> markup; extract its plain text via a detached
+  // <template> (no regex sanitization, nothing is ever inserted into the live DOM).
+  const tpl = document.createElement("template");
+  tpl.innerHTML = t("disclaimer");
+  window.alert(tpl.content.textContent || "");
+}
 
 // -- system update -------------------------------------------------------------
 async function setChannel(ch) {
