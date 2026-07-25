@@ -6,6 +6,8 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0-rc.2] - 2026-07-25
+
 ### Ajouté
 
 - **Mode Classe — refonte « console de parc » (maquette approuvée)** : en mode Classe le rail gauche

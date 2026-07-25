@@ -73,3 +73,15 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
   usage perso/défensif ; on ne contourne aucune signature (impossible de signer un firmware
   tiers de toute façon). L'outil lit l'identité en **lecture seule** et n'active jamais le
   mode examen.
+
+## Idées / à explorer (backlog)
+
+Pistes notées pour plus tard (non planifiées) :
+
+- ⬜ **Réduire la taille du binaire** empaqueté (PyInstaller) — audit des dépendances embarquées,
+  exclusions, éventuel `--onefile` vs dossier, strip.
+- ⬜ **Porter `nwlink` pour se passer de Node** — finir le linker pur-Python
+  (`formats/nwa_link.py`) afin d'installer une app distribuée (ELF) **sans** Node/npm ; nécessite
+  le placement type script `lld` + vendoriser le runtime EADK (question de licence).
+- ⬜ **Embarquer une IHM dans le binaire** — fenêtre native (ex. webview système / Qt / Tk) pour ne
+  plus dépendre d'un navigateur externe ; le serveur local + les assets web actuels restent le socle.
