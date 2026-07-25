@@ -13,6 +13,14 @@ try:
 except ImportError:  # pragma: no cover - only on an unbuilt source tree
     __version__ = "0.0.0+unknown"
 
+
+def ensure_suffix(name: str, suffix: str) -> str:
+    """Return ``name`` with ``suffix`` appended unless it is already there (e.g. ``"a" ->
+    "a.py"``, ``"a.py" -> "a.py"``). Shared by the script (``.py``) and app (``.nwa``) paths so the
+    filename-normalisation idiom lives in one place."""
+    return name if name.endswith(suffix) else name + suffix
+
+
 # ----------------------------------------------------------------------------------------
 # Avertissement affiché un peu partout (CLI, UI web, docs). Le flashage d'une calculatrice
 # est une opération à risque : ce projet décline toute responsabilité.

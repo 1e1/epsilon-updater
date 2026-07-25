@@ -349,6 +349,31 @@ def test_fetch_app_allowlist_and_download():
         s.fetch_app("https://evil.example/x.nwa")
 
 
+def test_add_store_app_fetches_and_installs_real_bytes():
+    # A catalogue entry with a real URL (not example.invalid) is downloaded through the SSRF-guarded
+    # proxy and its REAL bytes are installed — no synthesized demo image.
+    from nwupdater.catalog.auth import Response
+    from nwupdater.formats.appicon import demo_icon_lz4
+
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    url = next(e.url for e in s.store.entries if e.name == "RPN")
+    nwa = build_nwa("RPN", api_level=0, code=b"\x00" * 4096, icon=demo_icon_lz4("RPN"))
+    s._transport = _FakeTransport({("GET", url): Response(200, [], nwa)})
+    r = s.add_store_app("RPN")
+    assert r["ok"] and r["name"] == "RPN"
+    got = next(m for m in s._appmgr().installed() if m.name == "RPN")
+    assert got.blob == nwa  # the exact fetched bytes were flashed, not a synthesized image
+
+
+def test_add_store_app_synthesizes_for_placeholder_url():
+    # An example.invalid placeholder has no real download → fall back to the demo image (offline).
+    s = Session(connect=False)
+    s.attach_demo("n0110")
+    r = s.add_store_app("Tetris")  # url = https://example.invalid/tetris.nwa
+    assert r["ok"] and r["name"] == "Tetris"
+
+
 def test_open_app_stream_ssrf_guard():
     import pytest
 

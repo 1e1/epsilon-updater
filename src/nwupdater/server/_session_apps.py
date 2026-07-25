@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .. import ensure_suffix
 from ..formats.nwa import build_nwa
 from ._session_base import SessionBase
 
@@ -23,6 +24,7 @@ class AppsMixin(SessionBase):
                     "api_level": e.api_level,
                     "description": e.description,
                     "source": e.source,
+                    "url": e.url,
                     "size": e.size,
                 }
                 for e in compat
@@ -98,7 +100,7 @@ class AppsMixin(SessionBase):
         m = next((a for a in self._appmgr().installed() if a.name == name), None)
         if m is None:
             raise ValueError(f"app not installed: {name}")
-        filename = Path(name if name.endswith(".nwa") else name + ".nwa").name
+        filename = Path(ensure_suffix(name, ".nwa")).name
         dest = user_apps_dir()
         dest.mkdir(parents=True, exist_ok=True)
         (dest / filename).write_bytes(m.blob)
@@ -146,6 +148,16 @@ class AppsMixin(SessionBase):
             from pathlib import Path
 
             m = self._appmgr().push(Path(entry.local_path).read_bytes())
+            return {"ok": True, "name": m.name, "size": len(m.blob)}
+        if entry.url and "example.invalid" not in entry.url:
+            # A real catalogue entry: download the actual .nwa server-side through the SSRF-guarded
+            # proxy (the URL is allowlisted because it is in the store) and install its REAL bytes.
+            # AppManager.push links a relocatable ELF as needed and runs validate_nwa — nothing is
+            # synthesized. Only genuine placeholders (example.invalid) fall through to the demo.
+            import base64
+
+            fetched = self.fetch_app(entry.url)
+            m = self._appmgr().push(base64.b64decode(fetched["data_b64"]))
             return {"ok": True, "name": m.name, "size": len(m.blob)}
         # Synthesize at the catalogue's declared size so demo region usage is realistic (a real
         # .nwa carries its own app_size; here we pad the body to match — header is 0x20 bytes,
