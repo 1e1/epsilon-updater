@@ -41,10 +41,16 @@ Navigateur système  ──HTTP 127.0.0.1──▶  Serveur local (stdlib http.s
     graphique blanc/écran couleur/alpha ; scientifique charbon/écran monochrome large).
     Icônes d'applications redessinées en vectoriel ; **écrans sans texte** par défaut
     (i18n : seuls illustrations et symboles maths restent — flag interne `DEFAULT_TEXTLESS`).
+    `buildCalc({variant, mode})` — **3 modes** : `device` (défaut, appareil complet),
+    `icon` (glyphe famille compact ~28 px pour le roster), `thumb` (vignette écran seul).
   - `i18n.js` — dictionnaires **FR/EN** + `t(key, params)` ; langue auto-détectée
     (`navigator.language`), mémorisée (`localStorage`), basculable à chaud.
   - `app.js` — fetch de l'API, rendu, install firmware / app / `.nwa` local, mode classe
     (cache), toasts. Aucune chaîne serveur affichée : le client localise tout.
+  - `ux.html` — **bibliothèque UX** (galerie live, non liée dans la nav produit) :
+    catalogue des variantes `calc.js` (icon/thumb/device) et des composants du parc 2.0
+    (rail des classes, table du roster, pastilles, barre groupée, toasts). Référence de
+    conception, servie en statique — ouvrir `/ux.html`.
 
 ## Lancer
 

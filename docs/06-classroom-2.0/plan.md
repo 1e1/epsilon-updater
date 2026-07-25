@@ -191,7 +191,8 @@ Nouvel onglet **« Parc »** dans `.tabbar` (`index.html:332`), rendu **seulemen
 - **Rail des classes** : `Toutes` · `Sans classe` · chaque classe (**tri alphanumérique**), avec
   compteurs (`counts`), boutons réels (`aria-pressed`, filtre actif). Bouton **+ Ajouter une
   classe** ; par classe : renommer / supprimer (suppression ⇒ **confirmation** si non vide).
-- **Table du roster** — colonnes : **icône** (glyphe famille via `calc.js`), **nom** (édition
+- **Table du roster** — colonnes : **icône** (glyphe famille via `calc.js` —
+  `buildCalc({variant, mode:"icon"})`, spécimen dans `web/ux.html`), **nom** (édition
   inline), **firmware connu + pastille à-jour**, **dernier scan** (relatif), **actions**. **Aucune
   colonne numéro de série.**
 - **Renommer** : édition inline (input/`contenteditable`) → `POST /api/roster/rename`.

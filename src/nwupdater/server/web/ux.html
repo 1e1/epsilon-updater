@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bibliothèque UX — nwupdater</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<style>
+  /* ===== tokens — copiés d'index.html (source de vérité du design) ============== */
+  :root {
+    color-scheme: light dark;
+    --desk:#e4e2db; --desk2:#eeece6;
+    --bg:#edece7; --panel:#f6f4ef; --card:#ffffff; --ink:#1b1c1e; --muted:#6d6f74;
+    --line:#e6e3dc; --line-strong:#d8d4ca; --chrome:#f1efe9;
+    --accent:#e8930c; --accent-soft:#fbe9cd; --accent-ink:#7a4d05;
+    --ok:#1f9d57; --ok-soft:#dcf1e5; --err:#d64545;
+    --blue:#3d68c9; --blue-soft:#e2ecfd; --blue-ink:#2d5bbf;
+    --radius:12px; --shadow:0 1px 2px rgba(30,25,15,.05), 0 18px 50px rgba(30,25,15,.14);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --desk:#0d0e11; --desk2:#16171b; --bg:#141519; --panel:#191b20; --card:#1f2228;
+      --ink:#eceef1; --muted:#969aa2; --line:#2a2d34; --line-strong:#363a42; --chrome:#1c1e24;
+      --accent:#f7b53d; --accent-soft:#3a2e14; --accent-ink:#f7c469; --ok:#3fbd77; --ok-soft:#16301f;
+      --err:#e26a6a; --blue:#6f9bff; --blue-soft:#1b2740; --blue-ink:#93b6ff;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 22px 60px rgba(0,0,0,.55); }
+  }
+  :root[data-theme="light"]{ --desk:#e4e2db; --desk2:#eeece6; --bg:#edece7; --panel:#f6f4ef; --card:#fff;
+    --ink:#1b1c1e; --muted:#6d6f74; --line:#e6e3dc; --line-strong:#d8d4ca; --chrome:#f1efe9;
+    --accent:#e8930c; --accent-soft:#fbe9cd; --accent-ink:#7a4d05; --ok:#1f9d57; --ok-soft:#dcf1e5;
+    --err:#d64545; --blue:#3d68c9; --blue-soft:#e2ecfd; --blue-ink:#2d5bbf;
+    --shadow:0 1px 2px rgba(30,25,15,.05), 0 18px 50px rgba(30,25,15,.14); }
+  :root[data-theme="dark"]{ --desk:#0d0e11; --desk2:#16171b; --bg:#141519; --panel:#191b20; --card:#1f2228;
+    --ink:#eceef1; --muted:#969aa2; --line:#2a2d34; --line-strong:#363a42; --chrome:#1c1e24;
+    --accent:#f7b53d; --accent-soft:#3a2e14; --accent-ink:#f7c469; --ok:#3fbd77; --ok-soft:#16301f;
+    --err:#e26a6a; --blue:#6f9bff; --blue-soft:#1b2740; --blue-ink:#93b6ff;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 22px 60px rgba(0,0,0,.55); }
+
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:var(--sans); color:var(--ink); -webkit-font-smoothing:antialiased;
+    background:radial-gradient(1200px 600px at 50% -10%, var(--desk2), transparent 60%), var(--desk);
+    min-height:100vh; padding:0 0 80px; }
+  button, input, select { font-family:inherit; }
+  .btn:focus-visible, button:focus-visible, [contenteditable]:focus-visible,
+  input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible {
+    outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ===== composants copiés d'index.html ======================================== */
+  .btn { font:inherit; font-size:13px; font-weight:650; padding:8px 15px; border-radius:9px; border:0; background:var(--accent);
+    color:#fff; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+  .btn svg { width:14px; height:14px; } .btn.ghost { background:var(--panel); color:var(--ink); border:1px solid var(--line-strong); }
+  .btn.sm { padding:6px 11px; font-size:12px; } .btn:disabled { opacity:.5; cursor:default; }
+  .tag { font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 6px; border-radius:999px; text-transform:uppercase; display:inline-block; }
+  .tag.un { background:var(--ok-soft); color:var(--ok); } .tag.rw { background:var(--accent-soft); color:var(--accent-ink); }
+  .tag.new { background:var(--blue-soft); color:var(--blue-ink); } .tag.del { background:var(--line); color:var(--muted); }
+  .tag.imp { background:var(--panel); color:var(--muted); border:1px solid var(--line-strong); }
+  .fam { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
+  .fam.g { background:var(--accent-soft); color:var(--accent-ink); } .fam.s { background:#3b3e44; color:#f0f1f3; }
+  .tabbar { display:flex; gap:2px; padding:8px 12px 0; border-bottom:1px solid var(--line); background:var(--card); border-radius:12px 12px 0 0; }
+  .tab { position:relative; border:0; background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:600;
+    padding:9px 14px 11px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab .cnt { font-size:11px; color:var(--muted); background:var(--panel); border-radius:999px; padding:1px 7px; font-variant-numeric:tabular-nums; }
+  .tab[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--accent); }
+  .tab[aria-selected="true"] .cnt { background:var(--accent-soft); color:var(--accent-ink); }
+  .updot { width:7px; height:7px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
+  .toast { display:inline-flex; align-items:center; gap:10px; background:var(--card); color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:10px; padding:11px 16px; font-size:13px; box-shadow:var(--shadow); }
+  .toast .tk { width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none; } .toast.err .tk { background:var(--err); }
+  .seg { display:inline-flex; background:var(--card); border:1px solid var(--line-strong); border-radius:10px; padding:3px; gap:2px; }
+  .seg button { border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; font-weight:700;
+    padding:6px 11px; border-radius:7px; cursor:pointer; }
+  .seg button[aria-pressed="true"]{ background:var(--accent-soft); color:var(--accent-ink); }
+
+  /* ===== chrome de la galerie =================================================== */
+  .top { position:sticky; top:0; z-index:5; background:color-mix(in srgb,var(--panel) 88%,transparent);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:16px clamp(18px,4vw,40px);
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .top .logo { width:28px; height:28px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .top h1 { font-size:16px; margin:0; font-weight:700; letter-spacing:-.01em; }
+  .top .sub { font-size:11.5px; color:var(--muted); font-family:var(--mono); }
+  .top .sp { flex:1; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 clamp(18px,4vw,40px); }
+  .lead { color:var(--muted); font-size:14.5px; max-width:70ch; margin:26px 0 6px; }
+  .lead code { font-family:var(--mono); font-size:12.5px; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 5px; border-radius:5px; }
+
+  h2.sec { font-size:12px; font-family:var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink);
+    margin:44px 0 2px; padding-top:22px; border-top:1px solid var(--line); }
+  h2.sec:first-of-type { border-top:0; }
+  .sec-sub { color:var(--muted); font-size:13.5px; margin:0 0 18px; max-width:70ch; }
+
+  .spec { background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);
+    margin:14px 0; overflow:hidden; }
+  .spec-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding:15px 18px 0; }
+  .spec-head h3 { margin:0; font-size:15px; font-weight:700; }
+  .spec-head .anchor { font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .spec-desc { padding:5px 18px 0; color:var(--muted); font-size:13px; max-width:74ch; }
+  .spec-desc b { color:var(--ink); font-weight:600; }
+  .spec-demo { padding:18px; margin-top:12px; background:
+    linear-gradient(0deg,color-mix(in srgb,var(--panel) 60%,transparent),transparent);
+    border-top:1px solid var(--line); display:flex; flex-wrap:wrap; gap:22px 30px; align-items:flex-end; }
+  .spec-demo.col { flex-direction:column; align-items:stretch; gap:14px; }
+  figure.sz { margin:0; text-align:center; } figure.sz svg { display:block; height:auto; }
+  figure.sz figcaption { margin-top:8px; font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+
+  /* device rail mini (pour la vue mono-appareil) */
+  .calc-mini svg { width:112px; height:auto; filter:drop-shadow(0 8px 16px rgba(0,0,0,.18)); }
+
+  /* ===== composants 2.0 (parc) ================================================= */
+  .roster { display:grid; grid-template-columns:210px 1fr; gap:16px; padding:18px; }
+  @media (max-width:680px){ .roster{ grid-template-columns:1fr; } }
+  .rail { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:3px; }
+  .rail .rl { display:flex; align-items:center; gap:8px; border:0; background:transparent; color:var(--muted); font:inherit;
+    font-size:13px; font-weight:600; padding:8px 10px; border-radius:8px; cursor:pointer; text-align:left; width:100%; }
+  .rail .rl .c { margin-left:auto; font-size:11px; font-family:var(--mono); color:var(--muted); background:var(--card);
+    border:1px solid var(--line); border-radius:999px; padding:1px 7px; }
+  .rail .rl[aria-pressed="true"]{ background:var(--accent-soft); color:var(--accent-ink); }
+  .rail .rl[aria-pressed="true"] .c { background:transparent; border-color:transparent; color:var(--accent-ink); }
+  .rail .add { color:var(--accent-ink); font-weight:700; margin-top:5px; border-top:1px dashed var(--line-strong); border-radius:0; padding-top:11px; }
+  .rtable { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .rtable th { text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; padding:0 12px 9px; border-bottom:1px solid var(--line); }
+  .rtable td { padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .rtable tr:last-child td { border-bottom:0; }
+  .rtable .ic { width:36px; } .rtable .ic svg { width:28px; height:28px; display:block; }
+  .rtable .nm { font-weight:600; } .rtable .nm.def { font-weight:500; color:var(--muted); font-style:italic; }
+  .rtable .fw { font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums; }
+  .rtable .scan { color:var(--muted); font-size:12px; }
+  .rtable .act { text-align:right; white-space:nowrap; }
+  .kbtn { border:1px solid var(--line-strong); background:var(--card); color:var(--muted); border-radius:7px;
+    width:28px; height:26px; cursor:pointer; font-size:14px; line-height:1; }
+  .kbtn:hover { color:var(--ink); }
+  .bulk { display:flex; align-items:center; gap:12px; background:var(--accent-soft); color:var(--accent-ink);
+    border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line)); border-radius:10px; padding:9px 14px; font-size:13px; font-weight:600; }
+  .bulk .sp { flex:1; } .bulk .lk { background:none; border:0; color:var(--accent-ink); font:inherit; font-weight:700; cursor:pointer; text-decoration:underline; }
+  .bulk .lk.del { color:var(--err); }
+  .i18n { font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+  .row-inline { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  footer { max-width:1080px; margin:40px auto 0; padding:20px clamp(18px,4vw,40px) 0; border-top:1px solid var(--line);
+    color:var(--muted); font-family:var(--mono); font-size:11.5px; }
+  @media (prefers-reduced-motion:reduce){ .updot{ animation:none; } }
+</style>
+</head>
+<body>
+  <header class="top">
+    <img src="logo.svg" class="logo" alt="">
+    <div>
+      <h1>Bibliothèque UX</h1>
+      <div class="sub">nwupdater · référence de conception (non liée dans la nav produit)</div>
+    </div>
+    <span class="sp"></span>
+    <div class="seg" role="group" aria-label="Thème">
+      <button id="th-light" aria-pressed="false">Clair</button>
+      <button id="th-auto" aria-pressed="true">Auto</button>
+      <button id="th-dark" aria-pressed="false">Sombre</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <p class="lead">Catalogue vivant des composants. Les rendus calculatrice sont générés en direct par
+      <code>calc.js</code> ; les composants du parc suivent le plan Classroom 2.0 (§5) et les tokens de
+      <code>index.html</code>. Chaque bloc indique son <b>rôle</b>, <b>quand l'utiliser</b> et son <b>ancre code</b>.</p>
+
+    <!-- ============ RENDUS CALC ============ -->
+    <h2 class="sec">Rendus calculatrice — calc.js</h2>
+    <p class="sec-sub">Trois modes, une seule fonction : <code>buildCalc({variant, mode})</code>. Finition
+      <b>réaliste</b> et écrans <b>sans texte</b> par défaut (flags internes cachés <code>DEFAULT_FINISH</code> /
+      <code>DEFAULT_TEXTLESS</code>). <code>variant</code> : <code>"graphing"</code> ou <code>"scientific"</code>.</p>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Icône famille — <code>mode:"icon"</code></h3><span class="anchor">calc.js › buildIcon()</span></div>
+      <p class="spec-desc"><b>Rôle</b> : glyphe compact de famille. <b>Quand</b> : cellule « icône » de la table du
+        roster (§5) et partout où il faut distinguer graphique (clair) / scientifique (graphite) d'un coup d'œil.
+        Silhouette d'appareil, lisible dès 24 px, sans texte.</p>
+      <div class="spec-demo" id="d-icon"></div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Vignette écran — <code>mode:"thumb"</code></h3><span class="anchor">calc.js › buildThumb()</span></div>
+      <p class="spec-desc"><b>Rôle</b> : aperçu de l'écran d'accueil dans son cadre. <b>Quand</b> : carte d'aperçu,
+        en-tête de famille, illustration moyenne (~96–160 px) sans encombrer avec le clavier.</p>
+      <div class="spec-demo" id="d-thumb"></div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Appareil complet — <code>mode:"device"</code> <span class="i18n">(défaut)</span></h3><span class="anchor">app.js:189 · .calc-slot</span></div>
+      <p class="spec-desc"><b>Rôle</b> : rendu complet corps + écran + clavier. <b>Quand</b> : vue mono-appareil dans le
+        rail (largeur cible ~112 px). Le clavier garde ses légendes physiques (non localisées).</p>
+      <div class="spec-demo" id="d-device"></div>
+    </div>
+
+    <!-- ============ PARC 2.0 ============ -->
+    <h2 class="sec">Parc — composants Classroom 2.0</h2>
+    <p class="sec-sub">Nouveaux composants de l'onglet « Parc » (visible seulement en mode classe). Implémentation de
+      référence — à porter dans <code>app.js</code> aux phases 1–3 du plan.</p>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Onglets — <code>.tabbar</code></h3><span class="anchor">index.html:123 · app.js setTab</span></div>
+      <p class="spec-desc"><b>Rôle</b> : navigation principale. <b>Quand</b> : l'onglet <b>Parc</b> s'ajoute à
+        System / Apps / Scripts, uniquement si <code>STATE.mode === "classroom"</code>. Compteur + point « maj dispo ».</p>
+      <div class="spec-demo col">
+        <div class="tabbar" role="tablist">
+          <button class="tab" role="tab" aria-selected="false">System <span class="updot" title="mise à jour disponible"></span></button>
+          <button class="tab" role="tab" aria-selected="false">Apps <span class="cnt">7</span></button>
+          <button class="tab" role="tab" aria-selected="false">Scripts <span class="cnt">3</span></button>
+          <button class="tab" role="tab" aria-selected="true">Parc <span class="cnt">12</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Parc complet — rail des classes + table du roster</h3><span class="anchor">plan §5 · GET /api/roster</span></div>
+      <p class="spec-desc"><b>Rôle</b> : gérer le parc local. <b>Rail</b> (gauche) : <code>Toutes</code>, <code>Sans classe</code>
+        puis les classes triées, avec compteurs et filtre actif (<code>aria-pressed</code>). <b>Table</b> (droite) :
+        icône famille, nom (édition inline), firmware connu + pastille « à jour au dernier scan », dernier scan relatif,
+        actions. <b>Aucune colonne numéro de série</b> (§6).</p>
+      <div class="spec-demo col">
+        <div class="roster">
+          <nav class="rail" aria-label="Classes">
+            <button class="rl" aria-pressed="true">Toutes <span class="c">4</span></button>
+            <button class="rl" aria-pressed="false">Sans classe <span class="c">1</span></button>
+            <button class="rl" aria-pressed="false">Seconde A <span class="c">1</span></button>
+            <button class="rl" aria-pressed="false">Terminale S <span class="c">2</span></button>
+            <button class="rl add" aria-pressed="false">+ Ajouter une classe</button>
+          </nav>
+          <table class="rtable">
+            <thead><tr><th></th><th>Nom</th><th>Firmware connu</th><th>Dernier scan</th><th></th></tr></thead>
+            <tbody id="roster-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Barre groupée — multi-sélection</h3><span class="anchor">plan §5 · move/delete (keys[])</span></div>
+      <p class="spec-desc"><b>Rôle</b> : agir sur plusieurs calculatrices. <b>Quand</b> : dès qu'une case est cochée —
+        déplacer / supprimer en masse. Repli clavier accessible du glisser-déposer.</p>
+      <div class="spec-demo">
+        <div class="bulk"><span>3 sélectionnées</span><span class="sp"></span>
+          <button class="lk">Déplacer vers…</button><button class="lk del">Supprimer</button></div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Pastilles &amp; badges — <code>.tag</code> · <code>.fam</code></h3><span class="anchor">index.html:105,244</span></div>
+      <p class="spec-desc"><b>Rôle</b> : encoder l'état d'un coup d'œil. La pastille « à jour » est libellée
+        <b>« au dernier scan »</b> (jamais temps réel, §3). Badge de famille pour les vues denses.</p>
+      <div class="spec-demo">
+        <figure class="sz"><span class="tag un">à jour</span><figcaption>tag un · à jour</figcaption></figure>
+        <figure class="sz"><span class="tag rw">maj dispo</span><figcaption>tag rw · maj</figcaption></figure>
+        <figure class="sz"><span class="tag imp">démo</span><figcaption>tag imp · démo</figcaption></figure>
+        <figure class="sz"><span class="tag new">nouveau</span><figcaption>tag new</figcaption></figure>
+        <figure class="sz"><span class="fam g">Graphique</span><figcaption>fam g</figcaption></figure>
+        <figure class="sz"><span class="fam s">Scientifique</span><figcaption>fam s</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Boutons — <code>.btn</code></h3><span class="anchor">index.html:164</span></div>
+      <p class="spec-desc"><b>Rôle</b> : actions. Primaire (accent) pour l'action dominante ; <b>ghost</b> pour le
+        secondaire ; <b>sm</b> en contexte dense (barres, lignes).</p>
+      <div class="spec-demo">
+        <button class="btn">Mettre à jour</button>
+        <button class="btn ghost">Annuler</button>
+        <button class="btn sm">Renommer</button>
+        <button class="btn sm ghost">Déplacer</button>
+        <button class="btn" disabled>Indisponible</button>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-head"><h3>Notifications — <code>.toast</code></h3><span class="anchor">index.html:294 · app.js:40 toast()</span></div>
+      <p class="spec-desc"><b>Rôle</b> : confirmer une action (live-region <code>role=status</code>). Succès en vert,
+        erreur en rouge. Auto-masqué (~3,6 s). Ici figé pour l'aperçu.</p>
+      <div class="spec-demo">
+        <div class="toast"><span class="tk"></span>Léa déplacée vers Terminale S</div>
+        <div class="toast err"><span class="tk"></span>Échec : calculatrice débranchée</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>calc.js · index.html (tokens) · plan Classroom 2.0 §5 — thème clair / sombre</footer>
+
+<script src="calc.js"></script>
+<script>
+  var $ = function(id){ return document.getElementById(id); };
+  var VARS = [["graphing","Graphique"],["scientific","Scientifique"]];
+
+  // ----- theme toggle (miroir du comportement app) -----
+  function setTheme(mode){
+    var root = document.documentElement;
+    if (mode === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", mode);
+    $("th-light").setAttribute("aria-pressed", String(mode==="light"));
+    $("th-auto").setAttribute("aria-pressed", String(mode==="auto"));
+    $("th-dark").setAttribute("aria-pressed", String(mode==="dark"));
+  }
+  $("th-light").onclick = function(){ setTheme("light"); };
+  $("th-auto").onclick  = function(){ setTheme("auto"); };
+  $("th-dark").onclick  = function(){ setTheme("dark"); };
+
+  // ----- calc specimens -----
+  function fig(label, svg, w){
+    return '<figure class="sz"><div style="width:'+w+'px;margin:0 auto">'+svg+'</div><figcaption>'+label+'</figcaption></figure>';
+  }
+  var di = "";
+  VARS.forEach(function(v){
+    [24,28,40].forEach(function(s){ di += fig(v[1]+" · "+s+"px", buildCalc({variant:v[0], mode:"icon"}), s); });
+  });
+  $("d-icon").innerHTML = di;
+
+  var dt = "";
+  VARS.forEach(function(v){ dt += fig(v[1], buildCalc({variant:v[0], mode:"thumb", uid:"th"+v[0]}), 150); });
+  $("d-thumb").innerHTML = dt;
+
+  var dd = "";
+  VARS.forEach(function(v){ dd += '<figure class="sz"><div class="calc-mini">'+buildCalc({variant:v[0], mode:"device", uid:"dv"+v[0]})+'</div><figcaption>'+v[1]+' · ~112px</figcaption></figure>'; });
+  $("d-device").innerHTML = dd;
+
+  // ----- roster demo rows (icônes live via buildCalc) -----
+  var ROSTER = [
+    {v:"graphing",   name:"Calculatrice de Léa", fw:"23.2.4", up:true,  scan:"il y a 2 min"},
+    {v:"scientific", name:"Poste 12",            fw:"23.1.0", up:false, scan:"hier"},
+    {v:"graphing",   name:"Terminale — n°3",     fw:"23.2.4", up:true,  scan:"il y a 5 j"},
+    {v:"scientific", name:"Sans nom",            fw:"22.4.1", up:false, scan:"il y a 1 mois", def:true}
+  ];
+  $("roster-body").innerHTML = ROSTER.map(function(r){
+    var pill = r.up ? '<span class="tag un">à jour</span>' : '<span class="tag rw">maj dispo</span>';
+    return '<tr>'+
+      '<td class="ic"><span aria-hidden="true">'+buildCalc({variant:r.v, mode:"icon"})+'</span></td>'+
+      '<td class="nm'+(r.def?' def':'')+'">'+r.name+'</td>'+
+      '<td class="fw">'+r.fw+' '+pill+'</td>'+
+      '<td class="scan">'+r.scan+'</td>'+
+      '<td class="act"><button class="kbtn" title="Déplacer / renommer / supprimer" aria-label="Actions">⋯</button></td>'+
+    '</tr>';
+  }).join("");
+</script>
+</body>
+</html>

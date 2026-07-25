@@ -168,10 +168,46 @@
     [["1"],["2"],["3"],["+"],["−"]], [["0"],["."],["×10ˣ"],["Ans"],["EXE"]]
   ];
 
+  /* ---------- compact family glyph (mode:"icon") — roster cell, ~28px ---------- */
+  function buildIcon(variant){
+    var g = variant !== "scientific";
+    var body = g ? "#eceef1" : "#3b3e44", edge = g ? "#d3d5d9" : "#2a2c30";
+    var scr = g ? "#ffffff" : "#c9d3c8", keyc = g ? "#cfd2d7" : "#565a62";
+    var a = [];
+    a.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" role="img" aria-label="NumWorks '+(g?"graphique":"scientifique")+'">');
+    a.push(rr(3, 2, 38, 40, 9, body, edge, 1));
+    a.push(rr(7, 6, 30, g?11:14, 2.5, scr, g?"#e2e4e8":"#0c0f0b", g?0.6:1));
+    if (g) a.push('<rect x="7" y="6" width="30" height="3.4" rx="1.6" fill="'+ORANGE+'"/>'); // orange status bar
+    // key dots: 3 rows × 4, with the home key in orange
+    var ky = g ? 23 : 25;
+    for (var r=0; r<3; r++) for (var c=0; c<4; c++){
+      var home = (r===0 && c===1);
+      a.push('<circle cx="'+(11+c*7.3)+'" cy="'+(ky+r*6)+'" r="1.7" fill="'+(home?HOME:keyc)+'"/>');
+    }
+    a.push('</svg>');
+    return a.join("");
+  }
+
+  /* ---------- screen-only thumbnail (mode:"thumb"), ~ device screen + bezel ---------- */
+  function buildThumb(variant, finish, textless, uid){
+    var g = variant !== "scientific", sw = 192, sh = g ? 158 : 80, pad = 9;
+    var W = sw + 2*pad, H = sh + 2*pad, a = [], push = function(s){ a.push(s); };
+    push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="NumWorks '+(g?"graphique":"scientifique")+' — écran">');
+    push('<defs><linearGradient id="gf'+uid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+ORANGE+'" stop-opacity="0.55"/><stop offset="1" stop-color="'+ORANGE+'" stop-opacity="0.06"/></linearGradient>'+
+      '<linearGradient id="pf'+uid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+ORANGE+'" stop-opacity="0.95"/><stop offset="1" stop-color="'+ORANGE+'" stop-opacity="0.32"/></linearGradient></defs>');
+    if (g) screenGraphing(push, pad, pad, sw, sh, uid, finish, textless);
+    else screenScientific(push, pad, pad, sw, sh, uid, finish, textless);
+    push('</svg>');
+    return a.join("");
+  }
+
   function buildCalc(input){
     var opts = typeof input === "string" ? { variant: input } : (input || {});
     var variant = opts.variant||"graphing", finish = opts.finish||DEFAULT_FINISH, uid = opts.uid||variant;
     opts.textless = opts.textless !== undefined ? opts.textless : DEFAULT_TEXTLESS;
+    var mode = opts.mode || "device";
+    if (mode === "icon") return buildIcon(variant);
+    if (mode === "thumb") return buildThumb(variant, finish, opts.textless, uid);
     var p = PAL[variant]||PAL.graphing, W=232, pad=8;
     var H = variant==="graphing" ? 466 : 372;
     var A=[]; var push=function(s){ A.push(s); };
