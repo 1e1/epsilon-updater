@@ -48,8 +48,10 @@ Légende : **[V1]** = dans cette livraison · **[HORS V1]** = explicitement repo
 
 **Reste ouvert** :
 
-- **Sync cloud du nom (Individuel)** — en attente d'**une capture** de l'appel de renommage
-  `my.numworks.com` pour connaître le endpoint exact (le stub `_session_names.py` reste prêt).
+- **Sync cloud du nom (Individuel)** — **différé (décision produit)**. Le flux `my.numworks` est
+  rétro-conçu et documenté (`docs/01-specs/scripts-and-device-pairing.md` §Nommage : formulaire Rails
+  + CSRF, `serial_cloud = hex(base64decode(serial))`) ; laissé de côté car c'est l'interaction la plus
+  fragile/intrusive. Le nommage **local** fonctionne seul ; le stub `_session_names.py` reste prêt.
 
 ---
 

@@ -33,8 +33,10 @@ class NamesMixin(SessionBase):
         from ..device_names import set_name
 
         model, serial, default = self._name_identity()
-        # TODO(cloud-sync): when signed in (Individual mode), also register/rename this calculator
-        # on the NumWorks account so the name follows it across machines. Deferred: the naming API
-        # is not reverse-engineered here, and local naming must (and does) work without it.
+        # TODO(cloud-sync): when signed in (Individual mode), also mirror this name to the NumWorks
+        # account so it follows the calculator across machines. DEFERRED by product decision — the
+        # flow IS reverse-engineered now (Rails form + CSRF; serial_cloud = hex(base64decode(serial));
+        # POST /devices/names create vs POST /devices/names/<slug> edit) and documented in
+        # docs/01-specs/scripts-and-device-pairing.md. Local naming stands on its own meanwhile.
         saved = set_name(model, serial, name)
         return {"ok": True, "model": model, "serial": serial, "name": saved, "default": default}

@@ -241,3 +241,36 @@ Reconstruire le buffer complet du store (magic + records + `0x0000`) et le DNLOA
   reste à observer. La persistance « à l'extinction » = **rétention SRAM en veille**, pas un
   backup flash (cf. §3.5) — le mode `standby()` (perte SRAM) et le point exact de rétention restent à
   confirmer sur matériel (driver power côté kernel, absent de ce fork).
+
+---
+
+## Nommage d'une calculatrice sur le compte (`my.numworks.com`) — rétro-ingénierie, **différé**
+
+But : faire suivre le **nom local** d'une calculatrice (mode Individuel, `device_names.py`) sur le
+compte NumWorks. **Non implémenté** (décision produit) — cette section consigne le flux capturé pour
+une implémentation propre ultérieure. Le stub vit dans `server/_session_names.py` (`set_device_name`).
+
+**Identité.** Le serial « compte » = **le même UID MCU** que notre serial DFU, encodé en **hex** au
+lieu de Base64 :
+
+```
+serial_cloud = base64decode(serial_dfu).hex()
+# ex. "FwAyAAJRMjE3NDM0" (DFU, Base64) → "170032000251323137343334" (compte, hex) — vérifié
+```
+
+**Auth.** Cookie `remember_user_token` (déjà géré par `catalog/auth.py` : `cookie_header()`).
+
+**Flux (formulaires Rails, jeton CSRF requis).** Le nom est une ressource `devices_name` distincte de
+l'enregistrement firmware (`POST /devices/{serial}` avec `x-http-method-override: PATCH`, JSON, qui ne
+porte **que** modèle+firmware) :
+
+| Cas | Récupérer le CSRF | Envoyer |
+|---|---|---|
+| **Créer** | `GET /devices/names/new/<serial_hex>` → `authenticity_token` (dans le HTML) | `POST /devices/names` (form-url-encoded) : `authenticity_token`, `device_serial_number=<serial_hex>`, `devices_name[name]`, `devices_name[description]`, `commit=Save` |
+| **Modifier** | `GET /devices/names/<slug>/edit` → `authenticity_token` | `POST /devices/names/<slug>` : `_method=patch`, `authenticity_token`, `devices_name[name]`, … |
+
+**Points durs (raison du report)** : (1) jeton CSRF à **scraper dans le HTML** du formulaire ; (2)
+le `<slug>` de modification (ex. `1v57zb8`) **n'est pas dérivable** du serial — il faut le retrouver
+(liste des devices / redirection de création) → scraping supplémentaire ; (3) fragile aux évolutions
+du HTML de `my.numworks`. C'est l'interaction la plus intrusive envisagée → volontairement laissée de
+côté au profit du **nommage local** qui fonctionne seul.

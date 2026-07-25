@@ -39,6 +39,10 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 - **Individuel — rafraîchissement plus fréquent** : les bibliothèques Apps/Scripts se rechargent au
   retour de focus sur la fenêtre + à intervalle léger (sans écraser un plan d'écriture en cours), de
   sorte qu'une purge manuelle du dossier local se reflète sans reconnecter.
+- **Compte — libellé honnête** : la carte Compte n'affirme plus « nomme vos calculatrices (synchro
+  cloud) » ; le **nom reste local** à l'outil. La synchro cloud du nom est **différée** (décision
+  produit) mais son flux `my.numworks` est désormais rétro-conçu et **documenté**
+  (`docs/01-specs/scripts-and-device-pairing.md`) pour une implémentation propre ultérieure.
 
 ## [1.0.0-rc.6] - 2026-07-25
 
