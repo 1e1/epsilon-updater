@@ -222,6 +222,13 @@ class VirtualDfuDevice:
                 device_name_flash=(slot_origin + 0x100, slot_origin + 0x500),
             ),
         )
+        # Model the EADK trampoline: an installed app's stubs dereference a word at
+        # userland_hdr_addr + USERLAND_HEADER_SIZE + USERLAND_ISR_SIZE (see apps/link). Put a
+        # plausible Thumb-into-flash pointer there so the install-time trampoline sanity check
+        # (apps/manage._link_if_needed) passes on the virtual device as it does on real hardware.
+        if apps_start:
+            tramp_addr = userland_hdr_addr + C.USERLAND_HEADER_SIZE + C.USERLAND_ISR_SIZE
+            self.memory.write(tramp_addr, struct.pack("<I", kernel_hdr_addr | 1))
         # Graphing models embed a Python scripts store; preload a small sample so reads/CLI
         # demo have content (scientific N02xx has no Python -> left zeroed).
         if self.model.family == "graphique":

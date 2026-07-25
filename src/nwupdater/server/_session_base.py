@@ -229,6 +229,11 @@ class SessionBase:
             if (i.external_apps_flash and i.external_apps_flash != (0, 0))
             else None
         )
+        ram = (
+            i.external_apps_ram
+            if (i.external_apps_ram and i.external_apps_ram != (0, 0))
+            else None
+        )
         return {
             "connected": True,
             "virtual": self.virtual,
@@ -244,6 +249,9 @@ class SessionBase:
             "has_external_apps": caps.external_apps,
             "external_apps_flash": (
                 [f"0x{region[0]:08x}", f"0x{region[1]:08x}"] if region else None
+            ),
+            "external_apps_ram": (
+                [f"0x{ram[0]:08x}", f"0x{ram[1]:08x}"] if ram else None
             ),
             "slot_info_valid": i.slot_info_valid,
             "capabilities": caps.to_dict(),

@@ -40,6 +40,11 @@ def validate_nwa(
     :class:`AppInstaller` and :class:`~nwupdater.apps.manage.AppManager` so the check can't drift."""
     info = AppInfo.parse(blob)
     if not info.valid:
+        if blob[:4] == b"\x7fELF":
+            raise error(
+                "this .nwa is a relocatable ELF and must be linked to the device's flash/RAM "
+                "addresses before install (see nwupdater.apps.link); a raw ELF is not flashable"
+            )
         raise error("invalid AppInfo magic (not a .nwa)")
     if info.api_level != device_api_level:
         raise error(f"API level {info.api_level} != device {device_api_level}")

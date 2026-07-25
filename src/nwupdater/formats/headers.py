@@ -110,19 +110,24 @@ class UserlandHeader:
     storage_addr_ram: int
     storage_size_ram: int
     external_apps_flash: tuple[int, int]
+    external_apps_ram: tuple[int, int]  # (start, end) RAM window the external apps' .bss/.data live in
+    device_name_flash: tuple[int, int]  # (start, end) of the device-name string in flash
     valid: bool
 
     @classmethod
     def unpack(cls, raw: bytes) -> UserlandHeader:
         if len(raw) < C.USERLAND_HEADER_SIZE:
-            return cls("", 0, 0, (0, 0), valid=False)  # truncated buffer -> invalid
+            return cls("", 0, 0, (0, 0), (0, 0), (0, 0), valid=False)  # truncated -> invalid
         fields = struct.unpack(_USERLAND_HEADER_FMT, raw[: C.USERLAND_HEADER_SIZE])
         magic, ver, st_addr, st_size, apps_s, apps_e = fields[0:6]
+        ram_s, ram_e, name_s, name_e = fields[6:10]
         footer = fields[10]
         return cls(
             _cstr(ver),
             st_addr,
             st_size,
             (apps_s, apps_e),
+            (ram_s, ram_e),
+            (name_s, name_e),
             magic == C.MAGIC_USERLAND_HEADER and footer == C.MAGIC_USERLAND_HEADER,
         )

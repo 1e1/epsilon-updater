@@ -1,7 +1,7 @@
 {
   "_note": "Catalogue d'exemple, générique et non officiel. RPN est une vraie source téléchargeable (dépôt indépendant) ; les autres entrées sont ILLUSTRATIVES (URLs example.invalid, installées comme image de démo). Il n'existe pas d'API JSON publique officielle (le flux officiel = upload d'un .nwa sur my.numworks.com/apps). Pour ajouter de VRAIES apps sans modifier ce fichier : déposez des .nwa dans le dossier apps utilisateur (NWUPDATER_APPS_DIR, sinon <config>/nwupdater/apps) et/ou listez leurs URLs (une par ligne) dans <dossier>/_urls.txt — agrégés automatiquement dans « Disponibles ». Les tailles (octets) reflètent app_size.",
   "apps": [
-    {"name": "RPN", "version": "2.0.0", "api_level": 0, "family": "graphique", "size": 86772,
+    {"name": "RPN", "version": "2.0.0", "api_level": 0, "family": "graphique", "size": 117300,
      "description": "Calculatrice en notation polonaise inversée", "source": "github.com/1e1/numworks-RPN",
      "url": "https://github.com/1e1/numworks-RPN/releases/download/v2.0.0/rpn-v2.0.0.nwa"},
     {"name": "Nofrendo", "version": "1.0", "api_level": 0, "family": "graphique", "size": 524288,

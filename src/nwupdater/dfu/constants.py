@@ -139,6 +139,11 @@ COMMIT_HASH_SIZE = 8
 SLOT_INFO_SIZE = 16  # struct "<IIII" (see formats/headers.py)
 KERNEL_HEADER_SIZE = 24  # struct "<I8s8sI"
 USERLAND_HEADER_SIZE = 0x30  # 48 bytes; struct "<I8sIIIIIIIII"; jump target = pointer + this
+# Epsilon userland ISR-area size right after the UserlandHeader. The external-apps EADK
+# trampoline (dispatch table the apps' stubs point at) begins at
+# userland_header_addr + USERLAND_HEADER_SIZE + USERLAND_ISR_SIZE. Value cross-checked against
+# nwlink's Header2.UserlandISRSize; used by apps/link.py to pass nwlink's --trampoline-start.
+USERLAND_ISR_SIZE = 8
 
 # STM32 internal-flash base = the bootloader. A DFU `leave` to this address is NOT in a reflashable
 # QSPI slot, so the firmware does Reset::core() (a cold boot) instead of jumping into a slot: the

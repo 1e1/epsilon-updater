@@ -82,6 +82,7 @@ def diagnose(
         "commit": ident.commit if ident else None,
         "slot_info_valid": ident.slot_info_valid if ident else False,
         "external_apps_flash": _fmt_region(ident.external_apps_flash if ident else None),
+        "external_apps_ram": _fmt_region(ident.external_apps_ram if ident else None),
         "transfers": cap.transfers,
         "transfer_count": len(cap.transfers),
         "error": error,

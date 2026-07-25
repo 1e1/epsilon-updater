@@ -251,7 +251,13 @@ def _cmd_apps(args) -> int:
     client, bcd = opened.client, opened.bcd
     ident = read_identity(client, bcd)
     has_region = bool(ident.external_apps_flash and ident.external_apps_flash != (0, 0))
-    mgr = AppManager(client, ident.external_apps_flash, device_api_level=args.api_level)
+    mgr = AppManager(
+        client,
+        ident.external_apps_flash,
+        device_api_level=args.api_level,
+        external_apps_ram=ident.external_apps_ram,
+        userland_header_addr=ident.userland_header_addr,
+    )
 
     def confirm(prompt: str) -> bool:
         return (

@@ -29,6 +29,8 @@ class CalculatorIdentity:
     kernel_version: str | None = None
     commit: str | None = None
     external_apps_flash: tuple[int, int] | None = None  # (start, end)
+    external_apps_ram: tuple[int, int] | None = None  # (start, end) RAM window for external apps
+    userland_header_addr: int | None = None  # active slot's UserlandHeader address (from SlotInfo)
     storage_ram: tuple[int, int] | None = None  # (m_storageAddressRAM, m_storageSizeRAM)
     slot_info_valid: bool = False
     serial_number: str | None = None  # iSerialNumber = Base64(MCU UID), 16 chars
@@ -71,6 +73,7 @@ def read_identity(
     slot = SlotInfo.unpack(client.read(base, C.SLOT_INFO_SIZE))
     if slot.valid:
         ident.slot_info_valid = True
+        ident.userland_header_addr = slot.userland_header_addr or None
         _read_kernel_header(client, slot.kernel_header_addr, ident)
         _read_userland_header(client, slot.userland_header_addr, ident)
     return ident
@@ -96,3 +99,5 @@ def _read_userland_header(client: DfuClient, addr: int, ident: CalculatorIdentit
     st_addr, st_size = user.storage_addr_ram, user.storage_size_ram
     ident.storage_ram = (st_addr, st_size) if st_addr and st_size else None
     ident.external_apps_flash = user.external_apps_flash
+    ram_s, ram_e = user.external_apps_ram
+    ident.external_apps_ram = (ram_s, ram_e) if ram_e > ram_s else None

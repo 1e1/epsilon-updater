@@ -48,12 +48,23 @@ class AppManager:
     """Read/modify/write the external-apps region with minimal rewrites."""
 
     def __init__(
-        self, client: DfuClient, region: tuple[int, int] | None, *, device_api_level: int = 0
+        self,
+        client: DfuClient,
+        region: tuple[int, int] | None,
+        *,
+        device_api_level: int = 0,
+        external_apps_ram: tuple[int, int] | None = None,
+        userland_header_addr: int | None = None,
     ):
         self.client = client
         self.start, self.end = region or (0, 0)
         self.capacity = max(0, self.end - self.start)
         self.device_api_level = device_api_level
+        # RAM window (UserlandHeader external-apps RAM) + the UserlandHeader address — needed only
+        # to LINK a distributed relocatable .nwa at install time (the latter derives the EADK
+        # trampoline). Both absent for pre-linked/synthetic blobs.
+        self.region_ram = external_apps_ram
+        self.userland_header_addr = userland_header_addr
 
     def installed(self) -> list[ManagedApp]:
         if self.capacity <= 0:
@@ -68,10 +79,45 @@ class AppManager:
         return apps
 
     def push(self, blob: bytes) -> ManagedApp:
+        current = self.installed()
+        blob = self._link_if_needed(blob, current)
         info = validate_nwa(blob, self.device_api_level, error=AppError)
-        target = [m.blob for m in self.installed()] + [blob]
-        self._apply(target)
+        self._apply([m.blob for m in current] + [blob])
         return ManagedApp(info.name or "?", info.api_level, blob)
+
+    def _link_if_needed(self, blob: bytes, current: list[ManagedApp]) -> bytes:
+        """A distributed ``.nwa`` is a relocatable ELF; link it (via nwlink, offline) at its
+        append address before it can be flashed. Pre-linked/synthetic blobs pass through. See
+        :mod:`nwupdater.apps.link`."""
+        from .link import (
+            LinkTarget,
+            NwlinkError,
+            ensure_linked,
+            is_relocatable_nwa,
+            trampoline_word_looks_valid,
+        )
+
+        if not is_relocatable_nwa(blob):
+            return blob
+        at_offset = sum(m.sectors * SECTOR for m in current)  # where the appended app will land
+        target = None
+        if self.region_ram and self.capacity > 0:
+            target = LinkTarget.from_identity(
+                (self.start, self.end),
+                self.region_ram,
+                at_offset=at_offset,
+                userland_header_addr=self.userland_header_addr,
+            )
+        # Guard: verify the derived EADK trampoline points at real OS code before linking against
+        # it. A wrong trampoline links fine but reboots the calc on launch, so fail loudly here.
+        if target is not None and target.trampoline_start is not None:
+            word = int.from_bytes(self.client.read(target.trampoline_start, 4), "little")
+            if not trampoline_word_looks_valid(word):
+                raise NwlinkError(
+                    f"EADK trampoline 0x{target.trampoline_start:08x} does not point at a code "
+                    f"table (first word 0x{word:08x}); refusing to link an app that would crash"
+                )
+        return ensure_linked(blob, target)
 
     def uninstall(self, name: str) -> None:
         current = self.installed()

@@ -45,7 +45,13 @@ class AppsMixin(SessionBase):
         from ..apps.manage import AppManager
 
         i = self._identity()
-        return AppManager(self._conn()[0], i.external_apps_flash, device_api_level=self.api_level)
+        return AppManager(
+            self._conn()[0],
+            i.external_apps_flash,
+            device_api_level=self.api_level,
+            external_apps_ram=i.external_apps_ram,
+            userland_header_addr=i.userland_header_addr,
+        )
 
     @staticmethod
     def _local_apps_index() -> dict[str, int]:
