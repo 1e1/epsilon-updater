@@ -22,16 +22,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest    # build universal2, then split into per-arch downloads (below)
+          - os: macos-latest        # one native build per arch (arm64 + x86_64), see Package step
             asset: NumWorks-Updater-macos
-          - os: windows-latest
+          - os: windows-latest      # x86_64
             asset: NumWorks-Updater-windows
-          - os: ubuntu-latest
-            asset: NumWorks-Updater-linux
+          - os: ubuntu-latest       # Linux x86_64
+            asset: NumWorks-Updater-linux-x86_64
+          - os: ubuntu-24.04-arm    # Linux arm64 (aarch64) — free hosted runner for public repos
+            asset: NumWorks-Updater-linux-arm64
+    # NB: no 32-bit Linux target — GitHub offers no 32-bit hosted runner and the desktop audience for
+    # i686/armhf is effectively nil; a 32-bit build would need a self-hosted or container toolchain.
     runs-on: ${{ matrix.os }}
-    # macOS builds universal2 (needs a universal2 runner Python); if that ever fails it must not
-    # block the Windows/Linux release — a mac binary can be attached separately.
-    continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
+    # A per-arch macOS build or the newer arm64 Linux runner must never block the rest of the
+    # release — attach whatever succeeded (x86_64 Linux + Windows are the baseline).
+    continue-on-error: ${{ startsWith(matrix.os, 'macos') || endsWith(matrix.os, '-arm') }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -6,6 +6,16 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0-rc.7] - 2026-07-27
+
+### Modifié (packaging — cibles Linux différenciées)
+
+- **Linux publié par architecture** : `NumWorks-Updater-linux-x86_64.zip` (x64) **et**
+  `NumWorks-Updater-linux-arm64.zip` (aarch64, ex. Raspberry Pi), au lieu d'un seul `-linux.zip`.
+  L'arm64 est buildé nativement sur le runner hébergé `ubuntu-24.04-arm` (gratuit pour ce dépôt
+  public). Pas de cible 32 bits : GitHub n'offre aucun runner 32 bits et l'audience i686/armhf est
+  négligeable. (Contenu applicatif identique à rc.6.)
+
 ## [2.0.0-rc.6] - 2026-07-27
 
 ### Corrigé (synchro UI + doublons apps/scripts, Individuel **et** Classe)
