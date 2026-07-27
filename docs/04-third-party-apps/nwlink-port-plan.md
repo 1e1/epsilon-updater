@@ -4,8 +4,48 @@ Objectif backlog ([roadmap.md](../00-overview/roadmap.md)) : installer un `.nwa`
 (ELF relocalisable) **sans** dépendance Node/npm côté utilisateur. Ce document fige l'analyse,
 compare les stratégies, et détaille le plan retenu.
 
-**Décision : stratégie B** — lier une fois par app en CI avec `nwlink`, publier une image de base
-+ une table de relocations, et relocaliser en **pur-Python** sur l'appareil. Voir §5.
+**Décision (mise à jour 2026-07-27, après vérification de licence — §0) : portage BLOQUÉ en Phase 0.**
+La stratégie B était retenue, mais la vérification de licence montre que **B *et* C exigent de
+redistribuer le runtime EADK propriétaire** de NumWorks — ce qui n'est pas permis dans ce projet.
+**Le chemin A (délégation `nwlink` via `npx`, déjà livré) reste la seule option propre.** B/C ne
+seront rouverts qu'avec une **autorisation écrite de NumWorks**. Détails et sources en §0 et §5.
+
+---
+
+## 0. Vérification de licence — go/no-go (2026-07-27, bloquant)
+
+Faits établis (sources en fin de doc) :
+- **`nwlink` (paquet npm) = « All rights reserved »** — propriétaire NumWorks. Seuls les WASM
+  embarqués `ld.wasm`/`objcopy.wasm` sont GPLv2 ; **le runtime EADK embarqué (`Uint8Array`) ne
+  l'est pas** — il est couvert par le « all rights reserved ».
+- **Epsilon OS = CC BY-NC-SA** historiquement (Attribution + **NonCommercial** + **ShareAlike**) ;
+  l'issue upstream #1875 note que la mention CC a « disparu » → statut actuel au mieux NC/SA,
+  au pire propriétaire par défaut (pas de fichier `LICENSE`).
+- **`epsilon-sample-app-c` = BSD 3-Clause** — mais c'est le **gabarit d'app** que le publisher
+  écrit, **pas** le runtime. Le runtime EADK (`_start` crt0 + les 10 stubs) est **fourni par
+  nwlink** au moment du link → **aucune source permissive (BSD/MIT) à recompiler nous-mêmes**.
+
+Pourquoi ça bloque B et C (et pas A) :
+- Le modèle **A** (actuel) exécute `nwlink` **sur la machine de l'utilisateur** (`npx`) au moment
+  de l'installation → le runtime EADK n'est **jamais** redistribué par nous ; chaque utilisateur
+  l'obtient directement de NumWorks sous les termes de NumWorks. **Rien à redistribuer → GO.**
+- **B** (lier 1× puis publier une image/`.nwb`) **introduit une redistribution du runtime** qui
+  n'existe pas aujourd'hui (l'écosystème diffuse l'ELF `ET_REL` *pré-link* ; c'est nwlink qui
+  ajoute le runtime en local). Publier une image liée = redistribuer les octets propriétaires
+  NumWorks → **NO-GO** tel que le projet (ou son catalogue) l'héberge.
+- **C** (linker pur-Python) doit **vendoriser** le runtime comme table réutilisable → redistribuer
+  du code propriétaire NumWorks dans un dépôt MIT → **NO-GO** (et la piste Epsilon = CC BY-NC-SA
+  est incompatible MIT + NC + ShareAlike de toute façon).
+
+| Stratégie | Verdict licence | Motif |
+|---|---|---|
+| **A** délégation `npx nwlink` | ✅ **GO** | rien redistribué ; runtime obtenu par l'utilisateur chez NumWorks |
+| **B** link CI + reloc pur-Python | ⛔ **NO-GO** | redistribue le runtime EADK propriétaire (image/`.nwb`) |
+| **C** linker pur-Python complet | ⛔ **NO-GO** | vendorise le runtime EADK propriétaire dans le dépôt |
+
+**Seul déblocage :** autorisation écrite de NumWorks de redistribuer le runtime EADK (rendrait B,
+puis C, envisageables) — ou l'apparition d'un runtime EADK sous licence permissive (inexistant à ce
+jour). À défaut, **on reste sur A**.
 
 ---
 
@@ -76,34 +116,38 @@ chacun corrigé du delta de sa **région** (flash vs ram vs pointeur table API).
 
 ## 4. Stratégies comparées
 
-| | Chemin | Node côté user | Réimpl. `lld` | Licence | Effort | Risque |
+| | Chemin | Node côté user | Réimpl. `lld` | Licence (vérifiée §0) | Effort | Risque |
 |---|---|---|---|---|---|---|
-| **A** | Garder la délégation (statu quo) | **Oui** | Non | OK (npx) | 0 | 0 |
-| **B** | **Link 1× en CI + reloc pur-Python** | **Non** | Non | légère¹ | Moyen | Faible |
-| **C** | Linker pur-Python complet (byte-exact) | **Non** | **Oui** | lourde² | Élevé | Élevé |
+| **A** | Garder la délégation (statu quo) | **Oui** | Non | ✅ **GO** | 0 | 0 |
+| **B** | Link 1× en CI + reloc pur-Python | **Non** | Non | ⛔ **NO-GO**¹ | Moyen | Faible (tech) |
+| **C** | Linker pur-Python complet (byte-exact) | **Non** | **Oui** | ⛔ **NO-GO**² | Élevé | Élevé |
 
-¹ B ne vendorise pas un runtime *réutilisable* : il redistribue une **image liée par app** — ce
-qu'un app-store fait déjà en flashant l'app sur l'appareil.
-² C vendorise le runtime EADK comme **table réutilisable** pour lier des apps arbitraires → c'est
-la vraie question de licence.
+¹ On croyait B « à empreinte légère » (redistribuer une image liée par app). La vérification §0
+montre que **publier une image pré-liée = redistribuer le runtime EADK propriétaire** — une
+redistribution qui n'a pas lieu aujourd'hui (l'écosystème diffuse l'ELF *pré-link*). NO-GO.
+² C vendorise le runtime EADK propriétaire comme **table réutilisable** dans le dépôt MIT → NO-GO.
 
 ---
 
-## 5. Stratégie retenue : B
+## 5. Stratégie retenue : A (B suspendu par la licence)
+
+Après §0, **on reste sur A** (délégation `nwlink` via `npx`, déjà livrée et validée N0120) : c'est
+la seule option qui ne redistribue aucun octet propriétaire NumWorks. Rien à implémenter.
+
+**B était le meilleur choix *technique*** (objectif roadmap atteint, sans réimplémenter `lld`, en
+réutilisant le moteur de relocs déjà committé), mais il est **suspendu** : publier une image
+pré-liée redistribue le runtime EADK propriétaire (§0). B ne devient réalisable qu'avec une
+**autorisation écrite de NumWorks**. La conception ci-dessous reste donc valable **le jour où B est
+débloqué** ; elle n'est pas à construire tant que la licence n'est pas levée.
+
+### Conception `.nwb` (à réaliser SEULEMENT si B est débloqué)
 
 Exploiter le modèle §3. **En CI/catalogue**, lier chaque app **une fois** avec `nwlink`, puis
 publier un artefact `(image_de_base, table_de_relocs, base_params)`. **À l'installation**, en
 pur-Python : `image = image_de_base` avec chaque offset absolu corrigé du delta de sa région, pour
 les params DFU-résolus de l'appareil.
 
-**Pourquoi B :** atteint l'objectif roadmap (plus de Node pour l'utilisateur), **sans réimplémenter
-`lld`** ni vendoriser un runtime source, **en réutilisant le moteur de relocs déjà committé**.
-Empreinte licence légère (redistribution d'une image liée par app = ce que fait déjà l'app-store).
-
-Garder **A** comme repli automatique (un ELF brut sans artefact `.nwb` retombe sur la délégation).
-Traiter **C** comme objectif « puriste » de long terme, **conditionné à la licence**.
-
-### Format d'artefact proposé — `.nwb` (numworks binary, pré-relocalisable)
+#### Format d'artefact — `.nwb` (numworks binary, pré-relocalisable)
 Conteneur pur-données (à figer en Phase 1) :
 - `base_image` : le `.bin` lié par `nwlink` à `base_params` connus.
 - `base_params` : `{flash_start, flash_length, ram_start, ram_length, trampoline_start}`.
@@ -117,11 +161,12 @@ Conteneur pur-données (à figer en Phase 1) :
 
 ---
 
-## 6. Plan par phases (B)
+## 6. Plan par phases (B) — GELÉ tant que la licence n'est pas levée
 
-- **Phase 0 — Licence & décision** *(bloquant)* : vérifier licence `nwlink` (npm) + EADK/Epsilon ;
-  confirmer que redistribuer une **image liée par app** est acceptable (elle l'est déjà pour le flash
-  sur appareil). Sortie : go/no-go documenté.
+- **Phase 0 — Licence & décision** ✅ **FAIT (2026-07-27) → NO-GO** (voir §0). B et C exigent de
+  redistribuer le runtime EADK propriétaire. **Les phases 1-4 ci-dessous sont GELÉES** ; elles ne
+  démarrent qu'après une autorisation écrite de NumWorks. Prochaine action possible : solliciter
+  NumWorks (grant explicite de redistribution du runtime EADK). À défaut, aucune action — A reste.
 - **Phase 1 — Générateur CI (dev-PC)** : script qui, par app, lance `nwlink nwa-bin` à **2 bases**,
   dérive la `reloc_table` (offset + région), et émet le `.nwb`. Oracle de régression : **RPN v2.0.1**
   (`70 056 B` lié, **406 mots rebasés**, `395 ABS32 / 1662 THM_CALL / 47 THM_JUMP24 / 4 PREL31`).
@@ -148,3 +193,8 @@ câblage + tests. Phase 0 licence reste bloquante.
 - Fondation pur-Python : [formats/nwa_link.py](../../src/nwupdater/formats/nwa_link.py).
 - Trampoline / constantes : [dfu/constants.py](../../src/nwupdater/dfu/constants.py) (`USERLAND_HEADER_SIZE`, `USERLAND_ISR_SIZE`).
 - Backlog : [roadmap.md](../00-overview/roadmap.md).
+
+### Sources licence (§0, vérifiées 2026-07-27)
+- `nwlink` npm — champ `license` = « All rights reserved » : `https://registry.npmjs.org/nwlink`
+- Epsilon = CC BY-NC-SA + débat licence : `https://github.com/numworks/epsilon/issues/1875`
+- Gabarit d'app BSD 3-Clause : `https://github.com/numworks/epsilon-sample-app-c` (fichier `LICENSE`)
