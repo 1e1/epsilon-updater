@@ -125,7 +125,13 @@ class PureLinker:
         # final VMA of each input section, keyed (obj_id, section_index) — for symbol resolution
         self._sec_vma: dict[tuple[int, int], int] = {}
 
-        # --- gather allocatable sections per group, in input order (app before runtime) ---
+        # --- garbage-collect sections: keep only what is reachable from the roots (entry _start +
+        # the KEEP'd app_info/name/icon/api sections). Real apps (e.g. tetris: 3400+ sections,
+        # dead refs to unused eadk_* like battery/usb) require this, exactly like nwlink's
+        # --gc-sections; it also pulls in only the runtime stubs the app actually calls. ---
+        live = self._gc(objs)
+
+        # --- gather allocatable, live sections per group, in input order (app before runtime) ---
         groups: dict[str, list[tuple[int, Section]]] = {
             k: [] for k in ("name", "icon", "api", "text", "rodata", "data", "bss")
         }
@@ -134,6 +140,8 @@ class PureLinker:
                 if not (sec.flags & SHF_ALLOC):
                     continue
                 if sec.name in _DROP_EXACT:
+                    continue
+                if (obj_id, sec.index) not in live:
                     continue
                 groups[_kind(sec)].append((obj_id, sec))
 
@@ -159,23 +167,22 @@ class PureLinker:
         place_flash("rodata")
         eadk_app_end = _align(cursor, 4)
 
-        # --- .data: LMA continues in flash (init image), VMA lives in RAM; both advance in
-        # lockstep (same per-section alignment) so crt0's straight byte-copy is correct ---
-        data_lma = _align(eadk_app_end, 4)
-        data_vma = self.ram_start
-        data_lma_start = data_lma
-        data_vma_start = data_vma
+        # --- .data as ONE contiguous block. crt0 copies it flash(LMA)->RAM(VMA) with a straight
+        # byte copy, so a section's offset within the block MUST be identical in flash and RAM.
+        # Aligning both the LMA and the VMA starts to the block's max alignment, then using a single
+        # running offset for both, guarantees that even with >4-byte section alignment. ---
+        data_align = max([1, *(s.addralign for _, s in groups["data"])])
+        data_vma_start = _align(self.ram_start, data_align)
+        data_lma_start = _align(eadk_app_end, data_align)
+        off = 0
         for obj_id, sec in groups["data"]:
-            data_lma = _align(data_lma, max(sec.addralign, 1))
-            data_vma = _align(data_vma, max(sec.addralign, 1))
-            if sec is groups["data"][0][1]:
-                data_lma_start, data_vma_start = data_lma, data_vma
-            placed.append(_Placed(obj_id, sec, data_vma, data_lma))
-            self._sec_vma[(obj_id, sec.index)] = data_vma
-            data_lma += sec.size
-            data_vma += sec.size
-        data_end_vma = data_vma
-        flash_end = data_lma  # end of the flat image in flash
+            off = _align(off, max(sec.addralign, 1))
+            vma = data_vma_start + off
+            placed.append(_Placed(obj_id, sec, vma, data_lma_start + off))
+            self._sec_vma[(obj_id, sec.index)] = vma
+            off += sec.size
+        data_end_vma = data_vma_start + off
+        flash_end = data_lma_start + off  # end of the flat image in flash
 
         # --- .bss: VMA in RAM after .data (NOBITS, not emitted) ---
         bss_vma = data_end_vma
@@ -187,6 +194,22 @@ class PureLinker:
             self._sec_vma[(obj_id, sec.index)] = bss_vma
             bss_vma += sec.size
         bss_end = bss_vma
+        heap_start = _align(bss_end, 8)
+
+        # --- bounds: never emit an image that overflows the flash region or the RAM window
+        # (a silent overflow would corrupt the adjacent app/region on flash, or fault at runtime) ---
+        flash_used = flash_end - origin
+        if flash_used > self.flash_length:
+            raise LinkError(
+                f"app is too large: needs {flash_used} B of flash but the external-apps region "
+                f"is only {self.flash_length} B"
+            )
+        ram_end = self.ram_start + self.ram_length
+        if heap_start > ram_end:
+            raise LinkError(
+                f"app RAM (.data+.bss = {heap_start - self.ram_start} B) overflows the "
+                f"{self.ram_length} B external-apps RAM window (no room left for the heap)"
+            )
 
         # --- linker-defined symbols the runtime (and some apps) reference ---
         self._linker_syms: dict[str, int] = {
@@ -195,8 +218,8 @@ class PureLinker:
             "_data_section_end_ram": data_end_vma,
             "_bss_section_start_ram": bss_start,
             "_bss_section_end_ram": bss_end,
-            "_heap_start": _align(bss_end, 8),
-            "_heap_end": self.ram_start + self.ram_length,
+            "_heap_start": heap_start,
+            "_heap_end": ram_end,
             "_userland_trampoline_address": self.trampoline_start,
             "_eadk_app_end": eadk_app_end,
         }
@@ -243,6 +266,50 @@ class PureLinker:
         )
         image[0:APPINFO_SIZE] = header
         return bytes(image)
+
+    # -- garbage collection ----------------------------------------------------------------
+    def _defining_section(self, objs: _Objects, obj_id: int, sym) -> tuple[int, int] | None:
+        """The (obj_id, section_index) that defines ``sym``, or None for absolute/linker syms."""
+        if sym.type == STT_SECTION or (not sym.name and sym.shndx not in (SHN_UNDEF, SHN_ABS)):
+            return (obj_id, sym.shndx) if sym.shndx not in (SHN_UNDEF, SHN_ABS) else None
+        if sym.shndx == SHN_ABS:
+            return None
+        if sym.shndx != SHN_UNDEF:
+            return (obj_id, sym.shndx)
+        g = objs.globals_.get(sym.name)
+        if g is None:
+            return None
+        g_obj, g_sym = g
+        if g_sym.shndx in (SHN_UNDEF, SHN_ABS):
+            return None
+        return (g_obj, g_sym.shndx)
+
+    def _gc(self, objs: _Objects) -> set[tuple[int, int]]:
+        """Mark-and-sweep from the roots, following relocation edges (mirrors --gc-sections)."""
+        live: set[tuple[int, int]] = set()
+        work: list[tuple[int, int]] = []
+
+        def add(x: tuple[int, int] | None) -> None:
+            if x is not None and x not in live:
+                live.add(x)
+                work.append(x)
+
+        g = objs.globals_.get("_start")  # the entry is always a root
+        if g is not None:
+            add((g[0], g[1].shndx))
+        for sec in objs.app.sections:  # KEEP'd app metadata the AppInfo header points at
+            if sec.name in (
+                ".rodata.eadk_app_name",
+                ".rodata.eadk_app_icon",
+                ".rodata.eadk_api_level",
+            ):
+                add((0, sec.index))
+        while work:
+            obj_id, sidx = work.pop()
+            elf = objs.app if obj_id == 0 else objs.runtime
+            for r in elf.relocs.get(sidx, []):
+                add(self._defining_section(objs, obj_id, elf.symbols[r.sym]))
+        return live
 
     # -- symbol resolution -----------------------------------------------------------------
     def _make_resolver(self, objs: _Objects, obj_id: int):

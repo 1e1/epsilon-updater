@@ -70,6 +70,8 @@ R_ARM_THM_CALL = 10
 R_ARM_THM_JUMP24 = 30
 R_ARM_TARGET1 = 38
 R_ARM_PREL31 = 42
+R_ARM_THM_MOVW_ABS_NC = 47  # low 16 bits of an absolute address, loaded via Thumb-2 MOVW
+R_ARM_THM_MOVT_ABS = 48  # high 16 bits, via Thumb-2 MOVT (the movw/movt pair builds a 32-bit addr)
 
 _EHDR = struct.Struct("<16sHHIIIIIHHHHHH")  # e_ident + 13 half/word fields
 _SHDR = struct.Struct("<IIIIIIIIII")  # 10 words
@@ -298,6 +300,26 @@ def _thumb_bl_encode(hw1: int, hw2: int, disp: int) -> tuple[int, int]:
     return hw1, hw2
 
 
+def _thumb_movw_movt_decode(hw1: int, hw2: int) -> int:
+    """Decode the 16-bit immediate encoded in a Thumb-2 MOVW/MOVT (T3): imm4:i:imm3:imm8."""
+    imm4 = hw1 & 0xF
+    i = (hw1 >> 10) & 1
+    imm3 = (hw2 >> 12) & 0x7
+    imm8 = hw2 & 0xFF
+    return (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8
+
+
+def _thumb_movw_movt_encode(hw1: int, hw2: int, imm16: int) -> tuple[int, int]:
+    """Re-encode a 16-bit immediate into a Thumb-2 MOVW/MOVT, preserving opcode + Rd bits."""
+    imm4 = (imm16 >> 12) & 0xF
+    i = (imm16 >> 11) & 1
+    imm3 = (imm16 >> 8) & 0x7
+    imm8 = imm16 & 0xFF
+    hw1 = (hw1 & 0xFBF0) | (i << 10) | imm4  # keep bits except i (bit10) and imm4 (bits3:0)
+    hw2 = (hw2 & 0x0F00) | (imm3 << 12) | imm8  # keep Rd (bits11:8); set imm3 (14:12) + imm8 (7:0)
+    return hw1, hw2
+
+
 @dataclass
 class RelocContext:
     """Everything a relocation needs: the final address of the site's section, and a resolver
@@ -321,7 +343,8 @@ def apply_relocations(data: bytes, relocs: list[Reloc], ctx: RelocContext) -> by
         S = ctx.resolve(r.sym)
         Se = S & ~1
         o = r.offset
-        if r.type == R_ARM_ABS32:
+        if r.type in (R_ARM_ABS32, R_ARM_TARGET1):
+            # TARGET1 behaves as ABS32 on bare-metal ARM (it tags .init_array entries).
             A = int.from_bytes(buf[o : o + 4], "little")
             buf[o : o + 4] = ((S + A) & 0xFFFFFFFF).to_bytes(4, "little")
         elif r.type == R_ARM_REL32:
@@ -339,6 +362,17 @@ def apply_relocations(data: bytes, relocs: list[Reloc], ctx: RelocContext) -> by
             disp = (Se + A - P) & 0xFFFFFFFF
             disp = _sign_extend(disp, 32)
             nhw1, nhw2 = _thumb_bl_encode(hw1, hw2, disp)
+            buf[o : o + 2] = nhw1.to_bytes(2, "little")
+            buf[o + 2 : o + 4] = nhw2.to_bytes(2, "little")
+        elif r.type in (R_ARM_THM_MOVW_ABS_NC, R_ARM_THM_MOVT_ABS):
+            # MOVW/MOVT load a 32-bit absolute address in two halves. S keeps the Thumb bit
+            # (folded into bit 0, which lands in MOVW), exactly like ABS32.
+            hw1 = int.from_bytes(buf[o : o + 2], "little")
+            hw2 = int.from_bytes(buf[o + 2 : o + 4], "little")
+            A = _thumb_movw_movt_decode(hw1, hw2)
+            full = (S + A) & 0xFFFFFFFF
+            imm = full & 0xFFFF if r.type == R_ARM_THM_MOVW_ABS_NC else (full >> 16) & 0xFFFF
+            nhw1, nhw2 = _thumb_movw_movt_encode(hw1, hw2, imm)
             buf[o : o + 2] = nhw1.to_bytes(2, "little")
             buf[o + 2 : o + 4] = nhw2.to_bytes(2, "little")
         else:

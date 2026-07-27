@@ -79,6 +79,7 @@ _start:
     SVC_RET eadk_display_wait_for_vblank, 0x15, uxtb
     SVC_RET eadk_event_get,               0x17, uxth
     SVC_RET eadk_random,                  0x2d, none
+    SVC_RET eadk_backlight_brightness,    0x01, uxtb
 
 /* ---- eadk void svc (no return) ---- */
     .macro SVC_VOID name, num
@@ -89,8 +90,9 @@ _start:
     svc     #\num
     bx      lr
     .endm
-    SVC_VOID eadk_timing_msleep, 0x31
-    SVC_VOID eadk_timing_usleep, 0x32
+    SVC_VOID eadk_timing_msleep,          0x31
+    SVC_VOID eadk_timing_usleep,          0x32
+    SVC_VOID eadk_backlight_set_brightness, 0x02
 
 /* ---- eadk 64-bit return (r0:r1) via a stack scratch pair ---- */
     .macro SVC_U64 name, num

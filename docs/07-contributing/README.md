@@ -11,6 +11,7 @@ Peu de texte : un schéma, un exemple minimal, une commande de test.
 | 2 | Modifier le front | `server/web/*.js` | [02-front-end.md](02-front-end.md) |
 | 3 | Interfacer une API NumWorks | `catalog/*.py` | [03-api-numworks.md](03-api-numworks.md) |
 | 4 | Ajouter un device | `models.py` | [04-nouveau-device.md](04-nouveau-device.md) |
+| 5 | Le linker `.nwa` pur-Python (sans Node) | `formats/nwa_linker.py`, `eadk_runtime.s` | [05-linker-nwa-pur-python.md](05-linker-nwa-pur-python.md) |
 
 Lire d'abord la règle commune, puis le [`CONTRIBUTING.md`](../../CONTRIBUTING.md) racine (mise en
 route, style, sécurité).

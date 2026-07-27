@@ -73,6 +73,32 @@ def test_unsupported_relocation_raises():
         )
 
 
+@pytest.mark.parametrize("imm", [0, 0x1234, 0xFFFF, 0xABCD, 0x8000])
+def test_thumb_movw_movt_imm_roundtrip(imm):
+    hw1, hw2 = L._thumb_movw_movt_encode(0xF240, 0x0000, imm)  # movw r0, #imm base
+    assert L._thumb_movw_movt_decode(hw1, hw2) == imm
+
+
+def test_apply_movw_movt_loads_split_absolute_address():
+    # movw r0,#0 / movt r0,#0 with ABS_NC + ABS relocs must reconstruct S (Thumb bit kept in bit0).
+    movw = struct.pack("<HH", 0xF240, 0x0000)
+    movt = struct.pack("<HH", 0xF2C0, 0x0000)
+    S = 0x9018ABCD  # Thumb function pointer (odd)
+    ctx = L.RelocContext(section_addr=0, resolve=lambda _s: S)
+    lo_ins = L.apply_relocations(movw, [L.Reloc(0, 1, L.R_ARM_THM_MOVW_ABS_NC)], ctx)
+    hi_ins = L.apply_relocations(movt, [L.Reloc(0, 1, L.R_ARM_THM_MOVT_ABS)], ctx)
+    lo = L._thumb_movw_movt_decode(*struct.unpack("<HH", lo_ins))
+    hi = L._thumb_movw_movt_decode(*struct.unpack("<HH", hi_ins))
+    assert (hi << 16) | lo == S
+
+
+def test_apply_target1_is_abs32():
+    data = struct.pack("<I", 0x8)
+    ctx = L.RelocContext(section_addr=0x1000, resolve=lambda _s: 0x90180001)
+    out = L.apply_relocations(data, [L.Reloc(0, 1, L.R_ARM_TARGET1)], ctx)
+    assert struct.unpack("<I", out)[0] == (0x90180001 + 0x8) & 0xFFFFFFFF
+
+
 # -- ELF32 reader (synthetic minimal ARM ET_REL) -------------------------------------------
 def _min_elf() -> bytes:
     """A tiny but valid little-endian ARM ET_REL: .text + .rel.text (one ABS32 to 'foo') +

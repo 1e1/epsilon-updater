@@ -8,8 +8,8 @@ nous-mêmes le mini-runtime (crt0 + stubs), en s'appuyant sur l'**ABI `svc`** (d
 code protégé). Zéro Node, et **aucun octet NumWorks redistribué**. Le chemin **A** (délégation
 `npx nwlink`, déjà livré) **reste le repli** jusqu'à ce que C′ soit prêt et validé sur matériel.
 
-**État (2026-07-27) : phases 1-4 LIVRÉES et validées offline** (en-tête AppInfo identique à nwlink
-pour RPN, suite verte, coverage OK) ; **Phase 5 = test matériel N0120 (app Tetris) en attente** — voir §6.
+**État (2026-07-27) : LIVRÉ et VALIDÉ SUR MATÉRIEL** — Tetris s'installe et se lance sur une N0120
+réelle via le linker pur-Python (chemin C′ forcé, sans Node). Phases 1-5 ✅ — voir §6.
 
 > **Posture de bonne foi (voir aussi [GOOD-FAITH-DECLARATION.md](../../GOOD-FAITH-DECLARATION.md)) :**
 > on procède au clean-room de bonne foi, et **on retirera la fonctionnalité immédiatement si NumWorks
@@ -155,8 +155,10 @@ aucun octet NumWorks.**
 - ✅ **Phase 4 — Câblage** : `AppManager._link_if_needed` essaie C′ d'abord (pur-Python, sans Node),
   **repli A** (`npx nwlink`) si le lien échoue ; `NWUPDATER_LINKER=nwlink|pure` force l'un ou l'autre.
   Isolé derrière `push` → retirable d'un bloc (bonne foi).
-- ⬜ **Phase 5 — Validation matériel** (à faire, N0120 + app Tetris) : installer + lancer, read-back.
-  C'est le seul juge de la correction fonctionnelle (offline ne teste pas l'exécution sur l'OS).
+- ✅ **Phase 5 — Validation matériel** : **Tetris (Tatone26/Numworks-games) s'installe et se lance
+  sur une N0120 réelle** via C′ (`NWUPDATER_LINKER=pure`), aux côtés d'une app existante. Le read-back
+  DFU du moteur d'install valide l'écriture. Params réels confirmés (flash `0x90180000..0x903f0000`,
+  RAM `0x240117b4..0x24037000`, trampoline `0x90020038`).
 - **Tests** : [`tests/test_nwa_linker.py`](../../tests/test_nwa_linker.py) — app synthétique en CI
   (aucun binaire committé) + cross-check `nwlink` **gate dev-PC** (`NWUPDATER_TEST_NWA` + `npx`).
 

@@ -144,6 +144,32 @@ def test_entry_points_at_start_and_calls_main():
     assert b"\x2d\xdf" in out
 
 
+def test_gc_drops_unused_runtime_stubs():
+    """--gc-sections behaviour: only the eadk stub the app actually calls is pulled in."""
+    out = link_nwa_pure(
+        _min_app(),
+        flash_start=FS,
+        flash_length=FL,
+        ram_start=RS,
+        ram_length=RL,
+        trampoline_start=TS,
+    )
+    assert b"\x2d\xdf" in out  # eadk_random (svc 0x2d) — called by _min_app → present
+    assert b"\x31\xdf" not in out  # eadk_timing_msleep (svc 0x31) — not called → GC'd out
+
+
+def test_oversized_app_raises():
+    with pytest.raises(LinkError):
+        link_nwa_pure(
+            _min_app(),
+            flash_start=FS,
+            flash_length=0x20,  # smaller than even the AppInfo header + app
+            ram_start=RS,
+            ram_length=RL,
+            trampoline_start=TS,
+        )
+
+
 def test_requires_trampoline():
     with pytest.raises(LinkError):
         link_nwa_pure(
