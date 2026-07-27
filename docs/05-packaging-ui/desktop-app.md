@@ -11,6 +11,11 @@ et à chaque tag `vX.Y.Z`. On télécharge le `.zip` de son OS depuis :
 - l'onglet **Actions** → le run → **Artifacts**, ou
 - la **Release** (si on a poussé un tag `git tag v0.1.0 && git push --tags`).
 
+Sur **macOS**, deux fichiers plus légers sont publiés (un par architecture, ≈ moitié de la
+taille d'un binaire universel) : `NumWorks-Updater-macos-arm64.zip` pour les Mac Apple Silicon
+(M1 et suivants) et `NumWorks-Updater-macos-x86_64.zip` pour les Mac Intel. En cas de doute :
+menu  → « À propos de ce Mac » indique la puce.
+
 ### 2. Compiler en local (une commande) — nécessite Python + PyInstaller
 ```bash
 pip install pyinstaller pillow .

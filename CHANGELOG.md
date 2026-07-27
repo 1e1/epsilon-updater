@@ -6,6 +6,16 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Modifié (taille des binaires)
+
+- **Binaires plus légers** : la spec PyInstaller élague les extensions C de la stdlib jamais
+  utilisées par cet outil (codecs CJK, `_decimal`, `pyexpat`, `readline`, `_sqlite3`, `_curses`),
+  active `strip` et `optimize=2`. ≈ **−17 %** mesuré (arm64 : 7,2 → 6,0 Mo zip). `unicodedata`
+  est conservé (le codec IDNA du bind `http.server` en dépend), ainsi qu'OpenSSL (HTTPS + hash).
+- **macOS — deux téléchargements par architecture** au lieu d'un binaire universel : le build
+  universel2 est découpé (`ditto --arch` + re-signature ad-hoc) en `…-macos-arm64.zip`
+  (Apple Silicon) et `…-macos-x86_64.zip` (Intel), chacun ≈ moitié plus petit.
+
 ## [2.0.0-rc.3] - 2026-07-25
 
 ### Corrigé (retours test N0120 réelle)

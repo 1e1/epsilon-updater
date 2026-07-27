@@ -78,8 +78,11 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
 
 Pistes notées pour plus tard (non planifiées) :
 
-- ⬜ **Réduire la taille du binaire** empaqueté (PyInstaller) — audit des dépendances embarquées,
-  exclusions, éventuel `--onefile` vs dossier, strip.
+- ✅ **Réduire la taille du binaire** empaqueté (PyInstaller) — élagage du TOC des extensions C
+  inutilisées (codecs CJK, `_decimal`, `pyexpat`, `readline`, `_sqlite3`, `_curses`), `strip` +
+  `optimize=2`, et **Mac découpé par architecture** (`ditto --arch`, arm64 / x86_64 au lieu d'un
+  binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**, **Mac 16 → 8,25 (arm64)
+  / 7,21 (Intel)**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
 - ⬜ **Porter `nwlink` pour se passer de Node** — finir le linker pur-Python
   (`formats/nwa_link.py`) afin d'installer une app distribuée (ELF) **sans** Node/npm ; nécessite
   le placement type script `lld` + vendoriser le runtime EADK (question de licence).

@@ -22,8 +22,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest    # universal2 (Intel + Apple Silicon) — GitHub Intel runners (macos-13) unavailable
-            asset: NumWorks-Updater-macos-universal
+          - os: macos-latest    # build universal2, then split into per-arch downloads (below)
+            asset: NumWorks-Updater-macos
           - os: windows-latest
             asset: NumWorks-Updater-windows
           - os: ubuntu-latest
@@ -75,7 +75,17 @@ jobs:
         run: |
           cd dist
           if [ "${{ runner.os }}" = "macOS" ]; then
-            zip -r -y "../${{ matrix.asset }}.zip" "NumWorks Updater.app"
+            # PyInstaller built a universal2 .app. Ship two smaller per-arch downloads instead
+            # of one fat binary: `ditto --arch` copies only the requested slice of every Mach-O
+            # (≈ halves the size), and the re-sign is required — thinning invalidates the ad-hoc
+            # signature and Apple Silicon SIGKILLs an unsigned binary on launch.
+            app="NumWorks Updater.app"
+            for arch in arm64 x86_64; do
+              rm -rf "thin-$arch"; mkdir "thin-$arch"
+              ditto --arch "$arch" "$app" "thin-$arch/$app"
+              codesign --force --deep -s - "thin-$arch/$app"
+              (cd "thin-$arch" && zip -r -y "../../${{ matrix.asset }}-$arch.zip" "$app")
+            done
           elif [ "${{ runner.os }}" = "Windows" ]; then
             7z a "../${{ matrix.asset }}.zip" "NumWorks Updater.exe"
           else
@@ -86,7 +96,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}.zip
+          # glob so macOS (two per-arch zips: -arm64 / -x86_64) and Windows/Linux (one zip) match
+          path: ${{ matrix.asset }}*.zip
           # Per-push builds are for immediate download from the run; keep them short so the
           # private-repo artifact storage quota can't fill up. Release binaries (on tags) are
           # attached to the GitHub Release, not kept as artifacts, so this doesn't affect them.
