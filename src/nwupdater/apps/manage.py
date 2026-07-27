@@ -82,6 +82,11 @@ class AppManager:
         current = self.installed()
         blob = self._link_if_needed(blob, current)
         info = validate_nwa(blob, self.device_api_level, error=AppError)
+        # An app name is unique on the device. Never silently append a duplicate (that also breaks
+        # reorder, which requires unique names). To *replace* an app, uninstall it first — the UI
+        # stages the removal before the add, so this path only ever sees a genuinely-new name.
+        if any(m.name == info.name for m in current):
+            raise AppError(f"app already installed: {info.name} (remove it first to replace it)")
         self._apply([m.blob for m in current] + [blob])
         return ManagedApp(info.name or "?", info.api_level, blob)
 
@@ -143,10 +148,24 @@ class AppManager:
         return ensure_linked(blob, target)
 
     def uninstall(self, name: str) -> None:
+        self.uninstall_many([name])
+
+    def uninstall_many(self, names: list[str]) -> None:
+        """Remove every app in ``names`` in a SINGLE region rewrite (deleting N apps one HTTP call
+        at a time would rewrite the whole region N times). Raises if any name isn't installed."""
         current = self.installed()
-        if not any(m.name == name for m in current):
-            raise AppError(f"app not installed: {name}")
-        self._apply([m.blob for m in current if m.name != name])
+        have = {m.name for m in current}
+        missing = [n for n in dict.fromkeys(names) if n not in have]
+        if missing:
+            raise AppError(f"app(s) not installed: {', '.join(missing)}")
+        drop = set(names)
+        self._apply([m.blob for m in current if m.name not in drop])
+
+    def usage(self) -> dict:
+        """Region occupation in the SAME sector-aligned unit the writer allocates (each app takes a
+        whole 64 KiB sector), so the UI's memory figure matches what actually fits on the device."""
+        used = sum(m.sectors * SECTOR for m in self.installed())
+        return {"capacity": self.capacity, "used": used, "free": max(0, self.capacity - used)}
 
     def reorder(self, order: list[str]) -> None:
         by_name = {m.name: m.blob for m in self.installed()}

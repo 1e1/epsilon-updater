@@ -651,6 +651,14 @@ function wcfg(kind) {
         accept: ".py", chooseLabel: t("choose_py"), order: t("storage_order") };
 }
 const deviceList = (kind) => (kind === "apps" ? STATE.apps.device : STATE.scripts.device);
+// Apps occupy whole 64 KiB flash sectors (the device allocates per sector); scripts are packed
+// into storage byte-for-byte. Rounding apps to the sector keeps the memory bar honest — a plan the
+// UI shows as "fits" must actually fit on the device.
+const APP_SECTOR = 65536;
+const footprint = (kind, bytes) => {
+  const b = bytes || 0;
+  return kind === "apps" ? (b > 0 ? Math.ceil(b / APP_SECTOR) * APP_SECTOR : 0) : b;
+};
 function initStage(kind) {
   STATE.stage[kind] = deviceList(kind).map(x => ({ ...x, onDevice: true, deleted: false }));
   STATE.hist[kind] = [];
@@ -676,7 +684,7 @@ function planFor(kind) {
   }
   let un = 0, rw = 0, nw = 0, unB = 0, rwB = 0, nwB = 0;
   for (const s of slots) {
-    const b = s.size || 0, st = status.get(s);
+    const b = footprint(kind, s.size), st = status.get(s);
     if (st === "un") { un++; unB += b; } else if (st === "rw") { rw++; rwB += b; }
     else if (st === "new") { nw++; nwB += b; }
   }
@@ -722,7 +730,7 @@ function onCalcRow(kind, s, p, mov, busy) {
   const st = p.status.get(s), movable = st === "rw" || st === "new";
   // During a write, only the slots actually being (re)written animate — rw (rewritten) and new
   // (added). Frozen "un" items and everything else stay still.
-  const busyCard = !!(busy && busy.op === "write" && (st === "rw" || st === "new"));
+  const busyCard = !!(busy && busy.op === "write" && (st === "rw" || st === "new" || st === "del"));
   const meta = kind === "scripts"
     ? `${fmtBytes(s.size)}${s.auto_import ? " · " + t("auto_import") : ""}`
     : `${fmtBytes(s.size)} · API ${s.api_level ?? 0}`;
@@ -780,7 +788,7 @@ function workshopBody(kind) {
   // Memory bar: ONE segment per item (2px gaps → a separator between EVERY item, even same
   // type), followed by the free tail.
   const seg = (b, cls) => `<span class="${cls}" style="width:${pct(b)}%"></span>`;
-  const bar = `<div class="membar">${target.map(s => seg(s.size || 0, "seg-" + p.status.get(s))).join("")}`
+  const bar = `<div class="membar">${target.map(s => seg(footprint(kind, s.size), "seg-" + p.status.get(s))).join("")}`
     + `${seg(p.freeB, "seg-free")}</div>`;
   const legend = `<div class="legend">
     <span><i class="seg-un"></i>${t("leg_un")}</span><span><i class="seg-rw"></i>${t("leg_rw")}</span>
@@ -1570,10 +1578,20 @@ function handleFile(kind, f) {
   reader.onload = async () => {
     if (kind === "apps") {
       const b64 = reader.result.split(",")[1] || "";
-      let icon = null;  // decode the real .nwa (ELF) icon server-side so it shows straight away
-      try { icon = (await post("/api/apps/inspect", { data_b64: b64 })).icon || null; } catch (e) { /* no icon */ }
+      // Decode icon + REAL app name server-side. The true name (from the .nwa/ELF) is what lands on
+      // the device and often differs in case/spelling from the filename, so we stage under it — and
+      // re-check for a duplicate under that real name (unless the existing copy is staged for erase).
+      let icon = null, realName = base;
+      try {
+        const info = await post("/api/apps/inspect", { data_b64: b64 });
+        icon = info.icon || null;
+        if (info.name) realName = info.name;
+      } catch (e) { /* no icon/name */ }
+      if (STATE.stage.apps.some(x => x.name === realName && !x.deleted)) {
+        toast(t("already_staged", { name: realName }), true); return;
+      }
       pushHist(kind);
-      STATE.stage.apps.push({ name: base, api_level: 0, size: f.size, source: t("src_local"),
+      STATE.stage.apps.push({ name: realName, api_level: 0, size: f.size, source: t("src_local"),
         origin: "local", onDevice: false, deleted: false, blob: b64, icon });
     } else {
       pushHist(kind);
@@ -1610,7 +1628,9 @@ async function commitStage(kind) {
   STATE.busy[kind] = { op: "write" }; renderWorkbench();
   try {
     if (kind === "apps") {
-      for (const name of removed) await post("/api/apps/uninstall", { name });
+      // Remove all staged deletions in ONE region rewrite (not one HTTP call per app). Deletions
+      // run before adds, so replacing an app (stage-delete old + add new) frees its name first.
+      if (removed.length) await post("/api/apps/uninstall", { names: removed });
       for (const a of added) {
         if (a.blob) await post("/api/apps/push", { filename: a.name.endsWith(".nwa") ? a.name : a.name + ".nwa", data_b64: a.blob });
         else await post("/api/apps/add", { name: a.name });
@@ -1621,17 +1641,27 @@ async function commitStage(kind) {
       await post("/api/scripts/set", { scripts: target.map(s => (
         { name: s.name.replace(/\.py$/i, ""), code: s.code || ("# " + s.name + "\n"), auto_import: !!s.auto_import })) });
     }
-    await refreshLists();
-    toast(t("written_ok", { n: removed.length + added.length }));
+    toast(writeSummary(added.length, removed.length));
   } catch (e) {
     // A missing linker surfaces as a raw multi-line message — replace it with a clear, translated,
     // actionable one (and refresh the tab so the preflight note appears).
     const msg = /nwlink/i.test(e.message || "") ? t("nwlink_needed") + " " + t("nwlink_hint") : e.message;
     toast(t("fail", { msg }), true);
-    if (kind === "apps" && /nwlink/i.test(e.message || "")) { STATE.apps.nwlink = false; renderWorkbench(); }
+    if (kind === "apps" && /nwlink/i.test(e.message || "")) STATE.apps.nwlink = false;
   } finally {
-    STATE.busy[kind] = false; renderWorkbench();
+    // ALWAYS resync from the device — even on a partial failure — so the plan, the "NEW" badges and
+    // the memory bar reflect what is really on the calculator (never a stuck, stale view).
+    STATE.busy[kind] = false;
+    await refreshLists();
+    renderWorkbench();
   }
+}
+// Completion toast that names what actually happened: installs and/or removals (removals were
+// previously folded into a single ambiguous count, so a delete had no clear "done" feedback).
+function writeSummary(nAdd, nDel) {
+  if (nAdd && nDel) return t("written_mixed", { a: nAdd, d: nDel });
+  if (nDel) return t("removed_ok", { n: nDel });
+  return t("written_ok", { n: nAdd });
 }
 
 async function quitApp() {

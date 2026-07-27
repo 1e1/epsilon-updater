@@ -98,6 +98,48 @@ def test_push_rejects_api_mismatch():
         mgr.push(build_nwa("X", api_level=1))
 
 
+def test_push_refuses_duplicate_name():
+    # A name is unique on the device: re-pushing must NOT silently create a second copy (which also
+    # breaks reorder). The user replaces by removing first (see the delete-then-add flow below).
+    _, _, mgr = _mgr()
+    mgr.push(build_nwa("Tetris", api_level=0, code=b"\x01" * 100))
+    with pytest.raises(AppError):
+        mgr.push(build_nwa("Tetris", api_level=0, code=b"\x02" * 100))
+    assert [m.name for m in mgr.installed()] == ["Tetris"]  # still exactly one
+
+
+def test_replace_via_delete_then_add():
+    _, _, mgr = _mgr()
+    mgr.push(build_nwa("Tetris", api_level=0, code=b"\x01" * 100))
+    mgr.uninstall("Tetris")  # stage-delete old ...
+    mgr.push(build_nwa("Tetris", api_level=0, code=b"\x02" * 200))  # ... then add the new version
+    apps = mgr.installed()
+    assert [m.name for m in apps] == ["Tetris"] and apps[0].blob.count(b"\x02") >= 200
+
+
+def test_uninstall_many_single_rewrite():
+    dev, _ident, mgr = _recording_mgr()
+    for n in ("A", "B", "C"):
+        mgr.push(build_nwa(n, api_level=0, code=b"\x01" * 100))
+    dev.erases.clear()
+    mgr.uninstall_many(["A", "C"])  # remove two at once
+    assert [m.name for m in mgr.installed()] == ["B"]
+
+
+def test_uninstall_many_reports_missing():
+    _, _, mgr = _mgr()
+    mgr.push(build_nwa("A", api_level=0, code=b"\x01" * 100))
+    with pytest.raises(AppError):
+        mgr.uninstall_many(["A", "Ghost"])
+
+
+def test_usage_is_sector_aligned():
+    _, _, mgr = _mgr()
+    mgr.push(build_nwa("A", api_level=0, code=b"\x01" * 100))  # ~100 B app -> one 64 KiB sector
+    u = mgr.usage()
+    assert u["used"] == SECTOR and u["free"] == u["capacity"] - SECTOR
+
+
 def test_uninstall_unknown_raises():
     _, _, mgr = _mgr()
     with pytest.raises(AppError):

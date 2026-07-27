@@ -158,6 +158,32 @@ def test_scripts_absent_on_scientific():
     assert s.scripts()["has_scripts"] is False
 
 
+def test_set_scripts_dedupes_by_name():
+    # The workshop's atomic commit must not write two records with the same name (a script name is
+    # unique in storage); the LAST occurrence wins so a re-add updates in place.
+    s = Session(model_name="n0110")
+    s.set_scripts([{"name": "dup", "code": "a=1\n"}, {"name": "dup", "code": "b=2\n"}])
+    dup = [x for x in s.scripts()["scripts"] if x["name"] == "dup.py"]
+    assert len(dup) == 1 and dup[0]["code"] == "b=2\n"
+
+
+def test_inspect_app_returns_real_name():
+    from nwupdater.formats.nwa import build_nwa
+
+    s = Session(model_name="n0110")
+    info = s.inspect_app(build_nwa("TETRIS", api_level=0, code=b"\x00" * 64))
+    assert info["name"] == "TETRIS"  # real AppInfo name, not the dropped filename stem
+
+
+def test_installed_apps_reports_sector_aligned_usage():
+    from nwupdater.apps.manage import SECTOR
+
+    s = Session(model_name="n0110")
+    d = s.installed_apps_on_device()
+    assert d["capacity"] > 0 and d["used"] % SECTOR == 0
+    assert d["free"] == d["capacity"] - d["used"]
+
+
 @pytest.mark.parametrize("model", ["n0110", "n0120"])
 def test_demo_graphing_device_is_populated(model):
     # The 'explore a demo' graphing device ships realistic on-calc content so BOTH workshops

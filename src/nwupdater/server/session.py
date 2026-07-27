@@ -113,6 +113,8 @@ class Session(
     def _batch_apps(self, names: list[str]) -> str:
         """Install the class's app set that's missing from the device; ``change`` if any was added,
         ``ok`` if none were needed, ``error`` on failure (e.g. nwlink absent for a distributed .nwa)."""
+        from ..apps.manage import AppError
+
         try:
             installed = {
                 a.get("name") for a in self.installed_apps_on_device().get("installed", [])
@@ -121,8 +123,14 @@ class Session(
             for n in names:
                 if n in installed:
                     continue
-                self.add_store_app(n)
-                changed = True
+                try:
+                    self.add_store_app(n)
+                    changed = True
+                except AppError as e:
+                    # Already on the device under its real (possibly differently-cased) name —
+                    # idempotent skip, not a failure. Any other AppError is a real problem.
+                    if "already installed" not in str(e):
+                        raise
             return "change" if changed else "ok"
         except Exception:
             return "error"

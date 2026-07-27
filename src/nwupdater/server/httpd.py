@@ -305,7 +305,13 @@ def _handler(session: Session, web_dir: Path, control: dict | None = None):
                 elif path == "/api/apps/fetch":
                     self._json(session.fetch_app(body.get("url", "")))
                 elif path == "/api/apps/uninstall":
-                    self._json(session.uninstall_app(body.get("name", "")))
+                    # accepts a single {name} (legacy) or {names:[...]} for a batched, one-rewrite
+                    # delete of several apps at once (the workshop stages many, commits once).
+                    names = body.get("names")
+                    if names is not None:
+                        self._json(session.uninstall_apps(names))
+                    else:
+                        self._json(session.uninstall_app(body.get("name", "")))
                 elif path == "/api/apps/reorder":
                     self._json(session.reorder_apps(body.get("order", [])))
                 elif path == "/api/apps/export":

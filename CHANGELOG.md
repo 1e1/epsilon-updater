@@ -6,6 +6,26 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Corrigé (synchro UI + doublons apps/scripts, Individuel **et** Classe)
+
+- **Plus de doublon à l'installation** (ex. « Tetris » installé deux fois). Un nom d'app/script est
+  désormais **unique** : `AppManager.push` refuse un nom déjà présent (invariant device), l'atelier
+  bloque l'ajout d'un nom déjà présent (sauf si l'ancien est planifié pour effacement → autorisé pour
+  *remplacer* dans la même écriture), et `set_scripts` déduplique. Le drop de fichier stage désormais
+  sous le **vrai** nom de l'app (lu dans le `.nwa`), pas le nom de fichier — c'est ce décalage de nom
+  qui laissait passer le doublon.
+- **UI toujours resynchronisée** après Écrire, même en cas d'échec partiel : `refreshLists()` passe
+  dans un `finally`. Corrige l'occupation mémoire figée et l'étiquette **NEW** qui restait collée
+  (elles restaient bloquées quand une étape d'écriture levait et sautait la resync).
+- **Occupation mémoire des apps** comptée en **secteurs 64 Kio** (comme l'alloue le device), au lieu
+  des octets bruts — la barre ne sous-estime plus l'espace et un plan affiché « ça rentre » rentre
+  vraiment.
+- **Suppression : vrai feedback** — les cartes supprimées s'animent pendant l'écriture et le toast de
+  fin distingue « n installé(s) » / « n supprimé(s) » / mixte. **Suppression multiple** en une seule
+  réécriture de région (`/api/apps/uninstall {names:[...]}` → `AppManager.uninstall_many`).
+- Correctifs appliqués aux **deux modes** (état device partagé) ; le batch Classe reste idempotent
+  (« déjà installé » = saut, pas d'erreur).
+
 ## [2.0.0-rc.5] - 2026-07-27
 
 ### Corrigé (app macOS ne se lançait pas)

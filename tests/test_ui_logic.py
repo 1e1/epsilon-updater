@@ -83,7 +83,7 @@ def test_planfor_computes_frozen_prefix_and_sizes(tmp_path):
     with _ui(tmp_path) as (page, errors):
         r = page.evaluate(
             """() => {
-                STATE.apps = { device: [{name:'A', size:1000}], capacity: 100000, avail: [], apiLevel: 0 };
+                STATE.apps = { device: [{name:'A', size:1000}], capacity: 1000000, avail: [], apiLevel: 0 };
                 STATE.stage.apps = [
                   {name:'A', size:1000, onDevice:true, deleted:false},
                   {name:'B', size:2000, onDevice:false, deleted:false},
@@ -92,7 +92,9 @@ def test_planfor_computes_frozen_prefix_and_sizes(tmp_path):
                 return {un:p.un, rw:p.rw, nw:p.nw, usedB:p.usedB, freeB:p.freeB, dirty:p.dirty};
             }"""
         )
-        assert r == {"un": 1, "rw": 0, "nw": 1, "usedB": 3000, "freeB": 97000, "dirty": True}
+        # apps occupy whole 64 KiB sectors: A(1000 B) and B(2000 B) each round up to one 65536 B
+        # sector, so usedB = 2*65536 = 131072 (not the raw 3000 B).
+        assert r == {"un": 1, "rw": 0, "nw": 1, "usedB": 131072, "freeB": 868928, "dirty": True}
         assert not errors
 
 

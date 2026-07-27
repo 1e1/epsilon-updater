@@ -7,6 +7,24 @@ from ..formats.nwa import build_nwa
 from ._session_base import SessionBase
 
 
+def _nwa_app_name(data: bytes) -> str:
+    """The real app name of a ``.nwa``, whether flat (AppInfo) or a relocatable ELF (the
+    ``.rodata.eadk_app_name`` string). Empty string if it can't be determined."""
+    from ..apps.link import is_relocatable_nwa
+
+    if is_relocatable_nwa(data):
+        from ..formats.nwa_link import Elf32
+
+        try:
+            sec = Elf32.parse(data).section(".rodata.eadk_app_name")
+        except Exception:
+            return ""
+        return sec.data.split(b"\x00", 1)[0].decode("ascii", "replace") if sec and sec.data else ""
+    from ..formats.nwa import AppInfo
+
+    return AppInfo.parse(data).name
+
+
 class AppsMixin(SessionBase):
     def apps(self) -> dict:
         from ..apps.link import nwlink_available
@@ -74,10 +92,13 @@ class AppsMixin(SessionBase):
         return idx
 
     def installed_apps_on_device(self) -> dict:
+        from ..apps.manage import SECTOR
         from ..formats.appicon import decode_app_icon
 
-        apps = self._appmgr().installed()
+        mgr = self._appmgr()
+        apps = mgr.installed()
         local = self._local_apps_index()
+        used = sum(m.sectors * SECTOR for m in apps)  # sector-aligned: matches what actually fits
         return {
             "installed": [
                 {
@@ -89,7 +110,11 @@ class AppsMixin(SessionBase):
                     "local": local.get(m.name) == len(m.blob),
                 }
                 for m in apps
-            ]
+            ],
+            # region occupation in the sector-aligned unit the device really uses (see manage.usage)
+            "capacity": mgr.capacity,
+            "used": used,
+            "free": max(0, mgr.capacity - used),
         }
 
     def export_app(self, name: str) -> dict:
@@ -121,11 +146,13 @@ class AppsMixin(SessionBase):
         return {"ok": True, "name": m.name, "size": len(m.blob)}
 
     def inspect_app(self, data: bytes) -> dict:
-        """Read-only metadata for a user-supplied .nwa (ELF or flat) — the decoded icon, so a
-        dropped file shows it in the plan immediately. Nothing is written or uploaded."""
+        """Read-only metadata for a user-supplied .nwa (ELF or flat) — the decoded icon AND the
+        real app name, so a dropped file shows its icon and its true on-device name in the plan
+        immediately (the filename stem often differs in case/spelling, which used to let a
+        same-named app be staged twice). Nothing is written or uploaded."""
         from ..formats.appicon import decode_app_icon
 
-        return {"icon": decode_app_icon(data), "size": len(data)}
+        return {"icon": decode_app_icon(data), "size": len(data), "name": _nwa_app_name(data)}
 
     def fetch_app(self, url: str) -> dict:
         """Download a catalogue app's .nwa server-side (the browser can't, CORS) for temporary
@@ -178,6 +205,11 @@ class AppsMixin(SessionBase):
     def uninstall_app(self, name: str) -> dict:
         self._appmgr().uninstall(name)
         return {"ok": True}
+
+    def uninstall_apps(self, names: list[str]) -> dict:
+        """Remove several apps in one region rewrite (batched delete from the workshop)."""
+        self._appmgr().uninstall_many(list(names))
+        return {"ok": True, "removed": list(names)}
 
     def reorder_apps(self, order: list[str]) -> dict:
         self._appmgr().reorder(order)

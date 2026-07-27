@@ -230,13 +230,14 @@ class ScriptsMixin(SessionBase):
         if not i.storage_ram:
             raise ValueError("this model has no Python scripts (no storage)")
         addr, size = i.storage_ram
+        # De-duplicate by name (a script name is unique in storage); keep the LAST occurrence so a
+        # re-added script updates in place instead of writing two records with the same name.
+        by_name: dict[str, dict] = {}
+        for it in items:
+            by_name[str(it.get("name", "")).removesuffix(".py")] = it
         recs = [
-            make_python(
-                str(it.get("name", "")).removesuffix(".py"),
-                it.get("code", ""),
-                bool(it.get("auto_import", True)),
-            )
-            for it in items
+            make_python(name, it.get("code", ""), bool(it.get("auto_import", True)))
+            for name, it in by_name.items()
         ]
         n = write_storage(self.client, addr, recs, capacity=size)
         return {"ok": True, "written": n, "capacity": size}
