@@ -6,6 +6,17 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0] - 2026-07-27
+
+Version **stable** de la lignée 2.0.0 (promotion de la rc.7). Faits marquants depuis la 1.x :
+
+- **Installer une app `.nwa` distribuée sans Node** — linker pur-Python + runtime EADK *clean-room*
+  (aucun octet NumWorks redistribué), **validé sur N0120 réelle** ; délégation `nwlink` en repli.
+- **Binaires plus légers et publiés par architecture** : macOS **arm64 / x86_64** (build natif par
+  arch), Linux **x86_64 / arm64**, Windows.
+- **Atelier apps/scripts fiabilisé** : synchro UI systématique, **zéro doublon**, occupation mémoire
+  en secteurs, vrai feedback de suppression — en mode **Individuel et Classe**.
+
 ## [2.0.0-rc.7] - 2026-07-27
 
 ### Modifié (packaging — cibles Linux différenciées)
