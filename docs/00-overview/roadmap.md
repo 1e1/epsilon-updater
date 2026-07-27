@@ -83,10 +83,11 @@ Pistes notées pour plus tard (non planifiées) :
   `optimize=2`, et **Mac découpé par architecture** (`ditto --arch`, arm64 / x86_64 au lieu d'un
   binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**, **Mac 16 → 8,25 (arm64)
   / 7,21 (Intel)**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
-- ⛔ **Porter `nwlink` pour se passer de Node** — **BLOQUÉ (licence, vérifié 2026-07-27)**. Analyse
-  & plan : [../04-third-party-apps/nwlink-port-plan.md](../04-third-party-apps/nwlink-port-plan.md).
-  Toute approche « pré-liée » (link CI ou linker pur-Python) redistribuerait le **runtime EADK
-  propriétaire** de NumWorks (`nwlink` npm = *all rights reserved*) → NO-GO sans autorisation écrite
-  de NumWorks. On **reste sur la délégation `npx nwlink`** (chemin A, déjà livré), qui ne redistribue rien.
+- 🟡 **Porter `nwlink` pour se passer de Node** — cible = **C′ : linker pur-Python + runtime EADK
+  *clean-room*** (on écrit crt0 + stubs nous-mêmes ; l'ABI `svc` = des faits). Zéro Node, **aucun
+  octet NumWorks redistribué** → license-clean. Analyse & plan :
+  [../04-third-party-apps/nwlink-port-plan.md](../04-third-party-apps/nwlink-port-plan.md).
+  La délégation `npx nwlink` (chemin A) reste le **repli** jusqu'à validation matériel de C′.
+  Posture de bonne foi : retrait immédiat si NumWorks le demande (équipe tech NumWorks présente sur le dépôt).
 - ⬜ **Embarquer une IHM dans le binaire** — fenêtre native (ex. webview système / Qt / Tk) pour ne
   plus dépendre d'un navigateur externe ; le serveur local + les assets web actuels restent le socle.
