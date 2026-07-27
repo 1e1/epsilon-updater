@@ -6,6 +6,18 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0-rc.5] - 2026-07-27
+
+### Corrigé (app macOS ne se lançait pas)
+
+- **macOS : « Could not load PyInstaller's embedded PKG archive » au lancement** (rc.4, testé sur
+  Mac Intel). Cause : rc.4 buildait un binaire universel2 puis le **découpait par arch a posteriori**
+  (`ditto --arch`), ce qui reconstruit le Mach-O et **perd l'archive PKG** que PyInstaller ajoute en
+  overlay à la fin de l'exécutable. Correctif : **un build PyInstaller natif par architecture**
+  (`NWUPDATER_MAC_ARCH=arm64|x86_64`) — l'overlay reste intact et PyInstaller signe chaque app.
+  Vérifié en local : arm64 (natif) et x86_64 (sous Rosetta) démarrent et servent l'UI. Linux/Windows
+  (mono-fichier, jamais découpés) n'étaient pas affectés.
+
 ## [2.0.0-rc.4] - 2026-07-27
 
 ### Ajouté (linker `.nwa` pur-Python — sans Node)

@@ -80,9 +80,10 @@ Pistes notées pour plus tard (non planifiées) :
 
 - ✅ **Réduire la taille du binaire** empaqueté (PyInstaller) — élagage du TOC des extensions C
   inutilisées (codecs CJK, `_decimal`, `pyexpat`, `readline`, `_sqlite3`, `_curses`), `strip` +
-  `optimize=2`, et **Mac découpé par architecture** (`ditto --arch`, arm64 / x86_64 au lieu d'un
-  binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**, **Mac 16 → 8,25 (arm64)
-  / 7,21 (Intel)**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
+  `optimize=2`, et **Mac buildé par architecture** (un build PyInstaller natif par arch, arm64 /
+  x86_64, au lieu d'un binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**,
+  **Mac 16 → ~8 Mo par arch**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
+  (rc.4 découpait le universal2 a posteriori via `ditto` → l'app Mac ne se lançait pas ; corrigé en rc.5.)
 - ✅ **Porter `nwlink` pour se passer de Node** — **C′ (linker pur-Python + runtime EADK
   *clean-room*) validé sur N0120 réelle : Tetris s'installe et se lance**. Zéro Node, **aucun octet
   NumWorks redistribué** → license-clean ; la délégation `npx nwlink` (A) reste le **repli**

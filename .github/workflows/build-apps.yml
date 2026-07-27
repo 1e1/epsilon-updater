@@ -49,9 +49,10 @@ jobs:
       - name: Generate icons
         run: python packaging/icon/generate_icons.py --arrow up
 
-      # macOS builds universal2 (Intel + Apple Silicon) because GitHub's Intel runners hang.
-      # libusb-package ships only per-arch dylibs, so lipo-merge the arm64 + x86_64 ones into
-      # a universal2 dylib in place before PyInstaller (which then bundles universal2).
+      # macOS ships one native app per arch (see the PKG-overlay note in nwupdater.spec: thinning
+      # a universal2 build post-hoc corrupts PyInstaller's embedded archive). To let PyInstaller
+      # emit a native x86_64 app on the arm64 runner, libusb must carry an x86_64 slice too —
+      # lipo-merge the arm64 + x86_64 dylibs into a universal2 one so either slice is available.
       - name: Universalize libusb (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -67,30 +68,30 @@ jobs:
           mv "$dylib.universal" "$dylib"
           echo "merged → $(lipo -archs "$dylib")"
 
-      - name: Build app
+      # macOS: build each arch NATIVELY (PyInstaller ad-hoc signs each). Post-hoc lipo/ditto
+      # thinning of a universal2 build drops the appended PKG archive → "Could not load
+      # PyInstaller's embedded PKG archive" at launch. Windows/Linux: one single-arch build.
+      - name: Build app (macOS — one per arch)
+        if: runner.os == 'macOS'
+        run: |
+          NWUPDATER_MAC_ARCH=arm64  pyinstaller packaging/nwupdater.spec --noconfirm --distpath dist-arm64
+          NWUPDATER_MAC_ARCH=x86_64 pyinstaller packaging/nwupdater.spec --noconfirm --distpath dist-x86_64
+
+      - name: Build app (Windows / Linux)
+        if: runner.os != 'macOS'
         run: pyinstaller packaging/nwupdater.spec --noconfirm
 
       - name: Package (zip)
         shell: bash
         run: |
-          cd dist
           if [ "${{ runner.os }}" = "macOS" ]; then
-            # PyInstaller built a universal2 .app. Ship two smaller per-arch downloads instead
-            # of one fat binary: `ditto --arch` copies only the requested slice of every Mach-O
-            # (≈ halves the size), and the re-sign is required — thinning invalidates the ad-hoc
-            # signature and Apple Silicon SIGKILLs an unsigned binary on launch.
-            app="NumWorks Updater.app"
             for arch in arm64 x86_64; do
-              rm -rf "thin-$arch"; mkdir "thin-$arch"
-              ditto --arch "$arch" "$app" "thin-$arch/$app"
-              codesign --force --deep -s - "thin-$arch/$app"
-              (cd "thin-$arch" && zip -r -y "../../${{ matrix.asset }}-$arch.zip" "$app")
+              (cd "dist-$arch" && zip -r -y "../${{ matrix.asset }}-$arch.zip" "NumWorks Updater.app")
             done
           elif [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "../${{ matrix.asset }}.zip" "NumWorks Updater.exe"
+            cd dist && 7z a "../${{ matrix.asset }}.zip" "NumWorks Updater.exe"
           else
-            chmod +x "NumWorks Updater"
-            zip "../${{ matrix.asset }}.zip" "NumWorks Updater"
+            cd dist && chmod +x "NumWorks Updater" && zip "../${{ matrix.asset }}.zip" "NumWorks Updater"
           fi
 
       - uses: actions/upload-artifact@v7

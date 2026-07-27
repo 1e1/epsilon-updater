@@ -9,6 +9,7 @@ Requires the package importable at spec time (CI does `pip install -e .`).
 Build:  pyinstaller packaging/nwupdater.spec --noconfirm
 """
 
+import os
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
@@ -32,10 +33,15 @@ icon_ico = str(ROOT / "icon" / "icon.ico")
 is_mac = sys.platform == "darwin"
 is_win = sys.platform.startswith("win")
 icon = icon_icns if is_mac else (icon_ico if is_win else None)
-# macOS: build universal2 (Intel + Apple Silicon). GitHub's Intel runners (macos-13) hang
-# forever, and an arm64-only .app won't launch on Intel. The CI step "Universalize libusb"
-# lipo-merges the libusb dylib to universal2 first so this build can succeed.
-target_arch = "universal2" if is_mac else None
+# macOS target arch, from NWUPDATER_MAC_ARCH ("arm64" | "x86_64" | "universal2"; default
+# universal2). CI builds each arch NATIVELY via PyInstaller — one run per arch — because that is
+# the only way to get a correct per-arch app: PyInstaller appends its PKG archive as an overlay to
+# the bootloader executable, and post-hoc `lipo`/`ditto` thinning of a universal2 build REBUILDS
+# the Mach-O and DROPS that overlay ("Could not load PyInstaller's embedded PKG archive"). Building
+# on the arm64 runner with a universal2 Python + universal2 libusb (see the "Universalize libusb"
+# CI step) lets PyInstaller emit a native x86_64 app too. GitHub's Intel runners (macos-13) hang,
+# hence we never build x86_64 on a native Intel host.
+target_arch = os.environ.get("NWUPDATER_MAC_ARCH", "universal2") if is_mac else None
 
 a = Analysis(
     [str(ROOT / "entry.py")],
