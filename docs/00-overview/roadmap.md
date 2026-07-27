@@ -83,8 +83,9 @@ Pistes notées pour plus tard (non planifiées) :
   `optimize=2`, et **Mac découpé par architecture** (`ditto --arch`, arm64 / x86_64 au lieu d'un
   binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**, **Mac 16 → 8,25 (arm64)
   / 7,21 (Intel)**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
-- ⬜ **Porter `nwlink` pour se passer de Node** — finir le linker pur-Python
-  (`formats/nwa_link.py`) afin d'installer une app distribuée (ELF) **sans** Node/npm ; nécessite
-  le placement type script `lld` + vendoriser le runtime EADK (question de licence).
+- ⬜ **Porter `nwlink` pour se passer de Node** — installer une app distribuée (ELF) **sans**
+  Node/npm. Analyse & plan : [../04-third-party-apps/nwlink-port-plan.md](../04-third-party-apps/nwlink-port-plan.md).
+  Stratégie retenue = **B** (lier 1× en CI + relocation pur-Python côté appareil), qui évite de
+  réimplémenter `lld` et la vendorisation du runtime EADK ; bloqué en Phase 0 par la question de licence.
 - ⬜ **Embarquer une IHM dans le binaire** — fenêtre native (ex. webview système / Qt / Tk) pour ne
   plus dépendre d'un navigateur externe ; le serveur local + les assets web actuels restent le socle.
