@@ -6,6 +6,8 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [2.0.0-rc.6] - 2026-07-27
+
 ### Corrigé (synchro UI + doublons apps/scripts, Individuel **et** Classe)
 
 - **Plus de doublon à l'installation** (ex. « Tetris » installé deux fois). Un nom d'app/script est
