@@ -117,6 +117,29 @@ class AppManager:
                     f"EADK trampoline 0x{target.trampoline_start:08x} does not point at a code "
                     f"table (first word 0x{word:08x}); refusing to link an app that would crash"
                 )
+
+        # Prefer the pure-Python linker (strategy C': no Node, clean-room EADK runtime); fall back
+        # to the nwlink delegation (strategy A) if it can't handle this app or is forced off.
+        # NWUPDATER_LINKER=nwlink forces A (safety hatch); =pure disables the fallback.
+        import os
+
+        pref = os.environ.get("NWUPDATER_LINKER", "auto").lower()
+        if pref != "nwlink" and target is not None and target.trampoline_start is not None:
+            from ..formats.nwa_linker import LinkError, link_nwa_pure
+
+            try:
+                return link_nwa_pure(
+                    blob,
+                    flash_start=target.flash_start,
+                    flash_length=target.flash_length,
+                    ram_start=target.ram_start,
+                    ram_length=target.ram_length,
+                    trampoline_start=target.trampoline_start,
+                )
+            except LinkError:
+                if pref == "pure":
+                    raise
+                # else fall through to the nwlink delegation
         return ensure_linked(blob, target)
 
     def uninstall(self, name: str) -> None:

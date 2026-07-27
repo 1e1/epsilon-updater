@@ -6,6 +6,17 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Ajouté (linker `.nwa` pur-Python — sans Node, expérimental)
+
+- **Installer une app distribuée (`.nwa` = ELF relocalisable) sans Node/npm** via un linker
+  **pur-Python** (`formats/nwa_linker.py`) + un **runtime EADK clean-room** que nous écrivons
+  (`formats/eadk_runtime.s`, embarqué en pur-Python dans `formats/_eadk_runtime.py` — aucun
+  toolchain requis à l'exécution). `AppManager.push` l'essaie d'abord ; **repli automatique** sur
+  la délégation `nwlink` (`NWUPDATER_LINKER=nwlink|pure` pour forcer). Aucun octet NumWorks
+  redistribué (l'ABI `svc` sont des faits ; le runtime est notre code MIT). **Validé offline**
+  (en-tête AppInfo identique à `nwlink`) ; **validation matériel N0120 en attente**. Retirable
+  d'un bloc si NumWorks le demande. Voir `docs/04-third-party-apps/nwlink-port-plan.md`.
+
 ### Modifié (taille des binaires)
 
 - **Binaires plus légers** : la spec PyInstaller élague les extensions C de la stdlib jamais

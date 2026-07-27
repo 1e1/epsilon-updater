@@ -8,6 +8,9 @@ nous-mêmes le mini-runtime (crt0 + stubs), en s'appuyant sur l'**ABI `svc`** (d
 code protégé). Zéro Node, et **aucun octet NumWorks redistribué**. Le chemin **A** (délégation
 `npx nwlink`, déjà livré) **reste le repli** jusqu'à ce que C′ soit prêt et validé sur matériel.
 
+**État (2026-07-27) : phases 1-4 LIVRÉES et validées offline** (en-tête AppInfo identique à nwlink
+pour RPN, suite verte, coverage OK) ; **Phase 5 = test matériel N0120 (app Tetris) en attente** — voir §6.
+
 > **Posture de bonne foi (voir aussi [GOOD-FAITH-DECLARATION.md](../../GOOD-FAITH-DECLARATION.md)) :**
 > on procède au clean-room de bonne foi, et **on retirera la fonctionnalité immédiatement si NumWorks
 > le demande**. L'équipe technique de NumWorks (dont la CTO) a accepté l'invitation GitHub sur ce
@@ -132,26 +135,30 @@ aucun octet NumWorks.**
 
 ---
 
-## 6. Plan par phases (C′)
+## 6. Plan par phases (C′) — phases 1-4 LIVRÉES (2026-07-27), Phase 5 = matériel
 
-- **Phase 1 — Récupérer l'ABI (faits)** : les numéros `svc` manquants + le mécanisme de la table API
-  (`draw_string`), par observation empirique (Epsilon/appareil/oracle). *Livrable : une table de
-  faits documentée, aucune copie de code.*
-- **Phase 2 — Runtime clean-room** : écrire `_start` (crt0) + 3 stubs `eadk_*` + 7 stubs newlib en
-  Thumb-2 (hand-assemblé, ~200 B), sous forme d'un objet/ELF que **nous** produisons, avec les
-  symboles définis attendus (§2). MIT, dans le dépôt.
-- **Phase 3 — Placement + assemblage pur-Python** : au-dessus du lecteur+reloc committés, placer les
-  sections (valide, pas byte-exact), résoudre les symboles, écrire l'en-tête AppInfo (magic,
-  api_level, name, icon, `app_size = _eadk_app_end`, `entry = _start`), appliquer les relocs pour les
-  params cible. Trampoline = `userland_header_addr + 0x38` (déjà dans [apps/link.py](../../src/nwupdater/apps/link.py)).
-- **Phase 4 — Câblage** : `AppManager.push` utilise C′ **sans Node** ; A en repli ; surface capacité
-  `"nwlink"` conservée ([server/_session_apps.py](../../src/nwupdater/server/_session_apps.py)).
-- **Phase 5 — Validation matériel** : N0120 (installe + lance), read-back ; cross-check région app vs
-  `nwlink` (§3). Régression sur l'app RPN (v2.0.1, `70 056 B` lié, 406 mots rebasés).
-- **Tests** : unit/structurel **pur-Python en CI** (ELF, relocs, placement, en-tête) ; smoke matériel
-  et diff vs `nwlink` **gate dev-PC**, *skip* si nwlink/Node absents (comme
-  [test_apps_link.py](../../tests/test_apps_link.py) / [test_nwa_link.py](../../tests/test_nwa_link.py)).
-  **Aucun binaire committé** ; oracles en scratchpad uniquement.
+- ✅ **Phase 1 — ABI (faits)** : récupérée via un **probe clean-room** (app écrite par nous, liée
+  par nwlink hors-ligne, désassemblée). Numéros `svc` : `pull_rect 0x12`, `push_rect 0x13`,
+  `push_rect_uniform 0x14`, `wait_for_vblank 0x15`, `event_get 0x17`, `keyboard_scan 0x22`,
+  `random 0x2d`, `timing_millis 0x30`, `msleep 0x31`, `usleep 0x32`. `draw_string` = dispatch via
+  la table du trampoline OS (`*(*(&trampoline))`, tail-call). crt0 = copie `.data`, zéro `.bss`,
+  `b main`. Aucune copie de code nwlink.
+- ✅ **Phase 2 — Runtime clean-room** : [`formats/eadk_runtime.s`](../../src/nwupdater/formats/eadk_runtime.s)
+  (notre asm Thumb-2, MIT), compilé par [`scripts/build_eadk_runtime.py`](../../scripts/build_eadk_runtime.py)
+  et embarqué en base64 pur-Python dans [`formats/_eadk_runtime.py`](../../src/nwupdater/formats/_eadk_runtime.py)
+  (aucun toolchain requis à l'exécution). Vérifié : mes stubs = séquences ABI recouvrées.
+- ✅ **Phase 3 — Linker pur-Python** : [`formats/nwa_linker.py`](../../src/nwupdater/formats/nwa_linker.py)
+  (placement header→name→icon→`.text`→`.rodata`→`.data` LMA→`.bss`, résolution cross-objets,
+  en-tête AppInfo, relocs via le moteur committé). **Validé offline** : en-tête AppInfo **identique
+  à nwlink** pour RPN v2.0.1 (magic/api/name/icon), crt0→main + tous les `svc` corrects,
+  `validate_nwa` OK. `entry`/`app_size` diffèrent (non byte-exact, attendu).
+- ✅ **Phase 4 — Câblage** : `AppManager._link_if_needed` essaie C′ d'abord (pur-Python, sans Node),
+  **repli A** (`npx nwlink`) si le lien échoue ; `NWUPDATER_LINKER=nwlink|pure` force l'un ou l'autre.
+  Isolé derrière `push` → retirable d'un bloc (bonne foi).
+- ⬜ **Phase 5 — Validation matériel** (à faire, N0120 + app Tetris) : installer + lancer, read-back.
+  C'est le seul juge de la correction fonctionnelle (offline ne teste pas l'exécution sur l'OS).
+- **Tests** : [`tests/test_nwa_linker.py`](../../tests/test_nwa_linker.py) — app synthétique en CI
+  (aucun binaire committé) + cross-check `nwlink` **gate dev-PC** (`NWUPDATER_TEST_NWA` + `npx`).
 
 ---
 

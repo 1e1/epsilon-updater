@@ -83,11 +83,12 @@ Pistes notées pour plus tard (non planifiées) :
   `optimize=2`, et **Mac découpé par architecture** (`ditto --arch`, arm64 / x86_64 au lieu d'un
   binaire universel). Résultat mesuré : **Linux 20,9 → 9,86 Mo (−53 %)**, **Mac 16 → 8,25 (arm64)
   / 7,21 (Intel)**, **Windows 8,84 → 7,98 Mo**. Voir `packaging/nwupdater.spec`.
-- 🟡 **Porter `nwlink` pour se passer de Node** — cible = **C′ : linker pur-Python + runtime EADK
-  *clean-room*** (on écrit crt0 + stubs nous-mêmes ; l'ABI `svc` = des faits). Zéro Node, **aucun
-  octet NumWorks redistribué** → license-clean. Analyse & plan :
+- 🟡 **Porter `nwlink` pour se passer de Node** — **C′ (linker pur-Python + runtime EADK
+  *clean-room*) : phases 1-4 LIVRÉES**, validées offline (en-tête AppInfo identique à nwlink pour
+  RPN, suite verte). **Reste la Phase 5 = test matériel N0120** (app Tetris). Zéro Node, **aucun
+  octet NumWorks redistribué** → license-clean ; la délégation `npx nwlink` (A) reste le **repli**.
+  Code : `formats/nwa_linker.py` + `eadk_runtime.s`/`_eadk_runtime.py`. Plan :
   [../04-third-party-apps/nwlink-port-plan.md](../04-third-party-apps/nwlink-port-plan.md).
-  La délégation `npx nwlink` (chemin A) reste le **repli** jusqu'à validation matériel de C′.
-  Posture de bonne foi : retrait immédiat si NumWorks le demande (équipe tech NumWorks présente sur le dépôt).
+  Bonne foi : retrait immédiat si NumWorks le demande (équipe tech NumWorks présente sur le dépôt).
 - ⬜ **Embarquer une IHM dans le binaire** — fenêtre native (ex. webview système / Qt / Tk) pour ne
   plus dépendre d'un navigateur externe ; le serveur local + les assets web actuels restent le socle.

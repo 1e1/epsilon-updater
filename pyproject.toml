@@ -53,6 +53,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "nwupdater" = ["py.typed", "data/*.json"]
+"nwupdater.formats" = ["*.s"]  # clean-room EADK runtime source (provenance for the embedded blob)
 "nwupdater.catalog" = ["data/*.json"]
 "nwupdater.apps" = ["data/*.json"]
 "nwupdater.server" = ["web/*"]
