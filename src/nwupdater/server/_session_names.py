@@ -15,9 +15,17 @@ class NamesMixin(SessionBase):
         return model, serial, default
 
     def device_name(self) -> dict:
-        """The stored name (or ``None``) for the connected calculator + the default display."""
+        """The stored name (or ``None``) for the connected calculator + the default display.
+
+        A disconnected calculator is a normal state, not a server error: this mirrors
+        :meth:`SessionBase.identity`, which reports ``connected: False`` rather than raising.
+        Without that symmetry the UI's own reads race any detach — a read still in flight when
+        the device goes away came back as a 500 in the page's console.
+        """
         from ..device_names import get_name
 
+        if not self.connected:
+            return {"model": "", "serial": "", "name": None, "default": "calc"}
         model, serial, default = self._name_identity()
         return {
             "model": model,

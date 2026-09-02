@@ -8,11 +8,19 @@ updates *in place* when the rows are the same keeps both — that is optimisatio
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
-from PySide6.QtCore import QAbstractListModel, QByteArray, QModelIndex, Qt, Slot
+from PySide6.QtCore import (
+    QAbstractListModel,
+    QByteArray,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+    Slot,
+)
 
-_BASE_ROLE = Qt.UserRole + 1
+_BASE_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 
 class RowsModel(QAbstractListModel):
@@ -23,7 +31,7 @@ class RowsModel(QAbstractListModel):
     difference falls back to a reset.
     """
 
-    def __init__(self, fields: list[str], key: str = "name", parent=None):
+    def __init__(self, fields: Sequence[str], key: str = "name", parent=None):
         super().__init__(parent)
         self._fields = list(fields)
         self._key = key
@@ -37,7 +45,11 @@ class RowsModel(QAbstractListModel):
     def rowCount(self, parent=None) -> int:
         return 0 if parent is not None and parent.isValid() else len(self._rows)
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = int(Qt.ItemDataRole.DisplayRole),
+    ) -> Any:
         # Anything raised here escapes through a C++ virtual call — Qt has no way to unwind it,
         # and the scene dies later with a bare segfault. Keep this total.
         if not index.isValid() or role not in self._roles:

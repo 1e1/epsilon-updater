@@ -61,6 +61,10 @@ compatibilité** pour les postes que les roues Qt excluent.
   réclamait la moitié de la fenêtre.
 - Récursion du moteur de layout (deux colonnes en `Layout.preferredWidth: 1`) et boucle de
   liaison dans la barre mémoire — les deux se manifestaient en **segfault sans message**.
+- **`GET /api/device/name` renvoyait 500 quand aucune calculatrice n'est connectée**, alors que
+  `/api/identity` traite le même état comme normal. Toute lecture encore en vol au moment d'un
+  débranchement remontait donc une erreur serveur dans la console de la page — d'où un test d'IHM
+  web intermittent (antérieur à cette version). Les deux lectures se comportent désormais pareil.
 - `RowsModel.data()` levait une exception a travers un appel virtuel C++, que Qt ne peut pas
   dérouler ; la scène mourait plus tard, ailleurs.
 

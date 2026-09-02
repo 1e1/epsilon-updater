@@ -63,7 +63,12 @@ class Backend(QObject):
         self._auth: dict = {}
         self._parc_class = R.CLASS_ALL
         self._parc_filter = ""
-        self._batch = {"armed": False, "className": "", "journal": [], "running": False}
+        self._batch: dict[str, Any] = {
+            "armed": False,
+            "className": "",
+            "journal": [],
+            "running": False,
+        }
         self._shops: dict[str, Workshop | None] = {k: None for k in KINDS}
         self._demo_models = [m["name"] for m in session.demo_models()]
 
@@ -128,37 +133,43 @@ class Backend(QObject):
         self._refresh_roster()
 
     # -- state properties -------------------------------------------------------------
-    @Property("QVariantMap", notify=identityChanged)
+    @Property("QVariantMap", notify=identityChanged)  # type: ignore[arg-type]
     def identity(self) -> dict:
         return self._identity
 
-    @Property("QVariantMap", notify=identityChanged)
+    @Property("QVariantMap", notify=identityChanged)  # type: ignore[arg-type]
     def deviceName(self) -> dict:
         return self._device_name
 
-    @Property(bool, notify=identityChanged)
-    def connected(self) -> bool:
+    def is_connected(self) -> bool:
         return bool(self._identity.get("connected"))
 
-    @Property("QVariantMap", notify=catalogChanged)
+    @Property(bool, notify=identityChanged)
+    def connected(self) -> bool:
+        return self.is_connected()
+
+    @Property("QVariantMap", notify=catalogChanged)  # type: ignore[arg-type]
     def catalog(self) -> dict:
         return self._catalog
 
-    @Property("QVariantMap", notify=catalogChanged)
+    @Property("QVariantMap", notify=catalogChanged)  # type: ignore[arg-type]
     def cacheStatus(self) -> dict:
         return {"entries": [], **self._cache}
 
-    @Property("QVariantMap", notify=rosterChanged)
+    @Property("QVariantMap", notify=rosterChanged)  # type: ignore[arg-type]
     def roster(self) -> dict:
         return self._roster
 
-    @Property("QVariantMap", notify=authChanged)
+    @Property("QVariantMap", notify=authChanged)  # type: ignore[arg-type]
     def auth(self) -> dict:
         return self._auth
 
+    def current_mode(self) -> str:
+        return "classroom" if self._s.policy.classroom else "individual"
+
     @Property(str, notify=modeChanged)
     def mode(self) -> str:
-        return "classroom" if self._s.policy.classroom else "individual"
+        return self.current_mode()
 
     @Property(str, notify=busyChanged)
     def busy(self) -> str:
@@ -172,7 +183,7 @@ class Backend(QObject):
     def progressLabel(self) -> str:
         return self._progress_label
 
-    @Property("QVariantList", constant=True)
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
     def demoModels(self) -> list:
         return self._demo_models
 
@@ -200,11 +211,11 @@ class Backend(QObject):
     def classes(self):
         return self.classesModel
 
-    @Property("QVariantMap", notify=workshopChanged)
+    @Property("QVariantMap", notify=workshopChanged)  # type: ignore[arg-type]
     def appsPlan(self) -> dict:
         return self._plan_view("apps")
 
-    @Property("QVariantMap", notify=workshopChanged)
+    @Property("QVariantMap", notify=workshopChanged)  # type: ignore[arg-type]
     def scriptsPlan(self) -> dict:
         return self._plan_view("scripts")
 
@@ -244,7 +255,7 @@ class Backend(QObject):
         self.authChanged.emit()
 
     def _refresh_workshops(self) -> None:
-        if not self.connected:
+        if not self.is_connected():
             self._shops = {k: None for k in KINDS}
             for model in (self.appsDevice, self.appsAvail, self.scriptsDevice, self.scriptsAvail):
                 model.set_rows([])
@@ -353,7 +364,7 @@ class Backend(QObject):
         """Watch for a calculator being plugged in, or the cable being pulled."""
         if self._busy:
             return
-        if not self.connected:
+        if not self.is_connected():
             try:
                 if self._locked(self._s.attach_real).get("connected"):
                     self.refresh_all()
@@ -370,9 +381,32 @@ class Backend(QObject):
                 pass
 
     # -- device -----------------------------------------------------------------------
+    def _reloaded(self, _: object) -> None:
+        self.refresh_all()
+
+    def _installed(self, result: dict) -> None:
+        self.refresh_all()
+        self.toast.emit(f"install_ok::{result.get('to_version', '')}", False)
+
+    def _caches_updated(self, _: object) -> None:
+        self._refresh_catalog()
+        self.toast.emit("caches_updated", False)
+
+    def _signed_in(self, _: object) -> None:
+        self.refresh_auth()
+        self.toast.emit("auth_saved", False)
+
+    def _written(self, _: object) -> None:
+        self._refresh_workshops()
+        self.toast.emit("write_done", False)
+
+    def _demo_attached_for_batch(self, _: object) -> None:
+        self.refresh_all()
+        self.batchRunOnce()
+
     @Slot()
     def rescan(self):
-        self._run("device", lambda: self._locked(self._s.attach_real), lambda _: self.refresh_all())
+        self._run("device", lambda: self._locked(self._s.attach_real), self._reloaded)
 
     @Slot(str)
     def exploreDemo(self, model: str):
@@ -430,10 +464,7 @@ class Backend(QObject):
                 channel=self._s.channel,
                 progress=progress,
             ),
-            lambda r: (
-                self.refresh_all(),
-                self.toast.emit(f"install_ok::{r.get('to_version', '')}", False),
-            ),
+            self._installed,
         )
 
     @Slot()
@@ -441,7 +472,7 @@ class Backend(QObject):
         self._run(
             "cache",
             lambda: self._locked(self._s.preload_all),
-            lambda _: (self._refresh_catalog(), self.toast.emit("caches_updated", False)),
+            self._caches_updated,
         )
 
     # -- account ----------------------------------------------------------------------
@@ -450,7 +481,7 @@ class Backend(QObject):
         self._run(
             "auth",
             lambda: self._s.login_token(token),
-            lambda _: (self.refresh_auth(), self.toast.emit("auth_saved", False)),
+            self._signed_in,
         )
 
     @Slot(str, str)
@@ -459,7 +490,7 @@ class Backend(QObject):
         self._run(
             "auth",
             lambda: self._s.login_password(email, password),
-            lambda _: (self.refresh_auth(), self.toast.emit("auth_saved", False)),
+            self._signed_in,
         )
 
     @Slot()
@@ -581,7 +612,7 @@ class Backend(QObject):
         self._run(
             f"write:{kind}",
             work,
-            lambda _: (self._refresh_workshops(), self.toast.emit("write_done", False)),
+            self._written,
         )
 
     @Slot(str, str, QUrl)
@@ -611,9 +642,12 @@ class Backend(QObject):
     def parcFilter(self) -> str:
         return self._parc_filter
 
-    @Property("QVariantList", notify=rosterChanged)
+    def class_names(self) -> list[str]:
+        return [str(c) for c in (self._roster.get("classes") or [])]
+
+    @Property("QVariantList", notify=rosterChanged)  # type: ignore[arg-type]
     def classNames(self) -> list:
-        return list(self._roster.get("classes") or [])
+        return self.class_names()
 
     @Property(int, notify=rosterChanged)
     def selectedClassCount(self) -> int:
@@ -663,30 +697,33 @@ class Backend(QObject):
             self.distChanged.emit()
 
     # -- distribution -----------------------------------------------------------------
-    @Property("QVariantMap", notify=distChanged)
-    def distribution(self) -> dict:
+    def distribution_view(self) -> dict:
         return R.distribution_view(self._roster, self._parc_class)
 
-    @Property("QVariantList", notify=distChanged)
+    @Property("QVariantMap", notify=distChanged)  # type: ignore[arg-type]
+    def distribution(self) -> dict:
+        return self.distribution_view()
+
+    @Property("QVariantList", notify=distChanged)  # type: ignore[arg-type]
     def batchSteps(self) -> list:
-        return R.enabled_steps(self.distribution)
+        return R.enabled_steps(self.distribution_view())
 
     @Slot(str, bool)
     def distSetAction(self, action: str, on: bool):
-        view = self.distribution
+        view = self.distribution_view()
         if view["editable"]:
             actions = {**view["actions"], action: on}
             self._write_distribution({**self._dist_payload(view), "actions": actions})
 
     @Slot(str)
     def distSetOnboarding(self, mode: str):
-        view = self.distribution
+        view = self.distribution_view()
         if view["editable"]:
             self._write_distribution({**self._dist_payload(view), "onboarding": mode})
 
     @Slot(str, str, bool)
     def distToggleItem(self, kind: str, name: str, on: bool):
-        view = self.distribution
+        view = self.distribution_view()
         if not view["editable"]:
             return
         items = [n for n in view[kind] if n != name] + ([name] if on else [])
@@ -711,7 +748,7 @@ class Backend(QObject):
         self.distChanged.emit()
 
     # -- batch kiosk ------------------------------------------------------------------
-    @Property("QVariantMap", notify=batchChanged)
+    @Property("QVariantMap", notify=batchChanged)  # type: ignore[arg-type]
     def batch(self) -> dict:
         return self._batch
 
@@ -720,7 +757,7 @@ class Backend(QObject):
         """Arm the kiosk for the selected class, falling back to the first real class."""
         class_id = self._parc_class
         if class_id in (R.CLASS_ALL, R.CLASS_UNFILED):
-            names = self.classNames
+            names = self.class_names()
             if not names:
                 self.toast.emit("batch_need_class", True)
                 return False
@@ -740,14 +777,15 @@ class Backend(QObject):
     @Slot()
     def batchRunOnce(self):
         """Run the armed class's chain against the calculator currently plugged in."""
-        if not (self._batch["armed"] and self.connected) or self._batch["running"]:
+        if not (self._batch["armed"] and self.is_connected()) or self._batch["running"]:
             return
         class_id = self._batch["className"]
         self._batch = {**self._batch, "running": True}
         self.batchChanged.emit()
 
         def finish(entry: dict | None, error: str | None) -> None:
-            journal = self._batch["journal"] if entry is None else [entry, *self._batch["journal"]]
+            previous: list = list(self._batch["journal"])
+            journal = previous if entry is None else [entry, *previous]
             self._batch = {**self._batch, "running": False, "journal": journal}
             self._set_busy("")
             self.batchChanged.emit()
@@ -770,7 +808,7 @@ class Backend(QObject):
             self._run(
                 "device",
                 lambda: self._locked(self._s.attach_demo, model),
-                lambda _: (self.refresh_all(), self.batchRunOnce()),
+                self._demo_attached_for_batch,
             )
 
     # -- app --------------------------------------------------------------------------
