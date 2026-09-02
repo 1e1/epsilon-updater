@@ -133,11 +133,11 @@ class Backend(QObject):
         self._refresh_roster()
 
     # -- state properties -------------------------------------------------------------
-    @Property("QVariantMap", notify=identityChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=identityChanged)
     def identity(self) -> dict:
         return self._identity
 
-    @Property("QVariantMap", notify=identityChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=identityChanged)
     def deviceName(self) -> dict:
         return self._device_name
 
@@ -148,19 +148,19 @@ class Backend(QObject):
     def connected(self) -> bool:
         return self.is_connected()
 
-    @Property("QVariantMap", notify=catalogChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=catalogChanged)
     def catalog(self) -> dict:
         return self._catalog
 
-    @Property("QVariantMap", notify=catalogChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=catalogChanged)
     def cacheStatus(self) -> dict:
         return {"entries": [], **self._cache}
 
-    @Property("QVariantMap", notify=rosterChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=rosterChanged)
     def roster(self) -> dict:
         return self._roster
 
-    @Property("QVariantMap", notify=authChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=authChanged)
     def auth(self) -> dict:
         return self._auth
 
@@ -183,7 +183,7 @@ class Backend(QObject):
     def progressLabel(self) -> str:
         return self._progress_label
 
-    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    @Property(list, constant=True)
     def demoModels(self) -> list:
         return self._demo_models
 
@@ -211,11 +211,11 @@ class Backend(QObject):
     def classes(self):
         return self.classesModel
 
-    @Property("QVariantMap", notify=workshopChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=workshopChanged)
     def appsPlan(self) -> dict:
         return self._plan_view("apps")
 
-    @Property("QVariantMap", notify=workshopChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=workshopChanged)
     def scriptsPlan(self) -> dict:
         return self._plan_view("scripts")
 
@@ -645,7 +645,7 @@ class Backend(QObject):
     def class_names(self) -> list[str]:
         return [str(c) for c in (self._roster.get("classes") or [])]
 
-    @Property("QVariantList", notify=rosterChanged)  # type: ignore[arg-type]
+    @Property(list, notify=rosterChanged)
     def classNames(self) -> list:
         return self.class_names()
 
@@ -700,11 +700,11 @@ class Backend(QObject):
     def distribution_view(self) -> dict:
         return R.distribution_view(self._roster, self._parc_class)
 
-    @Property("QVariantMap", notify=distChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=distChanged)
     def distribution(self) -> dict:
         return self.distribution_view()
 
-    @Property("QVariantList", notify=distChanged)  # type: ignore[arg-type]
+    @Property(list, notify=distChanged)
     def batchSteps(self) -> list:
         return R.enabled_steps(self.distribution_view())
 
@@ -748,7 +748,7 @@ class Backend(QObject):
         self.distChanged.emit()
 
     # -- batch kiosk ------------------------------------------------------------------
-    @Property("QVariantMap", notify=batchChanged)  # type: ignore[arg-type]
+    @Property(dict, notify=batchChanged)
     def batch(self) -> dict:
         return self._batch
 
