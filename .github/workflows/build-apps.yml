@@ -117,12 +117,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-latest        # one build per arch, like the browser app
             asset: NumWorks-Updater-native-macos
-          - os: windows-latest
-            asset: NumWorks-Updater-native-windows
+          - os: windows-latest      # x86_64 (no free Windows-on-ARM runner)
+            asset: NumWorks-Updater-native-windows-x86_64
           - os: ubuntu-latest
             asset: NumWorks-Updater-native-linux-x86_64
+          # No Linux arm64 target. The suite passes there ("85 passed"), then the interpreter
+          # aborts during finalization: "bool_dealloc: deallocating True or False — bug likely
+          # caused by a refcount error in a C extension", i.e. a PySide6/shiboken teardown bug on
+          # aarch64, not our code. Shipping a binary whose own check aborts is not something to
+          # sign off, and the audience is thin anyway (PySide6's aarch64 wheel needs glibc 2.39,
+          # so Ubuntu 24.04+ only). Linux arm64 stays covered by the browser app, which has no
+          # floor at all. Revisit when the upstream wheel stops aborting.
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -153,21 +160,43 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_gui_pure.py tests/test_gui_i18n.py tests/test_gui_qt.py -q
 
-      - name: Build native app
-        env:
-          NWUPDATER_MAC_ARCH: arm64
+      # PySide6's macOS wheel is universal2, so a single runner can emit both slices — but
+      # libusb ships one arch, so merge it first (same reason as the browser app's step).
+      - name: Universalize libusb (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+          dylib=$(python -c "import os,libusb_package;print(os.path.join(os.path.dirname(libusb_package.__file__),'libusb-1.0.dylib'))")
+          python -m pip download libusb-package --only-binary=:all: \
+            --platform macosx_10_9_x86_64 --python-version 3.11 --no-deps --dest x86pkg
+          (cd x86pkg && unzip -oq ./*.whl)
+          x86=$(find x86pkg -name libusb-1.0.dylib | head -1)
+          lipo -create "$dylib" "$x86" -output "$dylib.universal"
+          mv "$dylib.universal" "$dylib"
+
+      - name: Build native app (macOS — one per arch)
+        if: runner.os == 'macOS'
+        run: |
+          NWUPDATER_MAC_ARCH=arm64  pyinstaller packaging/nwupdater-gui.spec --noconfirm --distpath dist-arm64
+          NWUPDATER_MAC_ARCH=x86_64 pyinstaller packaging/nwupdater-gui.spec --noconfirm --distpath dist-x86_64
+
+      - name: Build native app (Windows / Linux)
+        if: runner.os != 'macOS'
         run: pyinstaller packaging/nwupdater-gui.spec --noconfirm
 
       - name: Package (zip)
         shell: bash
         run: |
-          cd dist
           if [ "${{ runner.os }}" = "macOS" ]; then
-            zip -r -y "../${{ matrix.asset }}.zip" "NumWorks Updater (natif).app"
+            for arch in arm64 x86_64; do
+              (cd "dist-$arch" && zip -r -y "../${{ matrix.asset }}-$arch.zip" \
+                 "NumWorks Updater (natif).app")
+            done
           elif [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "../${{ matrix.asset }}.zip" "NumWorks Updater (natif)"
+            cd dist && 7z a "../${{ matrix.asset }}.zip" "NumWorks Updater (natif)"
           else
-            chmod +x "NumWorks Updater (natif)/NumWorks Updater (natif)"
+            cd dist && chmod +x "NumWorks Updater (natif)/NumWorks Updater (natif)"
             zip -r "../${{ matrix.asset }}.zip" "NumWorks Updater (natif)"
           fi
 

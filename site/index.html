@@ -301,14 +301,26 @@
 
   // ---- dynamic download links from the latest GitHub release ------------------
   // Falls back to the /releases/latest page (already set in the href) on any error.
+  // The download buttons always point at the COMPATIBILITY build (browser-based): it has no
+  // system floor and runs where the native window cannot. The native build is an opt-in from the
+  // releases page, so it is filtered out here — otherwise `find` would return
+  // "…-native-windows…" simply because it sorts before "…-windows…".
   var MATCH = { mac: /mac|darwin|osx/i, win: /win/i, linux: /linux/i };
+  // Preferred architecture per OS when several are published (first match wins).
+  var ARCH = { mac: [/arm64/i, /x86_64/i], win: [/./], linux: [/x86_64/i, /arm64/i] };
   fetch("https://api.github.com/repos/" + REPO + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (rel) {
       var assets = (rel.assets || []);
       Object.keys(MATCH).forEach(function (os) {
-        // pick the app zip for this OS, skipping the separate capture tooling
-        var a = assets.find(function (x) { return MATCH[os].test(x.name) && !/capture/i.test(x.name) && /\.zip$/i.test(x.name); });
+        // the app zip for this OS: not the capture tooling, not the native build
+        var pool = assets.filter(function (x) {
+          return MATCH[os].test(x.name) && /\.zip$/i.test(x.name)
+            && !/capture/i.test(x.name) && !/native/i.test(x.name);
+        });
+        var a = null;
+        ARCH[os].some(function (re) { a = pool.find(function (x) { return re.test(x.name); }); return !!a; });
+        if (!a) a = pool[0];
         if (a) {
           var el = document.getElementById("dl-" + os);
           if (el) el.href = a.browser_download_url;

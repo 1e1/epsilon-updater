@@ -31,6 +31,12 @@ compatibilité** pour les postes que les roues Qt excluent.
 - **Tests** : `tests/test_gui_pure.py` (plan d'écriture, staging, projections — **sans Qt**),
   `test_gui_i18n.py` (parité FR/EN, clés QML, placeholders), `test_gui_qt.py` (modèles, jobs,
   backend, en `offscreen`). 85 tests ajoutés, couverture 93–100 % sur les modules purs.
+- **App native publiée par architecture**, comme l'app navigateur : macOS arm64 et x86_64,
+  Linux x86_64, Windows x86_64. Le nom **sans** `native` reste le canal de compatibilité — c'est
+  le téléchargement par défaut du site, celui qui n'a aucun plancher système. Deux absences
+  assumées et nommées : Windows-sur-ARM (pas de runner hébergé) et **Linux arm64 en natif**, où
+  la suite passe puis l'interpréteur abandonne à la finalisation (bug de démontage
+  PySide6/shiboken sur aarch64) — cette cible reste couverte par l'app navigateur.
 - **`packaging/nwupdater-gui.spec`** — app native empaquetée. Qt élagué (126 → 116 Mo sur disque,
   40 → 38 Mo zippés, macOS arm64) ; bibliothèques Qt laissées **séparées et remplaçables** sur les
   trois OS, comme la LGPL le demande.
@@ -65,7 +71,12 @@ compatibilité** pour les postes que les roues Qt excluent.
   `/api/identity` traite le même état comme normal. Toute lecture encore en vol au moment d'un
   débranchement remontait donc une erreur serveur dans la console de la page — d'où un test d'IHM
   web intermittent (antérieur à cette version). Les deux lectures se comportent désormais pareil.
-- `RowsModel.data()` levait une exception a travers un appel virtuel C++, que Qt ne peut pas
+- **Le site proposait le binaire natif aux visiteurs Windows** : le sélecteur prenait la
+  première correspondance, et `…-native-windows…` trie avant `…-windows…`. Il exclut désormais
+  explicitement le natif — le bouton de téléchargement doit toujours pointer vers le canal sans
+  plancher système. Au passage, Linux recevait l'arm64 pour tout le monde (défaut antérieur) :
+  l'architecture préférée est maintenant explicite par OS.
+- `RowsModel.data()` levait une exception à travers un appel virtuel C++, que Qt ne peut pas
   dérouler ; la scène mourait plus tard, ailleurs.
 
 ## [2.0.0] - 2026-07-27

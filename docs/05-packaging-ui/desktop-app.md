@@ -90,6 +90,10 @@ python packaging/icon/generate_icons.py --arrow up
 pyinstaller packaging/nwupdater-gui.spec --noconfirm   # -> dist/
 ```
 
+Elle est publiée **par architecture**, comme l'app navigateur :
+`NumWorks-Updater-native-{macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64, linux-arm64}.zip`.
+Le nom **sans** `native` reste le canal de compatibilité, et c'est lui que propose le site.
+
 Différences avec l'app décrite ci-dessus : ~38 Mo zippés au lieu de 6, **aucun serveur local ni
 navigateur**, et — Qt étant sous LGPL — une livraison en **dossier** (bibliothèques séparées et
 remplaçables) sur les trois OS, pas en fichier unique. Elle exige aussi glibc ≥ 2.34 / macOS ≥ 13,

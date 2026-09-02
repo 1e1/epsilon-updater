@@ -75,7 +75,30 @@ système, pour les postes que Qt exclut (cf. la matrice de l'étude de faisabili
 ## 5. Empaquetage
 
 `packaging/nwupdater-gui.spec` construit l'app native ; `packaging/nwupdater.spec` continue de
-construire l'app navigateur. Les deux sont livrées.
+construire l'app navigateur. Les deux sont livrées, **par architecture** :
+
+| | Compatibilité (navigateur) | Native (Qt Quick) |
+|---|---|---|
+| macOS | `…-macos-arm64.zip` · `…-macos-x86_64.zip` | `…-native-macos-arm64.zip` · `…-native-macos-x86_64.zip` |
+| Windows | `…-windows.zip` | `…-native-windows-x86_64.zip` |
+| Linux | `…-linux-x86_64.zip` · `…-linux-arm64.zip` | `…-native-linux-x86_64.zip` — **pas d'arm64** |
+
+Le nom **sans qualificatif est le canal de compatibilité** : c'est le téléchargement par défaut du
+site, et celui qui n'a aucun plancher système. `native` est un choix explicite. Windows-sur-ARM
+n'est pas couvert (aucun runner hébergé gratuit) ; le suffixe `-x86_64` le dit plutôt que de le
+laisser deviner.
+
+**Linux arm64 n'a pas de build natif.** La suite y passe (« 85 passed »), puis l'interpréteur
+abandonne à la finalisation : `bool_dealloc: deallocating True or False — bug likely caused by a
+refcount error in a C extension`, c'est-à-dire un bug de démontage de PySide6/shiboken sur
+aarch64, pas dans ce code. Livrer un binaire dont la propre vérification se termine par un
+abandon n'est pas signable ; et le public est mince, la roue aarch64 de PySide6 exigeant
+glibc 2.39 (Ubuntu 24.04+). Linux arm64 reste couvert par l'app navigateur, qui n'a aucun
+plancher. À revoir quand la roue amont cessera d'abandonner.
+
+> Un binaire par architecture plutôt qu'un universel : c'est ce que fait déjà l'app navigateur, et
+> côté natif l'écart est plus marqué encore — un bundle Qt universel2 embarque deux fois chaque
+> bibliothèque.
 
 Deux points structurants du spec :
 
