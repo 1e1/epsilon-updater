@@ -1,0 +1,323 @@
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+
+/* Classroom fleet table. Keyboard and range-selection are the desktop additions; the
+   checkboxes, the name filter and the bulk bar are what the web view already had. */
+Item {
+    id: root
+    property var selection: ({})
+    property int lastClicked: -1
+    property int selCount: 0
+
+    function selectedKeys() {
+        return Object.keys(root.selection).filter((k) => root.selection[k])
+    }
+    function setSel(key, on) {
+        let s = root.selection
+        s[key] = on
+        root.selection = s
+        root.selCount = root.selectedKeys().length
+    }
+    function clearSel() { root.selection = ({}); root.selCount = 0 }
+    function selectAll(on) {
+        let s = {}
+        if (on)
+            for (let i = 0; i < backend.rosterRows.rowCount(); i++)
+                s[backend.rosterRows.get(i).key] = true
+        root.selection = s
+        root.selCount = root.selectedKeys().length
+    }
+    Connections {
+        target: backend
+        function onRosterChanged() { root.clearSel() }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // -- bulk bar: only while something is selected -----------------------------
+        Rectangle {
+            Layout.fillWidth: true
+            visible: root.selCount > 0
+            implicitHeight: 46
+            color: Theme.accentSoft
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 10
+                Text {
+                    text: i18n.t("roster_bulk_selected", { n: root.selCount })
+                    color: Theme.accentInk
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                Item { Layout.fillWidth: true }
+                ComboBox {
+                    id: moveTo
+                    Layout.preferredWidth: 200
+                    font.pixelSize: 13
+                    model: [i18n.t("roster_move_to")]
+                        .concat(backend.classNames)
+                        .concat([i18n.t("roster_unfiled")])
+                    onActivated: (i) => {
+                        if (i === 0) return
+                        const cls = (i === count - 1) ? "" : backend.classNames[i - 1]
+                        backend.rosterMove(root.selectedKeys(), cls)
+                        currentIndex = 0
+                    }
+                }
+                AppButton {
+                    ghost: true
+                    text: i18n.t("roster_delete")
+                    onClicked: backend.rosterDelete(root.selectedKeys())
+                }
+            }
+        }
+
+        // -- header -----------------------------------------------------------------
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 44
+            color: Theme.card
+            Rectangle { width: parent.width; height: 1; y: parent.height - 1; color: Theme.line }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 0
+                Item {
+                    Layout.preferredWidth: 34
+                    Layout.fillHeight: true
+                    CheckBox {
+                        anchors.centerIn: parent
+                        checked: root.selCount > 0
+                                 && root.selCount === backend.rosterRows.rowCount()
+                        onToggled: root.selectAll(checked)
+                        ToolTip.visible: hovered
+                        ToolTip.text: i18n.t("roster_select_all")
+                    }
+                }
+                HeaderCell { Layout.preferredWidth: 54; text: i18n.t("roster_col_type") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    HeaderCell { text: i18n.t("roster_col_name") }
+                    TextField {
+                        Layout.preferredWidth: 170
+                        placeholderText: i18n.t("roster_filter")
+                        font.pixelSize: 12
+                        text: backend.parcFilter
+                        onTextEdited: backend.setFilter(text)
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                HeaderCell { Layout.preferredWidth: 190; text: i18n.t("roster_known_fw") }
+                HeaderCell { Layout.preferredWidth: 150; text: i18n.t("roster_col_dist") }
+                HeaderCell { Layout.preferredWidth: 150; text: i18n.t("roster_col_lastscan") }
+            }
+        }
+
+        // -- rows -------------------------------------------------------------------
+        ListView {
+            id: rows
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            model: backend.rosterRows
+            focus: true
+            ScrollBar.vertical: ScrollBar {}
+
+            Text {
+                anchors.centerIn: parent
+                visible: rows.count === 0
+                text: backend.parcFilter !== "" ? i18n.t("no_match") : i18n.t("roster_empty")
+                color: Theme.muted
+                font.pixelSize: 13
+            }
+
+            Keys.onPressed: (e) => {
+                if (e.key === Qt.Key_Delete || e.key === Qt.Key_Backspace) {
+                    const keys = root.selectedKeys()
+                    if (keys.length) backend.rosterDelete(keys)
+                    e.accepted = true
+                } else if (e.key === Qt.Key_A
+                           && (e.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) {
+                    root.selectAll(true)
+                    e.accepted = true
+                } else if (e.key === Qt.Key_F2 && rows.currentItem) {
+                    rows.currentItem.startRename()
+                    e.accepted = true
+                } else if (e.key === Qt.Key_Escape) {
+                    root.clearSel()
+                    e.accepted = true
+                }
+            }
+
+            delegate: Rectangle {
+                id: row
+                required property int index
+                required property string key
+                required property string displayName
+                required property string family
+                required property string knownFirmware
+                required property bool upToDate
+                required property string lastScan
+
+                width: rows.width
+                height: 52
+                opacity: dragHandler.active ? 0.5 : 1
+                color: root.selection[row.key] ? Theme.accentSoft
+                     : rowHover.hovered ? Theme.panel : "transparent"
+                function startRename() { nameEdit.visible = true; nameEdit.forceActiveFocus() }
+
+                Rectangle { width: parent.width; height: 1; y: parent.height - 1; color: Theme.line }
+                HoverHandler { id: rowHover }
+
+                // Drag a row onto a class in the rail. If the row is part of the current
+                // selection, the whole selection travels with it.
+                Drag.active: dragHandler.active
+                Drag.dragType: Drag.Automatic
+                Drag.supportedActions: Qt.MoveAction
+                Drag.mimeData: {
+                    "nwupdater/roster-keys": (root.selection[row.key]
+                        ? root.selectedKeys() : [row.key]).join("\n")
+                }
+                DragHandler {
+                    id: dragHandler
+                    target: null
+                    onActiveChanged: if (active && !root.selection[row.key]) {
+                        root.clearSel()
+                        root.setSel(row.key, true)
+                    }
+                }
+
+                TapHandler {
+                    acceptedModifiers: Qt.NoModifier
+                    onTapped: {
+                        rows.currentIndex = row.index
+                        root.clearSel()
+                        root.setSel(row.key, true)
+                        root.lastClicked = row.index
+                        rows.forceActiveFocus()
+                    }
+                    onDoubleTapped: row.startRename()
+                }
+                TapHandler {
+                    acceptedModifiers: Qt.ShiftModifier
+                    onTapped: {
+                        const anchor = root.lastClicked < 0 ? row.index : root.lastClicked
+                        const a = Math.min(anchor, row.index), b = Math.max(anchor, row.index)
+                        let s = root.selection
+                        for (let i = a; i <= b; i++) s[backend.rosterRows.get(i).key] = true
+                        root.selection = s
+                        root.selCount = root.selectedKeys().length
+                        rows.currentIndex = row.index
+                    }
+                }
+                TapHandler {
+                    acceptedModifiers: Qt.ControlModifier | Qt.MetaModifier
+                    onTapped: {
+                        root.setSel(row.key, !root.selection[row.key])
+                        root.lastClicked = row.index
+                    }
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 0
+
+                    Item {
+                        Layout.preferredWidth: 34
+                        Layout.fillHeight: true
+                        CheckBox {
+                            anchors.centerIn: parent
+                            checked: !!root.selection[row.key]
+                            onToggled: root.setSel(row.key, checked)
+                        }
+                    }
+                    Item {
+                        Layout.preferredWidth: 54
+                        Layout.fillHeight: true
+                        Image {
+                            anchors.centerIn: parent
+                            source: "../assets/calc-"
+                                    + (row.family === "scientifique" ? "scientific" : "graphing")
+                                    + "-icon.svg"
+                            sourceSize.width: 30
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !nameEdit.visible
+                            width: parent.width - 8
+                            text: row.displayName
+                            color: Theme.ink
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                        TextField {
+                            id: nameEdit
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: false
+                            width: parent.width - 12
+                            text: row.displayName
+                            font.pixelSize: 13
+                            onAccepted: { backend.rosterRename(row.key, text); visible = false }
+                            Keys.onEscapePressed: { text = row.displayName; visible = false }
+                            onActiveFocusChanged: if (!activeFocus) visible = false
+                        }
+                    }
+                    RowLayout {
+                        Layout.preferredWidth: 190
+                        spacing: 8
+                        Text {
+                            text: row.knownFirmware === "—"
+                                  ? "—" : "Epsilon " + row.knownFirmware
+                            color: Theme.ink
+                            font.pixelSize: 13
+                        }
+                        Chip {
+                            visible: row.knownFirmware !== "—"
+                            text: row.upToDate ? i18n.t("roster_uptodate") : i18n.t("roster_needs")
+                            fg: row.upToDate ? Theme.ok : Theme.accentInk
+                            bg: row.upToDate ? Theme.okSoft : Theme.accentSoft
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                    Text {
+                        Layout.preferredWidth: 150
+                        text: "—"
+                        color: Theme.muted
+                        font.pixelSize: 13
+                    }
+                    RowLayout {
+                        Layout.preferredWidth: 150
+                        spacing: 6
+                        Text {
+                            text: row.lastScan
+                            color: Theme.muted
+                            font.pixelSize: 13
+                        }
+                        Item { Layout.fillWidth: true }
+                        IconGhostButton {   // hover trash, like the web row
+                            visible: rowHover.hovered
+                            glyph: "🗑"
+                            tip: i18n.t("roster_delete")
+                            onTriggered: backend.rosterDelete([row.key])
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

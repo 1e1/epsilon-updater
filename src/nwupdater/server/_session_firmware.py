@@ -120,7 +120,14 @@ class FirmwareMixin(SessionBase):
         from_cache: bool = False,
         download: bool = False,
         channel: str = "stable",
+        progress=None,
     ) -> dict:
+        """Flash the inactive slot and verify it.
+
+        ``progress`` is the optional ``Installer`` callback ``(phase, done, total)`` with
+        phase ``"write"`` or ``"verify"`` — the native UI binds it to a determinate progress
+        bar; the HTTP layer leaves it unset (no streaming channel to report on).
+        """
         if not self.connected:
             raise ValueError("no calculator connected")
         if self.model is None:
@@ -159,7 +166,7 @@ class FirmwareMixin(SessionBase):
                 used_cache = True
             else:
                 image = FirmwareImage.synthetic(self.model, version=to_version or "0.0.0")
-        inst = Installer(self._conn()[0], self.model)
+        inst = Installer(self._conn()[0], self.model, progress=progress)
         # Detect the running slot so the installer flashes the INACTIVE one (the active slot is
         # hardware-protected; writing it errTARGETs and wedges the DFU session on real hardware).
         plan = inst.install(image, active_slot=self._active_slot(), verify=True, boot=False)

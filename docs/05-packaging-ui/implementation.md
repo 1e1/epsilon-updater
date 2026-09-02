@@ -75,3 +75,11 @@ nwupdater ui --real                # piloter une vraie calculatrice (pyusb requi
 - Mode démo = **device virtuel**, aucun USB réel (conforme à la contrainte projet).
 - Les installs « réelles » (`--real`) réutilisent exactement le même moteur DFU validé sur
   le mock.
+
+## Voir aussi
+
+- [`native-ui-feasibility.md`](native-ui-feasibility.md) — étude de faisabilité chiffrée d’une
+  **IHM native embarquée** (piste V3) : Qt Widgets / QML, QtWebEngine, webview système, Tk —
+  tailles mesurées, matrice de compatibilité, licence, plan de sortie.
+- [`native-ui-zoning.md`](native-ui-zoning.md) — **correspondance zone par zone** V2 → V3 :
+  optimisations desktop, taille binaire et RAM mesurées, pertes de convivialité.

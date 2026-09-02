@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nwupdater — mise à jour NumWorks, sans Chrome ni WebUSB</title>
-<meta name="description" content="Outil indépendant et non officiel pour mettre à jour les calculatrices NumWorks (N01xx & N02xx) et y installer des applications, sans Chrome ni WebUSB. macOS, Windows, Linux. Open source (MIT).">
+<meta name="description" content="Outil indépendant et non officiel pour mettre à jour les calculatrices NumWorks (N01xx & N02xx) et y installer des applications, sans Chrome ni WebUSB. Fenêtre native ou page locale, au choix. macOS, Windows, Linux. Open source (MIT).">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <style>
   :root {
@@ -135,10 +135,11 @@
       <span class="pill" data-i18n="p1">macOS · Windows · Linux</span>
       <span class="pill b" data-i18n="p2">Sans WebUSB</span>
       <span class="pill b" data-i18n="p3">Hors-ligne / mode classe</span>
+      <span class="pill b" data-i18n="p5">Fenêtre native ou navigateur</span>
       <span class="pill" data-i18n="p4">Open source · MIT</span>
     </div>
     <h1 data-i18n="h1">Mettez à jour vos calculatrices NumWorks, sans Chrome ni WebUSB.</h1>
-    <p class="lead" data-i18n="lead">Un outil indépendant pour mettre à jour les NumWorks (Graphique N01xx et Scientifique N02xx) et y installer des applications tierces — via un cœur natif qui parle USB/DFU et une page web ouverte dans votre navigateur système. Fonctionne là où l'updater web officiel ne passe pas.</p>
+    <p class="lead" data-i18n="lead">Un outil indépendant pour mettre à jour les NumWorks (Graphique N01xx et Scientifique N02xx) et y installer des applications tierces — via un cœur natif qui parle USB/DFU, piloté au choix par une <strong>fenêtre native</strong> ou une page web ouverte dans votre navigateur système. Fonctionne là où l'updater web officiel ne passe pas.</p>
     <div class="ctrls">
       <a class="btn primary" href="#download" data-i18n="cta">↓ Télécharger</a>
       <a class="btn" href="https://github.com/1e1/epsilon-updater#readme" target="_blank" rel="noopener" data-i18n="cta2">Comment ça marche</a>
@@ -232,9 +233,9 @@
   // ---- i18n -------------------------------------------------------------------
   var EN = {
     brandsub: "· NumWorks updater",
-    p1: "macOS · Windows · Linux", p2: "No WebUSB", p3: "Offline / classroom", p4: "Open source · MIT",
+    p1: "macOS · Windows · Linux", p2: "No WebUSB", p3: "Offline / classroom", p4: "Open source · MIT", p5: "Native window or browser",
     h1: "Update your NumWorks calculators, without Chrome or WebUSB.",
-    lead: "An independent tool to update NumWorks calculators (Graphing N01xx and Scientific N02xx) and install third-party apps — through a native core that speaks USB/DFU and a web page opened in your system browser. Works where the official web updater can't.",
+    lead: "An independent tool to update NumWorks calculators (Graphing N01xx and Scientific N02xx) and install third-party apps — through a native core that speaks USB/DFU, driven either by a <strong>native window</strong> or by a web page opened in your system browser. Works where the official web updater can't.",
     cta: "↓ Download", cta2: "How it works",
     disc_t: "Independent, unofficial project.",
     disc_b: " Not affiliated with NumWorks SAS. Provided with no warranty: updating or flashing a calculator can damage it, erase data or brick it. Use entirely at your own risk. Firmware comes from NumWorks' official channels, under your own account.",

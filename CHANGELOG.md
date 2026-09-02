@@ -6,6 +6,64 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.0-rc.1] - 2026-09-02
+
+**IHM native embarquée** (Lot 7). Le cœur est inchangé : la fenêtre pilote `Session` **dans le
+processus**, sans serveur HTTP. L'IHM web reste livrée — c'est désormais le **canal de
+compatibilité** pour les postes que les roues Qt excluent.
+
+### Ajouté
+
+- **`nwupdater gui`** — fenêtre **Qt Quick** (extra `pip install 'nwupdater[gui]'`,
+  PySide6-Essentials ; QtWebEngine n'est pas utilisé). Le design system de la V2 est conservé
+  (23 tokens, thème clair/sombre) ; c'est la *chrome* et les *comportements* qui deviennent natifs.
+- **Progression réelle du flash** : `Session.install_firmware(progress=…)` expose le callback de
+  `Installer` qui existait déjà et que la couche HTTP ne pouvait pas exploiter (pas de canal de
+  streaming). La barre affiche les octets écrits puis vérifiés.
+- **Gestes du bureau** : glisser-déposer entrant *et sortant* (traîner une app vers le Finder /
+  l'Explorateur pour l'exporter), Maj-clic et ⌘/Ctrl-clic pour la sélection de plage, ⌘A,
+  `Suppr`, `F2`, ⌘Z, menus natifs (⌘1 / ⌘2 pour le mode), dialogues de fichiers natifs,
+  géométrie de fenêtre, langue et thème mémorisés.
+- **Mode classe complet** : rail des classes avec renommage en place et dépôt de calculatrices,
+  suppression de classe à **3 issues**, barre de lot, filtre par nom, chaîne d'actions cliquable,
+  panneaux conditionnels, cache firmware, et le **kiosque batch en fenêtre séparée** (projetable
+  sur un 2ᵉ écran pendant qu'on travaille dans la fenêtre principale).
+- **Tests** : `tests/test_gui_pure.py` (plan d'écriture, staging, projections — **sans Qt**),
+  `test_gui_i18n.py` (parité FR/EN, clés QML, placeholders), `test_gui_qt.py` (modèles, jobs,
+  backend, en `offscreen`). 85 tests ajoutés, couverture 93–100 % sur les modules purs.
+- **`packaging/nwupdater-gui.spec`** — app native empaquetée. Qt élagué (126 → 116 Mo sur disque,
+  40 → 38 Mo zippés, macOS arm64) ; bibliothèques Qt laissées **séparées et remplaçables** sur les
+  trois OS, comme la LGPL le demande.
+
+### Modifié
+
+- **Architecture** : toute la logique décidable sans fenêtre vit hors de Qt et est testée là —
+  `gui/plan.py` (plan d'écriture), `workshop.py`, `roster.py`, `format.py`. `gui/backend.py` n'est
+  qu'un adaptateur Qt. Le plan mémoire ne dépend plus d'un navigateur pour être vérifié.
+- **Réordonnancement des apps** : les flèches parcourent la région **réinscriptible** en sautant
+  les slots figés, au lieu de refuser le déplacement quand le voisin immédiat est figé. Aligné sur
+  la règle de l'atelier web, donc un plan construit dans l'une ou l'autre IHM écrit les mêmes
+  octets.
+- **RAM** : 206 → 194 Mo (individuel), 203 → 188 Mo (classe) — panneaux et fenêtre batch
+  construits à la demande, icônes d'apps décodées non retenues. Le plancher reste Qt
+  (~149 Mo pour une fenêtre vide).
+
+### Corrigé
+
+- Un `QRunnable` en `autoDelete` détruisait son objet de signaux **avant** que Qt ne livre la
+  complétion : l'appel réussissait en silence, l'IHM restait « occupée » indéfiniment et le
+  changement de calculatrice virtuelle paraissait sans effet.
+- Le commutateur Individuel/Classe semblait inerte : `Policy` porte `classroom`, pas `mode`, et un
+  `getattr(..., "individual")` par defaut masquait l'erreur.
+- Un rôle de modèle nommé `model` (et un autre nommé `id`) : ces noms sont réservés dans un
+  *delegate* QML, et la collision vidait **tous** les autres rôles de la ligne.
+- Zone morte en mode classe : un `StackLayout` sans enfant conservait son `fillHeight` et
+  réclamait la moitié de la fenêtre.
+- Récursion du moteur de layout (deux colonnes en `Layout.preferredWidth: 1`) et boucle de
+  liaison dans la barre mémoire — les deux se manifestaient en **segfault sans message**.
+- `RowsModel.data()` levait une exception a travers un appel virtuel C++, que Qt ne peut pas
+  dérouler ; la scène mourait plus tard, ailleurs.
+
 ## [2.0.0] - 2026-07-27
 
 Version **stable** de la lignée 2.0.0 (promotion de la rc.7). Faits marquants depuis la 1.x :

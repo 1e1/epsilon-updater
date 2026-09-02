@@ -18,6 +18,7 @@ from .cli_commands import (
     _cmd_capture,
     _cmd_catalog,
     _cmd_diagnose,
+    _cmd_gui,
     _cmd_identify,
     _cmd_install,
     _cmd_login,
@@ -202,6 +203,19 @@ def main(argv=None) -> int:
         help="read the identity and print the request WITHOUT sending it (no auth)",
     )
     p_pair.set_defaults(func=_cmd_pair)
+
+    p_gui = sub.add_parser(
+        "gui", help="open the native desktop window (needs: pip install nwupdater[gui])"
+    )
+    p_gui.add_argument(
+        "--virtual",
+        metavar="MODEL",
+        default=None,
+        help="start on a demo (virtual) device instead of staying disconnected",
+    )
+    p_gui.add_argument("--real", action="store_true", help="attach a real calculator at startup")
+    p_gui.add_argument("--lang", choices=("fr", "en"), default="fr", help="interface language")
+    p_gui.set_defaults(func=_cmd_gui)
 
     p_ui = sub.add_parser("ui", help="open the local web UI in the browser")
     p_ui.add_argument(

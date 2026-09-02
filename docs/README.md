@@ -9,7 +9,7 @@ Utilitaire pour mettre à jour une calculatrice NumWorks **sans Chrome / WebUSB*
 
 ## Comment lire cette base
 
-La doc suit les 5 lots du projet. Chaque lot a son dossier ; le dossier `reference/`
+La doc suit les lots du projet. Chaque lot a son dossier ; le dossier `reference/`
 contient les specs brutes réutilisables (protocole, API, captures).
 
 > Les lots sont numérotés dans l'**ordre de construction** (croissant). Le moteur DFU
@@ -22,6 +22,7 @@ contient les specs brutes réutilisables (protocole, API, captures).
 | 3 — Transfert | [`03-transfer-install/`](03-transfer-install/) | Simuler le transfert et l'installation d'une mise à jour |
 | 4 — Apps tierces | [`04-third-party-apps/`](04-third-party-apps/) | Simuler une calculatrice connectée pour récupérer des applications tierces depuis le site officiel |
 | 5 — Packaging UI | [`05-packaging-ui/`](05-packaging-ui/) | Module de transfert headless qui ouvre une page locale dans le navigateur |
+| 7 — IHM native (V3) | [`05-packaging-ui/native-ui-implementation.md`](05-packaging-ui/native-ui-implementation.md) | Fenêtre native Qt Quick pilotant le cœur en direct (sans serveur HTTP) — étude, zoning, implémentation |
 
 ## Contribuer
 

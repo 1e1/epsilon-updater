@@ -79,3 +79,21 @@ Aucun compte payant → l'OS affiche un avertissement **une seule fois** :
 Un binaire PyInstaller **embarque Python** → l'utilisateur final n'a **rien à installer**.
 On ne peut pas cross-compiler : chaque OS se compile sur sa propre machine — d'où la **CI
 multi-OS** qui évite d'avoir un Mac + un PC + un Linux sous la main.
+
+## Variante « fenêtre native » (V3)
+
+La même app existe en **fenêtre native**, sans navigateur :
+
+```bash
+pip install pyinstaller pillow '.[gui]'
+python packaging/icon/generate_icons.py --arrow up
+pyinstaller packaging/nwupdater-gui.spec --noconfirm   # -> dist/
+```
+
+Différences avec l'app décrite ci-dessus : ~38 Mo zippés au lieu de 6, **aucun serveur local ni
+navigateur**, et — Qt étant sous LGPL — une livraison en **dossier** (bibliothèques séparées et
+remplaçables) sur les trois OS, pas en fichier unique. Elle exige aussi glibc ≥ 2.34 / macOS ≥ 13,
+là où l'app navigateur n'a aucun plancher : c'est précisément pourquoi **les deux sont publiées**.
+
+Détail : [`native-ui-implementation.md`](native-ui-implementation.md) ·
+[`native-ui-feasibility.md`](native-ui-feasibility.md).

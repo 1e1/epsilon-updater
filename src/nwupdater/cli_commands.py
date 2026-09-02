@@ -709,3 +709,24 @@ def _cmd_pair(args) -> int:
         return 1
     print(f"→ registered: HTTP {res['register']['status']}")
     return 0
+
+
+def _cmd_gui(args) -> int:
+    """Native desktop window (Qt/QML). PySide6 is an optional extra, so the import is local
+    and its absence is a clear message rather than a traceback."""
+    try:
+        from .gui.app import run
+    except ImportError as exc:
+        print(
+            f"the native UI needs PySide6 ({exc}).\n"
+            "  install it with:  pip install 'nwupdater[gui]'\n"
+            "  or keep using the browser UI:  nwupdater ui",
+            file=sys.stderr,
+        )
+        return 2
+    return run(
+        model=args.virtual or "n0110",
+        real=bool(args.real),
+        demo=bool(args.virtual),
+        lang=args.lang,
+    )

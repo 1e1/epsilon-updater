@@ -43,6 +43,26 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
 - ✅ Acquisition matériel réel (`dfu/usbio.py`, pyusb injecté) + `install --download`.
 - Réf : [../01-specs/n02xx-firmware-format.md](../01-specs/n02xx-firmware-format.md) · code `catalog/`, `dfu/usbio.py`.
 
+## Lot 7 — IHM native embarquée (V3) ✅
+- ✅ Étude de faisabilité chiffrée (Qt Widgets/QML, QtWebEngine, webview système, Tk) + zoning
+  V2→V3 et comparatif du mode classe → [../05-packaging-ui/native-ui-feasibility.md](../05-packaging-ui/native-ui-feasibility.md) ·
+  [../05-packaging-ui/native-ui-zoning.md](../05-packaging-ui/native-ui-zoning.md)
+- ✅ Fenêtre **Qt Quick** pilotant `Session` **en direct** — plus de serveur HTTP sur ce chemin,
+  donc plus de surface réseau du tout (`nwupdater gui`, extra `pip install 'nwupdater[gui]'`).
+- ✅ Logique extraite en **Python pur et testée hors Qt** (`gui/plan.py`, `workshop.py`,
+  `roster.py`, `format.py`) : le plan d'écriture ne dépend plus d'un navigateur pour être vérifié.
+- ✅ **Barre de progression réelle** pendant le flash — le callback `Installer(progress=…)`
+  existait et n'était exploité par personne (aucun canal de streaming côté HTTP).
+- ✅ Parité fonctionnelle avec l'IHM web, **mode classe compris** (rail, renommage, suppression à
+  3 issues, lot, filtre, chaîne d'actions, cache firmware, kiosque batch), plus les gestes du
+  bureau (Maj-clic, ⌘A, `Suppr`, `F2`, ⌘Z, glisser-déposer sortant, menus et dialogues natifs).
+- ✅ Empaquetage `packaging/nwupdater-gui.spec` (Qt élagué ; LGPL : bibliothèques séparées).
+- ✅ 3 fichiers de tests (`tests/test_gui_pure.py`, `test_gui_i18n.py`, `test_gui_qt.py`).
+- Réf : [../05-packaging-ui/native-ui-implementation.md](../05-packaging-ui/native-ui-implementation.md) · code `src/nwupdater/gui/`
+
+> L'IHM **web reste livrée** : c'est le canal de compatibilité, sans plancher système, pour les
+> postes que les roues Qt excluent (glibc 2.34 / macOS 13 en PySide6 6.11).
+
 ## Outillage matériel (branche `develop`)
 - 🟡 **Harnais diagnostic + capture USB (lecture seule)** — FAIT (1er livrable `develop`) :
   `nwupdater diagnose` énumère, lit l'identité et capture les transferts USB **sans rien
@@ -91,5 +111,4 @@ Pistes notées pour plus tard (non planifiées) :
   [../04-third-party-apps/nwlink-port-plan.md](../04-third-party-apps/nwlink-port-plan.md) ·
   guide : [../07-contributing/05-linker-nwa-pur-python.md](../07-contributing/05-linker-nwa-pur-python.md).
   Bonne foi : retrait immédiat si NumWorks le demande (équipe tech NumWorks présente sur le dépôt).
-- ⬜ **Embarquer une IHM dans le binaire** — fenêtre native (ex. webview système / Qt / Tk) pour ne
-  plus dépendre d'un navigateur externe ; le serveur local + les assets web actuels restent le socle.
+- ✅ **Embarquer une IHM dans le binaire** — **livré en Lot 7** (voir plus haut)

@@ -108,6 +108,67 @@ jobs:
           # attached to the GitHub Release, not kept as artifacts, so this doesn't affect them.
           retention-days: 7
 
+  # The NATIVE-window app (Qt Quick). Separate job, and never allowed to block a release: the
+  # browser app above is the compatibility channel and ships whatever happens here. Qt's wheels
+  # carry a system floor (glibc 2.34 / macOS 13 at PySide6 6.11) that the browser app does not —
+  # see docs/05-packaging-ui/native-ui-feasibility.md.
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            asset: NumWorks-Updater-native-macos
+          - os: windows-latest
+            asset: NumWorks-Updater-native-windows
+          - os: ubuntu-latest
+            asset: NumWorks-Updater-native-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install build deps
+        run: python -m pip install --upgrade pip pyinstaller pillow ".[usb,gui]"
+
+      - name: Generate icons
+        run: python packaging/icon/generate_icons.py --arrow up
+
+      - name: Check the native UI (headless)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_gui_pure.py tests/test_gui_i18n.py tests/test_gui_qt.py -q
+
+      - name: Build native app
+        env:
+          NWUPDATER_MAC_ARCH: arm64
+        run: pyinstaller packaging/nwupdater-gui.spec --noconfirm
+
+      - name: Package (zip)
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            zip -r -y "../${{ matrix.asset }}.zip" "NumWorks Updater (natif).app"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "../${{ matrix.asset }}.zip" "NumWorks Updater (natif)"
+          else
+            chmod +x "NumWorks Updater (natif)/NumWorks Updater (natif)"
+            zip -r "../${{ matrix.asset }}.zip" "NumWorks Updater (natif)"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}*.zip
+          retention-days: 7
+
   # Single job that owns the Release, so matrix jobs never race to create it.
   release:
     needs: build

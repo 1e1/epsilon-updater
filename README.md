@@ -14,8 +14,9 @@
 
 Utilitaire pour mettre à jour les calculatrices **NumWorks** (famille **Graphique N01xx** et
 **Scientifique N02xx**) et y installer des applications tierces, **sans passer par Chrome +
-WebUSB**. L'architecture : un **cœur headless** natif qui parle USB/DFU, et une **page web
-locale** ouverte dans le navigateur système.
+WebUSB**. L'architecture : un **cœur headless** natif qui parle USB/DFU, et **deux interfaces
+au choix** — une **fenêtre native** (V3) ou une **page web locale** ouverte dans le navigateur
+système (V2, canal de compatibilité).
 
 > ⚠️ **Contrainte de développement : on ne branche JAMAIS d'USB réel.** Tout se développe et
 > se teste contre un **device DFU virtuel** en mémoire. Voir
@@ -50,6 +51,29 @@ système et la gestion de parc (pré-téléchargement des caches firmware, une v
 | 4 | Applications tierces (`.nwa`) | ✅ |
 | 5 | Packaging UI (page web locale) | ✅ |
 | 6 | Authentification + téléchargement du vrai firmware officiel | ✅ |
+| 7 | IHM native embarquée (Qt Quick), sans serveur HTTP | ✅ |
+
+## Deux interfaces, un seul cœur
+
+```bash
+pip install 'nwupdater[gui]'
+nwupdater gui     # fenêtre native (V3)
+nwupdater ui      # page locale dans le navigateur (V2)
+```
+
+|  | Fenêtre native (V3) | Page web (V2) |
+|---|---|---|
+| Téléchargement (zip, macOS arm64) | ~38 Mo | **6 Mo** |
+| Navigateur requis | non | oui |
+| Surface réseau | **aucune** | serveur en loopback |
+| Progression du flash | déterminée (octets écrits/vérifiés) | indéterminée |
+| Gestes bureau (Maj-clic, ⌘Z, glisser-déposer sortant, menus natifs) | oui | non |
+| Plancher système | glibc 2.34 / macOS 13 (roues Qt) | **aucun** |
+
+Les deux sont livrées et **font la même chose** : la V2 reste le canal de compatibilité pour les
+postes anciens ou verrouillés que les roues Qt excluent — Chromebooks, salles figées, Raspberry Pi
+sous Bookworm. Le détail chiffré du choix :
+[`docs/05-packaging-ui/native-ui-feasibility.md`](docs/05-packaging-ui/native-ui-feasibility.md).
 
 ## 🤝 Complément, pas concurrent
 
