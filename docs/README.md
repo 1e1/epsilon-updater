@@ -23,6 +23,7 @@ contient les specs brutes réutilisables (protocole, API, captures).
 | 4 — Apps tierces | [`04-third-party-apps/`](04-third-party-apps/) | Simuler une calculatrice connectée pour récupérer des applications tierces depuis le site officiel |
 | 5 — Packaging UI | [`05-packaging-ui/`](05-packaging-ui/) | Module de transfert headless qui ouvre une page locale dans le navigateur |
 | 7 — IHM native (V3) | [`05-packaging-ui/native-ui-implementation.md`](05-packaging-ui/native-ui-implementation.md) | Fenêtre native Qt Quick pilotant le cœur en direct (sans serveur HTTP) — étude, zoning, implémentation |
+| Canal figé | [`05-packaging-ui/legacy-channel.md`](05-packaging-ui/legacy-channel.md) | Binaires pour anciens systèmes (macOS 10.12, glibc 2.17, Windows 8.1) : outillage épinglé, planchers vérifiés sur les octets livrés |
 
 ## Contribuer
 

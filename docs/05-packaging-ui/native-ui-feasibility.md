@@ -11,9 +11,14 @@ L'objectif énoncé est double : **(a)** une vraie fenêtre native, plus de dép
 navigateur externe ; **(b)** une compatibilité large Windows / Linux / macOS.
 
 L'étude montre que **(a) et (b) se paient l'un contre l'autre**. Aujourd'hui l'IHM est gratuite
-en taille (elle réutilise le navigateur déjà installé) et n'a **aucun plancher système** — le
-cœur est stdlib pur. Tout moteur de rendu embarqué apporte, au choix : beaucoup de mégaoctets
-(Qt, Chromium) ou une dépendance système non empaquetable (webview de l'OS sous Linux).
+en taille (elle réutilise le navigateur déjà installé) et n'a **aucun plancher système côté
+code** — le cœur est stdlib pur. Tout moteur de rendu embarqué apporte, au choix : beaucoup de
+mégaoctets (Qt, Chromium) ou une dépendance système non empaquetable (webview de l'OS sous Linux).
+
+> **Précision (mesurée depuis)** : « stdlib pur » vaut pour le *code*, pas pour le *binaire*. Le
+> zip livré hérite des planchers de son outillage — bootloader PyInstaller en `10.13` sur macOS,
+> CPython de la CI en `GLIBC_2.34` sur Linux. C'est l'objet du
+> [canal figé](legacy-channel.md), qui les redescend à 10.12 et `GLIBC_2.17`.
 
 L'arbitrage n'est donc pas « Qt ou rien » mais : **quelle promesse on garde ?**
 
@@ -134,7 +139,7 @@ Traduction en parc réel :
   2.36) est exclu** — régression nette : le binaire actuel y tourne.
 - PySide6 6.11 exige aussi **Python 3.10 – 3.14** (la CI est en 3.11 ✔).
 
-Le binaire actuel, stdlib pur, n'a **aucun de ces planchers**. Il tourne partout où un Python
+Le binaire actuel, stdlib pur, n'a **aucun de ces planchers Qt**. Il tourne partout où un Python
 empaquetable tourne — et la cible affichée du projet, ce sont précisément les **postes anciens et
 verrouillés**. Deux sorties possibles, aucune indolore :
 
@@ -143,6 +148,16 @@ verrouillés**. Deux sorties possibles, aucune indolore :
    quand même l'aarch64 en glibc 2.39.
 2. **Deux canaux de distribution** : binaire natif « moderne » + binaire web actuel « compatibilité ».
    Coûte une ligne de CI et une ligne de doc, garde les deux promesses. *(Piste privilégiée, §9.)*
+
+**Suite (livrée)** : c'est la piste 2 qui a été retenue, avec un **troisième** canal derrière
+elle. Deux mesures ont corrigé le tableau ci-dessus une fois les binaires ouverts :
+
+- les **tags de roues mentent** — PySide6 6.5.2, taguée `macosx_10_9_universal2`, embarque un
+  `QtCore` en `minos 11.0`. Aucun Qt 6 ne descend sous **macOS 11**, quelle que soit l'épingle,
+  donc la piste 1 rapporte moins qu'annoncé ;
+- le binaire *web* portait lui aussi un plancher, hérité de son outillage (macOS 10.13, glibc
+  2.34). Le [**canal figé**](legacy-channel.md) le redescend à **10.12 / `GLIBC_2.17`** avec un
+  outillage épinglé, et vérifie le résultat sur les octets livrés.
 
 ## 7. Fidélité visuelle atteignable
 

@@ -60,8 +60,10 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire
 - ✅ 3 fichiers de tests (`tests/test_gui_pure.py`, `test_gui_i18n.py`, `test_gui_qt.py`).
 - Réf : [../05-packaging-ui/native-ui-implementation.md](../05-packaging-ui/native-ui-implementation.md) · code `src/nwupdater/gui/`
 
-> L'IHM **web reste livrée** : c'est le canal de compatibilité, sans plancher système, pour les
-> postes que les roues Qt excluent (glibc 2.34 / macOS 13 en PySide6 6.11).
+> L'IHM **web reste livrée** : c'est le canal de compatibilité, pour les postes que les roues Qt
+> excluent (glibc 2.34 / macOS 13 en PySide6 6.11). Son propre plancher — hérité de l'outillage,
+> macOS 10.13 / glibc 2.34 — descend à **macOS 10.12 / glibc 2.17** dans le
+> [canal figé](../05-packaging-ui/legacy-channel.md).
 
 ## Outillage matériel (branche `develop`)
 - 🟡 **Harnais diagnostic + capture USB (lecture seule)** — FAIT (1er livrable `develop`) :

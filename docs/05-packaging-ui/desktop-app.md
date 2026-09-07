@@ -16,6 +16,23 @@ taille d'un binaire universel) : `NumWorks-Updater-macos-arm64.zip` pour les Mac
 (M1 et suivants) et `NumWorks-Updater-macos-x86_64.zip` pour les Mac Intel. En cas de doute :
 menu  → « À propos de ce Mac » indique la puce.
 
+#### Quel zip prendre — trois canaux
+
+Chaque release publie trois familles de binaires. Le nom du fichier suffit à les distinguer, et
+les planchers ci-dessous sont **mesurés dans les binaires livrés**
+([`nwupdater.tools.binary_floor`](../../src/nwupdater/tools/binary_floor.py)), pas déduits d'un
+tag de paquet.
+
+| Canal | Nom du zip | Plancher système | Pour qui |
+|---|---|---|---|
+| **natif** | `…-native-…` | macOS 13 · glibc 2.34 · Windows 10 | poste récent, fenêtre Qt, pas de navigateur |
+| **compatibilité** (défaut) | `NumWorks-Updater-…` | macOS 10.13 · glibc 2.34 · Windows 8.1 | tout le monde ; ouvre une page locale dans le navigateur déjà installé |
+| **figé** | `…-legacy-…` | **macOS 10.12 · glibc 2.17 · Windows 8.1** | Mac Intel resté en Sierra, Ubuntu 20.04/CentOS 7, machines de salle gelées |
+
+Le canal **figé** livre le **même code** que les autres — ce n'est pas une vieille version de
+l'app, c'est la version courante compilée avec un outillage volontairement ancien. Détail des
+épingles et de la politique de gel : [`legacy-channel.md`](legacy-channel.md).
+
 ### 2. Compiler en local (une commande) — nécessite Python + PyInstaller
 ```bash
 pip install pyinstaller pillow .
@@ -97,7 +114,8 @@ Le nom **sans** `native` reste le canal de compatibilité, et c'est lui que prop
 Différences avec l'app décrite ci-dessus : ~38 Mo zippés au lieu de 6, **aucun serveur local ni
 navigateur**, et — Qt étant sous LGPL — une livraison en **dossier** (bibliothèques séparées et
 remplaçables) sur les trois OS, pas en fichier unique. Elle exige aussi glibc ≥ 2.34 / macOS ≥ 13,
-là où l'app navigateur n'a aucun plancher : c'est précisément pourquoi **les deux sont publiées**.
+là où l'app navigateur descend à macOS 10.13 / glibc 2.34 — et à **macOS 10.12 / glibc 2.17** dans
+le [canal figé](legacy-channel.md) : c'est précisément pourquoi **les trois sont publiées**.
 
 Détail : [`native-ui-implementation.md`](native-ui-implementation.md) ·
 [`native-ui-feasibility.md`](native-ui-feasibility.md).

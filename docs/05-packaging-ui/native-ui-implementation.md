@@ -69,22 +69,25 @@ nwupdater gui --virtual n0120     # démo explicite
 nwupdater gui --real --lang en
 ```
 
-`nwupdater ui` (navigateur) reste disponible : c'est le **canal de compatibilité**, sans plancher
-système, pour les postes que Qt exclut (cf. la matrice de l'étude de faisabilité).
+`nwupdater ui` (navigateur) reste disponible : c'est le **canal de compatibilité** (macOS 10.13 /
+glibc 2.34, et macOS 10.12 / glibc 2.17 dans le [canal figé](legacy-channel.md)), pour les postes
+que Qt exclut (cf. la matrice de l'étude de faisabilité).
 
 ## 5. Empaquetage
 
 `packaging/nwupdater-gui.spec` construit l'app native ; `packaging/nwupdater.spec` continue de
 construire l'app navigateur. Les deux sont livrées, **par architecture** :
 
-| | Compatibilité (navigateur) | Native (Qt Quick) |
-|---|---|---|
-| macOS | `…-macos-arm64.zip` · `…-macos-x86_64.zip` | `…-native-macos-arm64.zip` · `…-native-macos-x86_64.zip` |
-| Windows | `…-windows.zip` | `…-native-windows-x86_64.zip` |
-| Linux | `…-linux-x86_64.zip` · `…-linux-arm64.zip` | `…-native-linux-x86_64.zip` — **pas d'arm64** |
+| | Compatibilité (navigateur) | Native (Qt Quick) | Figée (anciens systèmes) |
+|---|---|---|---|
+| macOS | `…-macos-arm64.zip` · `…-macos-x86_64.zip` | `…-native-macos-arm64.zip` · `…-native-macos-x86_64.zip` | `…-legacy-macos-x86_64.zip` |
+| Windows | `…-windows.zip` | `…-native-windows-x86_64.zip` | `…-legacy-windows-x86_64.zip` |
+| Linux | `…-linux-x86_64.zip` · `…-linux-arm64.zip` | `…-native-linux-x86_64.zip` — **pas d'arm64** | `…-legacy-linux-x86_64.zip` |
 
 Le nom **sans qualificatif est le canal de compatibilité** : c'est le téléchargement par défaut du
-site, et celui qui n'a aucun plancher système. `native` est un choix explicite. Windows-sur-ARM
+site, et celui dont le plancher est le plus bas des deux canaux actifs (macOS 10.13 / glibc 2.34).
+`legacy` descend plus bas encore, avec un outillage épinglé
+([`legacy-channel.md`](legacy-channel.md)). `native` est un choix explicite. Windows-sur-ARM
 n'est pas couvert (aucun runner hébergé gratuit) ; le suffixe `-x86_64` le dit plutôt que de le
 laisser deviner.
 

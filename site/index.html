@@ -180,6 +180,8 @@
       <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/docs/05-packaging-ui/desktop-app.md" target="_blank" rel="noopener" data-i18n="dl_help">Comment l'ouvrir →</a>
       <br>
       <a href="https://github.com/1e1/epsilon-updater/releases" target="_blank" rel="noopener" data-i18n="dl_all">Toutes les versions et notes de publication →</a>
+      <br>
+      <a id="dl-legacy" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_legacy">Ancien poste (macOS 10.12, Ubuntu 20.04, Windows 8.1) : build figé →</a>
     </p>
   </section>
 
@@ -244,6 +246,7 @@
     mac_m: "Universal (Intel + Apple Silicon)", win_m: "64-bit (.exe inside a .zip)", linux_m: "x86-64 (binary inside a .zip)",
     dl_unsigned: "Unsigned binaries (no paid signing account): on first launch your system may show an “unidentified developer” warning.",
     dl_help: "How to open it →", dl_all: "All releases and release notes →",
+    dl_legacy: "Older machine (macOS 10.12, Ubuntu 20.04, Windows 8.1): frozen build →",
     f_h: "Why nwupdater", f_s: "A complement to the official tool, for the cases it doesn't cover today.",
     f1_t: "No WebUSB", f1_b: "Works on browsers and machines without WebUSB: Chromebooks, locked-down school computers, restricted browsers, filtered networks.",
     f2_t: "Classroom mode", f2_b: "Preload a version once, then flash a whole fleet without re-downloading. One version per model.",
@@ -301,10 +304,11 @@
 
   // ---- dynamic download links from the latest GitHub release ------------------
   // Falls back to the /releases/latest page (already set in the href) on any error.
-  // The download buttons always point at the COMPATIBILITY build (browser-based): it has no
-  // system floor and runs where the native window cannot. The native build is an opt-in from the
-  // releases page, so it is filtered out here — otherwise `find` would return
-  // "…-native-windows…" simply because it sorts before "…-windows…".
+  // The download buttons always point at the COMPATIBILITY build (browser-based): its system
+  // floor is far lower than Qt's and it runs where the native window cannot. The native build is
+  // an opt-in from the releases page, so it is filtered out here — otherwise `find` would return
+  // "…-native-windows…" simply because it sorts before "…-windows…". The frozen build is an
+  // opt-in too, offered by its own link for machines below even this floor.
   var MATCH = { mac: /mac|darwin|osx/i, win: /win/i, linux: /linux/i };
   // Preferred architecture per OS when several are published (first match wins).
   var ARCH = { mac: [/arm64/i, /x86_64/i], win: [/./], linux: [/x86_64/i, /arm64/i] };
@@ -313,10 +317,12 @@
     .then(function (rel) {
       var assets = (rel.assets || []);
       Object.keys(MATCH).forEach(function (os) {
-        // the app zip for this OS: not the capture tooling, not the native build
+        // the app zip for this OS: not the capture tooling, not the native build, and not the
+        // frozen one (it has its own link below — it would otherwise win on Windows, where
+        // "…-legacy-windows…" sorts before "…-windows…" and no arch pattern separates them)
         var pool = assets.filter(function (x) {
           return MATCH[os].test(x.name) && /\.zip$/i.test(x.name)
-            && !/capture/i.test(x.name) && !/native/i.test(x.name);
+            && !/capture/i.test(x.name) && !/native/i.test(x.name) && !/legacy/i.test(x.name);
         });
         var a = null;
         ARCH[os].some(function (re) { a = pool.find(function (x) { return re.test(x.name); }); return !!a; });
@@ -326,6 +332,12 @@
           if (el) el.href = a.browser_download_url;
         }
       });
+      // The frozen build for the visitor's OS (macOS 10.12 / glibc 2.17 / Windows 8.1). Only
+      // x86_64 is published there, so no arch preference to express.
+      var legacy = osKey && assets.filter(function (x) {
+        return /legacy/i.test(x.name) && MATCH[osKey].test(x.name) && /\.zip$/i.test(x.name);
+      })[0];
+      if (legacy) document.getElementById("dl-legacy").href = legacy.browser_download_url;
       if (rel.tag_name) {
         var v = document.getElementById("ver");
         var word = document.documentElement.lang === "en" ? "Latest version" : "Dernière version";

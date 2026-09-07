@@ -206,12 +206,155 @@ jobs:
           path: ${{ matrix.asset }}*.zip
           retention-days: 7
 
+  # The FROZEN channel — the browser app on a deliberately old toolchain, for the machines the two
+  # jobs above have left behind. x86_64 only: that is where the aging fleet is.
+  #
+  # Measured floors (nwupdater.tools.binary_floor, on the shipped bytes — not on wheel tags):
+  #   macOS    active 10.13 (PyInstaller's published bootloader)  -> frozen 10.12 (recompiled)
+  #   Linux    active GLIBC_2.34 (CPython built on the runner)    -> frozen GLIBC_2.17
+  #   Windows  active 8.1 (CPython 3.11 policy)                   -> frozen 8.1, held by the pin
+  #
+  # The pins below are frozen ON PURPOSE: they must NOT follow the active channel — that is the
+  # whole point of the job. Each floor is verified on the built tree, so a bump that raises one
+  # fails here instead of shipping a promise the binary does not keep.
+  # See docs/05-packaging-ui/legacy-channel.md.
+  build-legacy:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64 is cross-built on the arm64 runner (universal2 CPython, thinned by PyInstaller)
+          # for the same reason as the browser app: GitHub's Intel macOS runners hang.
+          - os: macos-latest
+            asset: NumWorks-Updater-legacy-macos-x86_64
+          - os: windows-latest
+            asset: NumWorks-Updater-legacy-windows-x86_64
+          - os: ubuntu-latest
+            asset: NumWorks-Updater-legacy-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true   # an old-toolchain build never blocks a release
+    env:
+      # 3.11 is the last CPython line that still supports Windows 8.1 (3.13 requires Windows 10),
+      # and .9 is its last patch with official binary installers — hence the freeze point.
+      LEGACY_PYTHON: "3.11.9"
+      LEGACY_PYINSTALLER: "6.22.2"
+      # Linux needs a CPython that was NOT built against the runner's glibc. This one targets
+      # glibc 2.17 and static-links OpenSSL, so TLS still works where the system libssl is gone.
+      LEGACY_LINUX_CPYTHON: "https://github.com/astral-sh/python-build-standalone/releases/download/20260805/cpython-3.11.15%2B20260805-x86_64-unknown-linux-gnu-install_only.tar.gz"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # setuptools-scm needs tags + history to stamp the shipped version
+
+      - uses: actions/setup-python@v7
+        if: runner.os != 'Linux'
+        with:
+          python-version: ${{ env.LEGACY_PYTHON }}
+
+      - name: Standalone CPython (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          curl -sSL "$LEGACY_LINUX_CPYTHON" -o cpython.tar.gz
+          mkdir -p "$RUNNER_TEMP/legacy-python"
+          tar xzf cpython.tar.gz -C "$RUNNER_TEMP/legacy-python"
+          echo "$RUNNER_TEMP/legacy-python/python/bin" >> "$GITHUB_PATH"
+
+      # The `auth` extra (certifi) is pulled in here and NOT in the active channel on purpose: a
+      # 2016 macOS or a CentOS 7 stopped receiving root-certificate updates, so the frozen app
+      # carries its own bundle rather than trusting a decade-old system store.
+      - name: Install build deps
+        run: python -m pip install --upgrade pip pillow ".[usb,auth]"
+
+      - name: Install PyInstaller
+        if: runner.os != 'macOS'
+        run: python -m pip install "pyinstaller==${{ env.LEGACY_PYINSTALLER }}"
+
+      # The published bootloader is built at 10.13, and THAT is what keeps the current app off a
+      # 10.12 Mac — the bundled CPython is fine at 10.9. Recompiling it is the entire fix. waf
+      # honours MACOSX_DEPLOYMENT_TARGET; --no-universal2 plus -arch x86_64 keep it single-slice,
+      # since an arm64 slice cannot target 10.12.
+      - name: Install PyInstaller (bootloader recompiled for macOS 10.12)
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "10.12"
+          CFLAGS: "-arch x86_64"
+          LINKFLAGS: "-arch x86_64"
+          PYINSTALLER_COMPILE_BOOTLOADER: "1"
+          PYINSTALLER_BOOTLOADER_WAF_ARGS: "--no-universal2"
+        run: python -m pip install --no-binary=pyinstaller "pyinstaller==${{ env.LEGACY_PYINSTALLER }}"
+
+      - name: Generate icons
+        run: python packaging/icon/generate_icons.py --arrow up
+
+      # This channel ships x86_64 only, so libusb is REPLACED by its x86_64 build instead of being
+      # lipo-merged like the browser app: here a leftover arm64 slice would only fail the floor check.
+      - name: x86_64 libusb (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          python -m pip download libusb-package --only-binary=:all: \
+            --platform macosx_10_9_x86_64 --python-version 3.11 --no-deps --dest x86pkg
+          (cd x86pkg && unzip -oq ./*.whl)
+          target=$(python -c "import os,libusb_package;print(os.path.dirname(libusb_package.__file__))")
+          cp x86pkg/libusb_package/libusb-1.0.dylib "$target/libusb-1.0.dylib"
+          echo "libusb slices: $(lipo -archs "$target/libusb-1.0.dylib")"
+
+      - name: Build app
+        env:
+          NWUPDATER_MAC_ARCH: x86_64
+          NWUPDATER_MAC_MIN: "10.12"   # plist floor, matched to the recompiled bootloader
+        run: pyinstaller packaging/nwupdater.spec --noconfirm --distpath dist-legacy
+
+      # The promise of this channel, checked on the bytes. macOS reads the whole .app (onedir).
+      # Windows and Linux are single-file builds whose interpreter is compressed inside the
+      # executable and thus invisible, so the interpreter tree is measured as well — a superset of
+      # what PyInstaller bundled, which makes the gate stricter, never weaker.
+      #
+      # site-packages is excluded and libusb re-added by name: it is the only compiled dependency
+      # that actually ships (pyusb is pure Python), whereas pillow — icons, build-time only, never
+      # bundled — needs GLIBC_2.27 and would fail the gate on a file nobody installs.
+      - name: Verify the system floor
+        shell: bash
+        run: |
+          set -euo pipefail
+          libusb=$(python -c "import os,libusb_package;print(os.path.dirname(libusb_package.__file__))")
+          case "${{ runner.os }}" in
+            macOS)
+              python -m nwupdater.tools.binary_floor --macos 10.12 dist-legacy ;;
+            Linux)
+              python -m nwupdater.tools.binary_floor --glibc 2.17 --exclude site-packages \
+                dist-legacy "$RUNNER_TEMP/legacy-python/python" "$libusb" ;;
+            Windows)
+              python -m nwupdater.tools.binary_floor --windows 6.3 --exclude site-packages \
+                dist-legacy "$(python -c 'import sys;print(sys.prefix)')" "$libusb" ;;
+          esac
+
+      - name: Package (zip)
+        shell: bash
+        run: |
+          cd dist-legacy
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            zip -r -y "../${{ matrix.asset }}.zip" "NumWorks Updater.app"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "../${{ matrix.asset }}.zip" "NumWorks Updater.exe"
+          else
+            chmod +x "NumWorks Updater"
+            zip "../${{ matrix.asset }}.zip" "NumWorks Updater"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.zip
+          retention-days: 7
+
   # Single job that owns the Release, so matrix jobs never race to create it.
   release:
-    # `build-native` is continue-on-error, so a failure there counts as success for `needs`:
-    # the release waits for the native app but is never blocked by it. The browser app remains
-    # the guaranteed deliverable.
-    needs: [build, build-native]
+    # `build-native` and `build-legacy` are continue-on-error, so a failure there counts as
+    # success for `needs`: the release waits for both but is never blocked by either. The browser
+    # app remains the guaranteed deliverable.
+    needs: [build, build-native, build-legacy]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

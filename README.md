@@ -68,11 +68,14 @@ nwupdater ui      # page locale dans le navigateur (V2)
 | Surface réseau | **aucune** | serveur en loopback |
 | Progression du flash | déterminée (octets écrits/vérifiés) | indéterminée |
 | Gestes bureau (Maj-clic, ⌘Z, glisser-déposer sortant, menus natifs) | oui | non |
-| Plancher système | glibc 2.34 / macOS 13 (roues Qt) | **aucun** |
+| Plancher système | glibc 2.34 / macOS 13 (roues Qt) | glibc 2.34 / macOS 10.13 (outillage) |
 
 Les deux sont livrées et **font la même chose** : la V2 reste le canal de compatibilité pour les
 postes anciens ou verrouillés que les roues Qt excluent — Chromebooks, salles figées, Raspberry Pi
-sous Bookworm. Le détail chiffré du choix :
+sous Bookworm. Et pour ceux que même cet outillage exclut (Mac resté en 10.12, Ubuntu 20.04,
+CentOS 7), un **[canal figé](docs/05-packaging-ui/legacy-channel.md)** publie la même app avec un
+outillage épinglé : **macOS 10.12 · glibc 2.17 · Windows 8.1**, planchers vérifiés sur les octets
+livrés. Le détail chiffré du choix :
 [`docs/05-packaging-ui/native-ui-feasibility.md`](docs/05-packaging-ui/native-ui-feasibility.md).
 
 ## 🤝 Complément, pas concurrent

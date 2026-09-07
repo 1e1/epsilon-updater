@@ -42,6 +42,11 @@ icon = icon_icns if is_mac else (icon_ico if is_win else None)
 # CI step) lets PyInstaller emit a native x86_64 app too. GitHub's Intel runners (macos-13) hang,
 # hence we never build x86_64 on a native Intel host.
 target_arch = os.environ.get("NWUPDATER_MAC_ARCH", "universal2") if is_mac else None
+# Declared macOS floor, from NWUPDATER_MAC_MIN (default 10.13, the deployment target of
+# PyInstaller's published bootloader). The frozen channel recompiles that bootloader at 10.12 and
+# passes 10.12 here so the plist matches what the Mach-O headers actually allow — Finder reads
+# this key to refuse the app, so a value LOWER than the binaries permit is what locks users out.
+mac_min = os.environ.get("NWUPDATER_MAC_MIN", "10.13")
 
 a = Analysis(
     [str(ROOT / "entry.py")],
@@ -80,7 +85,7 @@ if is_mac:
     app = BUNDLE(coll, name=f"{APP_NAME}.app", icon=icon_icns,
                  bundle_identifier="com.numworks.updater",
                  info_plist={"CFBundleShortVersionString": "0.1.0",
-                             "LSMinimumSystemVersion": "10.13",
+                             "LSMinimumSystemVersion": mac_min,
                              "NSHighResolutionCapable": True})
 else:
     # single double-click file on Windows / Linux

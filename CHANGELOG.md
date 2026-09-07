@@ -6,6 +6,36 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.0-rc.2] - 2026-09-07
+
+**Canal figé pour anciens systèmes** (troisième canal de distribution). Le canal actif reste sur
+les dernières versions d'outillage ; celui-ci gèle le sien pour garder les vieux postes.
+
+### Ajouté
+
+- **Troisième canal de distribution** (`NumWorks-Updater-legacy-…`, x86_64) : l'IHM web compilée
+  avec un **outillage volontairement épinglé**, pour les postes que le canal actif laisse derrière
+  — **macOS 10.12** (Sierra), **glibc 2.17** (CentOS 7, Ubuntu 14.04+), **Windows 8.1**. C'est le
+  **même code** que le canal actif : pas une vieille version de l'app, mais la version courante
+  bâtie pour de vieux systèmes — le parc ancien continue donc de recevoir le catalogue à jour.
+  Épingles, politique de gel et recette :
+  [`docs/05-packaging-ui/legacy-channel.md`](docs/05-packaging-ui/legacy-channel.md).
+- **`nwupdater.tools.binary_floor`** — lit le plancher système **dans les octets livrés** :
+  Mach-O (`LC_VERSION_MIN_MACOSX` / `LC_BUILD_VERSION`, chaque tranche d'un binaire universel),
+  symboles `GLIBC_x.y` importés par un ELF, en-tête optionnel PE. La CI s'en sert comme barrière :
+  une montée d'outillage qui remonte un plancher **fait échouer** le canal figé au lieu de livrer
+  une promesse que le binaire ne tient pas. Utilisable sur un zip téléchargé.
+- `NWUPDATER_MAC_MIN` pilote le `LSMinimumSystemVersion` du bundle macOS (défaut `10.13`), pour
+  que le plist suive le bootloader au lieu d'enfermer l'utilisateur dehors.
+
+### Corrigé
+
+- **Le plancher macOS annoncé était faux.** La doc affirmait que le binaire web n'avait « aucun
+  plancher système » ; mesure faite, le **bootloader PyInstaller publié est bâti à 10.13**, et
+  c'est lui — pas le CPython embarqué, qui accepte 10.9 — qui interdisait les Mac en 10.12. Le
+  canal figé le recompile à 10.12 ; l'étude de faisabilité est corrigée avec les chiffres mesurés
+  (Linux : `GLIBC_2.34` aujourd'hui, pas « aucun plancher »).
+
 ## [3.0.0-rc.1] - 2026-09-02
 
 **IHM native embarquée** (Lot 7). Le cœur est inchangé : la fenêtre pilote `Session` **dans le
