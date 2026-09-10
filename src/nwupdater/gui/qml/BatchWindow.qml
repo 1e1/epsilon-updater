@@ -136,7 +136,7 @@ Window {
                         Layout.fillWidth: true
                         visible: !backend.connected || backend.identity.virtual
                         spacing: 6
-                        ComboBox {
+                        AppComboBox {
                             id: simModel
                             Layout.fillWidth: true
                             font.pixelSize: 12
@@ -222,7 +222,7 @@ Window {
                     clip: true
                     spacing: 6
                     model: backend.batch.journal
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
 
                     Text {
                         anchors.centerIn: parent

@@ -642,6 +642,13 @@ class Backend(QObject):
     def parcFilter(self) -> str:
         return self._parc_filter
 
+    @Property(list, notify=rosterChanged)
+    def rosterKeys(self) -> list:
+        """Every calculator in the register, class and filter ignored. The table only ever sees
+        the filtered rows, so this is what a selection is pruned against — dropping the keys of
+        deleted calculators without forgetting the ones a filter is merely hiding."""
+        return [str(c.get("key") or "") for c in (self._roster.get("calculators") or [])]
+
     def class_names(self) -> list[str]:
         return [str(c) for c in (self._roster.get("classes") or [])]
 

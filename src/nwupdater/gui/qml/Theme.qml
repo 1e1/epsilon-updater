@@ -25,6 +25,9 @@ QtObject {
     readonly property color err:        dark ? "#e26a6a" : "#d64545"
     readonly property color blue:       dark ? "#6f9bff" : "#3d68c9"
     readonly property color blueSoft:   dark ? "#1b2740" : "#e2ecfd"
+    // what sits ON a filled accent: the accent is dark in the light theme and light in
+    // the dark one, so the ink has to flip with it (a tick, a badge label).
+    readonly property color onAccent:   dark ? "#151619" : "#ffffff"
 
     readonly property int radius: 12
     readonly property string sans: Qt.platform.os === "windows" ? "Segoe UI" : ""

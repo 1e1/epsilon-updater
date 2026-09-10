@@ -262,6 +262,18 @@ def test_batch_pass_records_a_journal_entry(backend, qt_app):
     assert backend.batch["journal"][0]["dist"]["recensement"] in ("ok", "change")
 
 
+def test_roster_keys_ignore_the_class_and_the_filter(backend):
+    """The table's rows follow the filter; rosterKeys must not — it is what the QML prunes a
+    selection against, and a filtered-out calculator is hidden, not gone."""
+    backend.setMode("classroom")
+    keys = list(backend.rosterKeys)
+    assert keys and all(isinstance(k, str) and k for k in keys)
+    backend.setFilter("zzz-no-such-calculator")
+    assert backend.rosterRows.rowCount() == 0
+    assert list(backend.rosterKeys) == keys
+    backend.setFilter("")
+
+
 def test_roster_filter_narrows_the_table(backend):
     backend.setMode("classroom")
     total = backend.rosterRows.rowCount()

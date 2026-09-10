@@ -8,7 +8,7 @@ Flickable {
     id: root
     contentHeight: col.implicitHeight + 32
     clip: true
-    ScrollBar.vertical: ScrollBar {}
+    ScrollBar.vertical: AppScrollBar {}
 
     ColumnLayout {
         id: col
@@ -41,7 +41,7 @@ Flickable {
                         current: backend.catalog.channel || "stable"
                         onPicked: (k) => backend.setChannel(k)
                     }
-                    ComboBox {
+                    AppComboBox {
                         id: versionBox
                         Layout.preferredWidth: 150
                         model: (backend.catalog.updates || []).map((u) => u.version)
@@ -141,22 +141,20 @@ Flickable {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
-                    TextField {
+                    AppTextField {
                         id: emailField
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
                         placeholderText: i18n.t("auth_email")
-                        font.pixelSize: 13
                         inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
                         onAccepted: pwField.forceActiveFocus()
                     }
-                    TextField {
+                    AppTextField {
                         id: pwField
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
                         placeholderText: i18n.t("auth_pw")
                         echoMode: TextInput.Password
-                        font.pixelSize: 13
                         onAccepted: loginBtn.clicked()
                     }
                     AppButton {
@@ -201,7 +199,7 @@ Flickable {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        TextField {
+                        AppTextField {
                             id: tokenField
                             Layout.fillWidth: true
                             Layout.preferredWidth: 0

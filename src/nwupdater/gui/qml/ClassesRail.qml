@@ -25,7 +25,7 @@ ColumnLayout {
         clip: true
         spacing: 2
         model: backend.classes
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: AppScrollBar {}
 
         delegate: Rectangle {
             id: bucket
@@ -57,12 +57,12 @@ ColumnLayout {
             ToolTip.text: i18n.t("roster_rename_hint")
             ToolTip.delay: 700
 
-            TextField {
+            AppTextField {
                 id: nameEdit
                 anchors.fill: parent
                 anchors.margins: 3
                 visible: false
-                font.pixelSize: 13
+                compact: true
                 onAccepted: {
                     if (text.trim() && text.trim() !== bucket.label)
                         backend.classRename(bucket.label, text.trim())
@@ -130,12 +130,11 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         spacing: 6
-        TextField {
+        AppTextField {
             id: newClass
             Layout.fillWidth: true
             Layout.preferredWidth: 0
             placeholderText: i18n.t("roster_new_class")
-            font.pixelSize: 13
             onAccepted: if (text.trim()) { backend.classCreate(text.trim()); text = "" }
         }
         AppButton {

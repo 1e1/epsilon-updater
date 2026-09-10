@@ -8,29 +8,43 @@ Item {
     id: root
     property var selection: ({})
     property int lastClicked: -1
-    property int selCount: 0
+    property int selCount: 0   // selected AND visible: the bulk bar counts what the eye counts
 
     function selectedKeys() {
         return Object.keys(root.selection).filter((k) => root.selection[k])
+    }
+    function countSel() {
+        let n = 0
+        for (let i = 0; i < backend.rosterRows.rowCount(); i++)
+            if (root.selection[backend.rosterRows.get(i).key]) n++
+        root.selCount = n
     }
     function setSel(key, on) {
         let s = root.selection
         s[key] = on
         root.selection = s
-        root.selCount = root.selectedKeys().length
+        root.countSel()
     }
     function clearSel() { root.selection = ({}); root.selCount = 0 }
     function selectAll(on) {
-        let s = {}
-        if (on)
-            for (let i = 0; i < backend.rosterRows.rowCount(); i++)
-                s[backend.rosterRows.get(i).key] = true
+        // Visible rows only, the rest of the selection untouched — a filtered-out calculator
+        // stays selected, as in the web table.
+        let s = root.selection
+        for (let i = 0; i < backend.rosterRows.rowCount(); i++)
+            s[backend.rosterRows.get(i).key] = on
         root.selection = s
-        root.selCount = root.selectedKeys().length
+        root.countSel()
     }
     Connections {
         target: backend
-        function onRosterChanged() { root.clearSel() }
+        // A refresh is not a reason to forget the selection — typing in the filter causes one on
+        // every keystroke. Only calculators that left the register are dropped.
+        function onRosterChanged() {
+            let s = {}
+            for (const k of backend.rosterKeys) if (root.selection[k]) s[k] = true
+            root.selection = s
+            root.countSel()
+        }
     }
 
     ColumnLayout {
@@ -55,10 +69,11 @@ Item {
                     font.weight: Font.DemiBold
                 }
                 Item { Layout.fillWidth: true }
-                ComboBox {
+                AppComboBox {
                     id: moveTo
                     Layout.preferredWidth: 200
                     font.pixelSize: 13
+                    Accessible.name: i18n.t("roster_move_to")
                     model: [i18n.t("roster_move_to")]
                         .concat(backend.classNames)
                         .concat([i18n.t("roster_unfiled")])
@@ -91,11 +106,12 @@ Item {
                 Item {
                     Layout.preferredWidth: 34
                     Layout.fillHeight: true
-                    CheckBox {
+                    AppCheckBox {
                         anchors.centerIn: parent
                         checked: root.selCount > 0
                                  && root.selCount === backend.rosterRows.rowCount()
                         onToggled: root.selectAll(checked)
+                        Accessible.name: i18n.t("roster_select_all")
                         ToolTip.visible: hovered
                         ToolTip.text: i18n.t("roster_select_all")
                     }
@@ -105,12 +121,22 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
                     HeaderCell { text: i18n.t("roster_col_name") }
-                    TextField {
+                    AppTextField {
+                        id: filterField
                         Layout.preferredWidth: 170
+                        compact: true
                         placeholderText: i18n.t("roster_filter")
-                        font.pixelSize: 12
-                        text: backend.parcFilter
+                        Accessible.name: i18n.t("roster_filter_name")
                         onTextEdited: backend.setFilter(text)
+                        // Typing breaks a plain `text:` binding for good, and the field then
+                        // ignores a filter cleared from the backend. Reassert it whenever the
+                        // field is not the one doing the writing.
+                        // RestoreNone: taking focus must not hand the field back an older value.
+                        Binding on text {
+                            value: backend.parcFilter
+                            when: !filterField.activeFocus
+                            restoreMode: Binding.RestoreNone
+                        }
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -128,7 +154,7 @@ Item {
             clip: true
             model: backend.rosterRows
             focus: true
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: AppScrollBar {}
 
             Text {
                 anchors.centerIn: parent
@@ -234,7 +260,7 @@ Item {
                     Item {
                         Layout.preferredWidth: 34
                         Layout.fillHeight: true
-                        CheckBox {
+                        AppCheckBox {
                             anchors.centerIn: parent
                             checked: !!root.selection[row.key]
                             onToggled: root.setSel(row.key, checked)
@@ -265,13 +291,13 @@ Item {
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
-                        TextField {
+                        AppTextField {
                             id: nameEdit
                             anchors.verticalCenter: parent.verticalCenter
                             visible: false
                             width: parent.width - 12
+                            compact: true
                             text: row.displayName
-                            font.pixelSize: 13
                             onAccepted: { backend.rosterRename(row.key, text); visible = false }
                             Keys.onEscapePressed: { text = row.displayName; visible = false }
                             onActiveFocusChanged: if (!activeFocus) visible = false

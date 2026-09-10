@@ -32,7 +32,7 @@ ColumnLayout {
         Layout.alignment: Qt.AlignHCenter
         source: "../assets/calc-" + (root.identity.family === "scientifique" ? "scientific" : "graphing")
                 + "-device.svg"
-        sourceSize.width: 176
+        sourceSize.width: 150
         fillMode: Image.PreserveAspectFit
         smooth: true
     }
@@ -96,7 +96,7 @@ ColumnLayout {
         visible: !!root.identity.virtual
         spacing: 8
         SpecKey { text: i18n.t("demo_model") }
-        ComboBox {
+        AppComboBox {
             Layout.fillWidth: true
             Layout.preferredWidth: 0
             model: backend.demoModels

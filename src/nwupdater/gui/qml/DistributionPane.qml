@@ -10,7 +10,7 @@ Flickable {
     readonly property var actions: dist.actions || ({})
     contentHeight: col.implicitHeight + 32
     clip: true
-    ScrollBar.vertical: ScrollBar {}
+    ScrollBar.vertical: AppScrollBar {}
 
     ColumnLayout {
         id: col

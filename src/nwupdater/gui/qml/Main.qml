@@ -138,7 +138,7 @@ ApplicationWindow {
         id: split
         anchors.fill: parent
         orientation: Qt.Horizontal
-        property real railWidth: 250
+        property real railWidth: 280
         property bool collapsed: false
 
         handle: Rectangle {
@@ -150,7 +150,7 @@ ApplicationWindow {
         Rectangle {
             id: rail
             SplitView.preferredWidth: split.collapsed ? 0 : split.railWidth
-            SplitView.minimumWidth: split.collapsed ? 0 : 190
+            SplitView.minimumWidth: split.collapsed ? 0 : 232
             SplitView.maximumWidth: 360
             visible: !split.collapsed
             color: Theme.panel
@@ -158,7 +158,7 @@ ApplicationWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 16
                 spacing: 10
 
                 Loader {
@@ -464,7 +464,7 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
             }
             AppButton { Layout.fillWidth: true; text: i18n.t("rescan"); onClicked: backend.rescan() }
-            ComboBox {
+            AppComboBox {
                 id: demoPick
                 Layout.fillWidth: true
                 model: backend.demoModels

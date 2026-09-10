@@ -94,7 +94,7 @@ Item {
                     spacing: 7
                     model: root.deviceModel
                     // The model updates rows in place, so this scroll position survives a refresh.
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
                     // The delegate root is a plain Item so the required properties do not
                     // shadow ItemRow's own API; it forwards them as values.
                     delegate: Item {
@@ -204,7 +204,7 @@ Item {
                     clip: true
                     spacing: 7
                     model: root.availModel
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
                     delegate: Item {
                         id: availCell
                         required property string name
