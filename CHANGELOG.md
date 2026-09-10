@@ -6,6 +6,25 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.0] - 2026-09-10
+
+Version **stable** de la lignée 3.0.0 (promotion de la rc.4). Faits marquants depuis la 2.x :
+
+- **Une fenêtre native** (Qt Quick) à côté de la page web, pilotant le cœur **en direct** : plus de
+  serveur en loopback sur ce chemin, donc **aucune surface réseau**, une progression de flash
+  **déterminée** (octets écrits puis vérifiés), et l'état de l'IHM qui **survit** à un
+  rafraîchissement — défilement et focus compris.
+- **Trois canaux de distribution** : natif (roues Qt), navigateur (le canal de compatibilité, 6 Mo,
+  sans plancher système) et **figé** pour les postes anciens (macOS 10.12 · glibc 2.17 ·
+  Windows 8.1), planchers vérifiés **sur les octets livrés**.
+- **Mode classe** au niveau de la V2, gestes bureau en plus : Maj-clic, ⌘-clic, ⌘A, `Suppr`, `F2`,
+  glisser-déposer vers une classe, et un **mode batch en seconde fenêtre** (projetable) au lieu
+  d'une modale.
+- **Aucune E/S appareil sur le thread graphique**, les lectures comprises : la fenêtre s'affiche
+  sans attendre la calculatrice, et le parc se filtre sans relire le registre.
+- **La présentation est vérifiée** : la scène QML est chargée en CI avec échec au premier
+  avertissement, et `qmllint` garde le lot sur les trois OS.
+
 ### Outillage
 
 - **Dependabot n'épingle plus `github/codeql-action` à une version exacte.** Les workflows suivent
