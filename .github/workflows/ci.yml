@@ -59,6 +59,9 @@ jobs:
       # is what makes the other twenty visible. Registering both as QML singletons would clear
       # it, but only pays off with generated .qmltypes — tracked for after 3.0.
       - name: Lint the QML scene (qmllint)
+        # bash on every OS: the default Windows shell is PowerShell, which does not expand
+        # `*.qml` and hands qmllint the literal string.
+        shell: bash
         run: |
           cd src/nwupdater/gui/qml
           pyside6-qmllint -I . --unqualified disable *.qml
