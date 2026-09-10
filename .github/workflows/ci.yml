@@ -49,6 +49,19 @@ jobs:
         run: python -m ruff format --check src tests
       - name: Type-check (mypy)
         run: python -m mypy src
+      # The QML half used to have no static gate at all: a two-level `parent.parent` chain, a
+      # size set on a layout child, a method called on an untyped `currentItem` — all of it
+      # only ever surfaced at runtime, in a window nobody opened in CI.
+      #
+      # `unqualified` is the one category left off, and it cannot be fixed rather than waived:
+      # `backend` and `i18n` reach QML as context properties, which are unqualifiable by
+      # construction, and they account for ~400 of the ~420 findings. Silencing that category
+      # is what makes the other twenty visible. Registering both as QML singletons would clear
+      # it, but only pays off with generated .qmltypes — tracked for after 3.0.
+      - name: Lint the QML scene (qmllint)
+        run: |
+          cd src/nwupdater/gui/qml
+          pyside6-qmllint -I . --unqualified disable *.qml
       # Coverage gate on Linux (full Python matrix); macOS/Windows just smoke-test the suite so
       # platform-specific branch coverage can't make the threshold flaky.
       - name: Tests + coverage (pytest)

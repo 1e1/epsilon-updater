@@ -14,8 +14,8 @@ RowLayout {
 
     Rectangle {
         Layout.alignment: Qt.AlignTop
-        width: 17
-        height: 17
+        Layout.preferredWidth: 17
+        Layout.preferredHeight: 17
         radius: 9
         color: "transparent"
         border.width: root.checked ? 5 : 1.5

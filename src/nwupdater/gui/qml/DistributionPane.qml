@@ -71,58 +71,55 @@ Flickable {
                 Layout.fillWidth: true
                 spacing: 6
                 Repeater {
-                    model: [
-                        { k: "census",   glyph: "▤", label: i18n.t("roster_dist_recensement") },
-                        { k: "firmware", glyph: "⚙", label: i18n.t("roster_dist_firmware") },
-                        { k: "apps",     glyph: "▦", label: i18n.t("roster_dist_apps") },
-                        { k: "scripts",  glyph: "‹›", label: i18n.t("roster_dist_scripts") }
-                    ]
+                    // The chain and its glyphs live in the DistActions singleton: this pane and
+                    // the batch journal used to keep two tables of the same four steps.
+                    model: DistActions.chain
                     delegate: Row {
+                        id: step
                         required property var modelData
                         required property int index
+                        readonly property bool on: !!root.actions[step.modelData.key]
                         spacing: 6
-                        readonly property bool on: !!root.actions[modelData.k]
 
                         Rectangle {
                             width: node.implicitWidth + 22
                             height: 34
                             radius: 9
-                            color: parent.on ? Theme.accentSoft : Theme.panel
+                            color: step.on ? Theme.accentSoft : Theme.panel
                             border.width: 1
-                            border.color: parent.on ? Theme.accent : Theme.line
+                            border.color: step.on ? Theme.accent : Theme.line
                             Row {
                                 id: node
                                 anchors.centerIn: parent
                                 spacing: 7
                                 Text {
-                                    text: (index + 1) + "."
+                                    text: (step.index + 1) + "."
                                     color: Theme.muted
                                     font.pixelSize: 11
                                     font.weight: Font.Bold
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: modelData.glyph
-                                    color: parent.parent.parent.on ? Theme.accentInk : Theme.muted
+                                    text: step.modelData.glyph
+                                    color: step.on ? Theme.accentInk : Theme.muted
                                     font.pixelSize: 13
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: modelData.label
-                                    color: parent.parent.parent.on ? Theme.accentInk : Theme.muted
+                                    text: i18n.t(step.modelData.label)
+                                    color: step.on ? Theme.accentInk : Theme.muted
                                     font.pixelSize: 13
-                                    font.weight: parent.parent.parent.on ? Font.DemiBold
-                                                                         : Font.Normal
+                                    font.weight: step.on ? Font.DemiBold : Font.Normal
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
                             TapHandler {
-                                onTapped: backend.distSetAction(modelData.k, !parent.parent.on)
+                                onTapped: backend.distSetAction(step.modelData.key, !step.on)
                             }
                             HoverHandler { cursorShape: Qt.PointingHandCursor }
                         }
                         Text {
-                            visible: index < 3
+                            visible: step.index < DistActions.chain.length - 1
                             text: "→"
                             color: Theme.muted
                             font.pixelSize: 13

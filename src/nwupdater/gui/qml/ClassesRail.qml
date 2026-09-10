@@ -40,8 +40,8 @@ ColumnLayout {
             readonly property bool active: backend.parcClass === bucket.classId
             color: bucket.active ? Theme.accentSoft : (hov.hovered ? Theme.card : "transparent")
 
-            readonly property bool renameable: bucket.classId !== "__all__"
-                                            && bucket.classId !== "__unfiled__"
+            readonly property bool renameable: bucket.classId !== backend.classAll
+                                            && bucket.classId !== backend.classUnfiled
 
             HoverHandler { id: hov; cursorShape: Qt.PointingHandCursor }
             TapHandler {
@@ -75,13 +75,13 @@ ColumnLayout {
             DropArea {
                 id: classDrop
                 anchors.fill: parent
-                enabled: bucket.classId !== "__all__"   // "All" is a view, not a bucket
+                enabled: bucket.classId !== backend.classAll   // "All" is a view, not a bucket
                 keys: ["nwupdater/roster-keys"]
                 onDropped: (ev) => {
                     const keys = ev.getDataAsString("nwupdater/roster-keys")
                                    .split("\n").filter((k) => k !== "")
                     if (keys.length)
-                        backend.rosterMove(keys, bucket.classId === "__unfiled__"
+                        backend.rosterMove(keys, bucket.classId === backend.classUnfiled
                                                  ? "" : bucket.classId)
                     ev.acceptProposedAction()
                 }
@@ -110,8 +110,8 @@ ColumnLayout {
                 Text {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 0
-                    text: bucket.classId === "__all__" ? i18n.t("roster_all")
-                        : bucket.classId === "__unfiled__" ? i18n.t("roster_unfiled")
+                    text: bucket.classId === backend.classAll ? i18n.t("roster_all")
+                        : bucket.classId === backend.classUnfiled ? i18n.t("roster_unfiled")
                         : bucket.label
                     color: bucket.active ? Theme.accentInk : Theme.ink
                     font.pixelSize: 13

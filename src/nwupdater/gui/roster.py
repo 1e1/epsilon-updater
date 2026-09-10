@@ -9,28 +9,32 @@ from __future__ import annotations
 
 from typing import Any
 
-from .format import fmt_relative
+from .format import relative_key
 
 CLASS_ALL = "__all__"
 CLASS_UNFILED = "__unfiled__"
 
 # QML reserves `id`, and inside a delegate `model` is the model object itself: a role by either
 # name silently blanks the whole row. Both are renamed here, once.
+#
+# Every field below is bound by the table's delegate. A role nobody draws is not free: it is
+# rebuilt for every calculator on every keystroke of the filter.
 ROSTER_FIELDS = (
     "key",
-    "name",
     "displayName",
-    "modelName",
     "family",
-    "cls",
     "knownFirmware",
     "upToDate",
-    "lastScan",
-    "selected",
+    "lastScanKey",  # i18n key + count rather than a sentence, so a language switch is free
+    "lastScanN",
+    "lastDist",  # per-action outcome of the last batch pass, {} until one runs
 )
 CLASS_FIELDS = ("classId", "label", "count", "icon")
 
+# The chain, in execution order. ``journal`` is the key the batch journal records an outcome
+# under — ``census`` is configured but recorded as ``recensement`` (see Session.batch_run).
 DIST_ACTIONS = ("census", "firmware", "apps", "scripts")
+DIST_JOURNAL_KEYS = ("recensement", "firmware", "apps", "scripts")
 
 
 def default_distribution() -> dict[str, Any]:
@@ -53,7 +57,11 @@ def in_class(calculator: dict, class_id: str) -> bool:
 
 
 def roster_rows(roster: dict, class_id: str, name_filter: str = "", **kw) -> list[dict[str, Any]]:
-    """The calculators of ``class_id`` whose display name matches ``name_filter``."""
+    """The calculators of ``class_id`` whose display name matches ``name_filter``.
+
+    ``kw`` is forwarded to :func:`~nwupdater.gui.format.relative_key` (only ``now``, injected by
+    the tests so the last-scan column can be asserted without freezing the clock).
+    """
     needle = (name_filter or "").strip().lower()
     rows = []
     for c in roster.get("calculators", []):
@@ -62,18 +70,18 @@ def roster_rows(roster: dict, class_id: str, name_filter: str = "", **kw) -> lis
         display = c.get("name") or c.get("default") or ""
         if needle and needle not in display.lower():
             continue
+        scan_key, scan_n = relative_key(c.get("last_scan"), **kw)
+        last_dist = c.get("last_dist")
         rows.append(
             {
                 "key": c.get("key"),
-                "name": c.get("name") or "",
                 "displayName": display,
-                "modelName": c.get("model") or "",
                 "family": c.get("family") or "",
-                "cls": c.get("class") or "",
                 "knownFirmware": c.get("known_firmware") or "—",
                 "upToDate": bool(c.get("up_to_date")),
-                "lastScan": fmt_relative(c.get("last_scan"), **kw),
-                "selected": False,
+                "lastScanKey": scan_key,
+                "lastScanN": scan_n,
+                "lastDist": dict(last_dist) if isinstance(last_dist, dict) else {},
             }
         )
     return rows

@@ -9,7 +9,11 @@ ColumnLayout {
     property var deviceName: ({})
     spacing: 12
 
-    TextField {
+    // The name sits on the panel, not in a box: only focus gives it a frame. Everything else
+    // (placeholder, selection, caret) comes from AppTextField, i.e. from Theme — a raw
+    // TextField would keep drawing those from the system palette in the dark theme.
+    AppTextField {
+        id: nameField
         Layout.fillWidth: true
         Layout.topMargin: 4
         text: root.deviceName.name || ""
@@ -17,15 +21,14 @@ ColumnLayout {
         horizontalAlignment: TextInput.AlignHCenter
         font.pixelSize: 15
         font.weight: Font.DemiBold
-        color: Theme.ink
         background: Rectangle {
             radius: 8
-            color: parent.activeFocus ? Theme.card : "transparent"
-            border.width: parent.activeFocus ? 1 : 0
+            color: nameField.activeFocus ? Theme.card : "transparent"
+            border.width: nameField.activeFocus ? 1 : 0
             border.color: Theme.lineStrong
         }
-        onEditingFinished: backend.setDeviceName(text)
-        Keys.onEscapePressed: { text = root.deviceName.name || ""; focus = false }
+        onEditingFinished: backend.setDeviceName(nameField.text)
+        Keys.onEscapePressed: { nameField.text = root.deviceName.name || ""; nameField.focus = false }
     }
 
     Image {
@@ -102,7 +105,7 @@ ColumnLayout {
             model: backend.demoModels
             currentIndex: Math.max(0, backend.demoModels.indexOf(root.identity.model))
             font.pixelSize: 12
-            onActivated: (i) => backend.switchDemo(backend.demoModels[i])
+            onActivated: (i) => backend.exploreDemo(backend.demoModels[i])
         }
     }
 

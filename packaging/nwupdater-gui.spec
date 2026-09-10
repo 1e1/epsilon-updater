@@ -46,9 +46,12 @@ target_arch = os.environ.get("NWUPDATER_MAC_ARCH", "universal2") if is_mac else 
 # disk, 40 -> 38 MB zipped. Modest, but it also pins the ceiling: without it, a machine with
 # QtWebEngine installed would ship ~200 MB more.
 #
-# QtWidgets is deliberately NOT in this list: Qt.labs.platform falls back to the widget-based
-# file dialog where no native one exists (a Linux desktop without a portal), which is exactly
-# the locked-down school machine this project targets. 6 MB is the right price for that.
+# QtWidgets is deliberately NOT in this list, and the reason is narrower than it used to say:
+# the file dialogs come from QtQuick.Dialogs, which needs nothing from Widgets. What does need
+# it is Qt.labs.platform's MENU BAR — native on macOS only, and a widget-based fallback
+# everywhere else, one that additionally requires the application object to be a QApplication
+# (see gui/app.py::_application). Without both halves, Windows and any Linux desktop without a
+# global menu ship a window with no menu bar at all. 6 MB is the right price for that.
 _QT_UNUSED = [
     "WebEngineCore", "WebEngineWidgets", "WebEngineQuick", "WebChannel", "WebSockets",
     "Multimedia", "MultimediaWidgets", "SpatialAudio", "Charts", "DataVisualization",

@@ -98,7 +98,10 @@ class RosterMixin(SessionBase):
         calculators.sort(key=lambda c: (c["name"] or c["default"] or "").lower())
         # Per-class distribution config (every class defaulted) + the device-independent name pools
         # the Distribution panels pick from (app/script catalogue), so the UI works with no device.
-        distributions = {c: R.distribution(c) for c in classes}
+        # ONE read for the whole map: a per-class R.distribution() call re-parses the register
+        # every time, which the native UI's roster refresh pays on the keystroke path.
+        stored = R.all_distributions()
+        distributions = {c: stored.get(c) or R.default_distribution() for c in classes}
         return {
             "schema": R.SCHEMA,
             "classes": classes,

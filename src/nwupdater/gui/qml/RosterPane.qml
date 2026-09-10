@@ -10,6 +10,10 @@ Item {
     property int lastClicked: -1
     property int selCount: 0   // selected AND visible: the bulk bar counts what the eye counts
 
+    // F2 used to call a method on `rows.currentItem`: untyped, and null as soon as the current
+    // row leaves the reuse pool. The row that owns the index answers instead.
+    signal renameRow(int index)
+
     function selectedKeys() {
         return Object.keys(root.selection).filter((k) => root.selection[k])
     }
@@ -173,8 +177,8 @@ Item {
                            && (e.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) {
                     root.selectAll(true)
                     e.accepted = true
-                } else if (e.key === Qt.Key_F2 && rows.currentItem) {
-                    rows.currentItem.startRename()
+                } else if (e.key === Qt.Key_F2 && rows.currentIndex >= 0) {
+                    root.renameRow(rows.currentIndex)
                     e.accepted = true
                 } else if (e.key === Qt.Key_Escape) {
                     root.clearSel()
@@ -190,7 +194,9 @@ Item {
                 required property string family
                 required property string knownFirmware
                 required property bool upToDate
-                required property string lastScan
+                required property string lastScanKey
+                required property int lastScanN
+                required property var lastDist
 
                 width: rows.width
                 height: 52
@@ -198,6 +204,10 @@ Item {
                 color: root.selection[row.key] ? Theme.accentSoft
                      : rowHover.hovered ? Theme.panel : "transparent"
                 function startRename() { nameEdit.visible = true; nameEdit.forceActiveFocus() }
+                Connections {
+                    target: root
+                    function onRenameRow(i) { if (i === row.index) row.startRename() }
+                }
 
                 Rectangle { width: parent.width; height: 1; y: parent.height - 1; color: Theme.line }
                 HoverHandler { id: rowHover }
@@ -239,7 +249,7 @@ Item {
                         let s = root.selection
                         for (let i = a; i <= b; i++) s[backend.rosterRows.get(i).key] = true
                         root.selection = s
-                        root.selCount = root.selectedKeys().length
+                        root.countSel()   // visible-only, like every other selection path
                         rows.currentIndex = row.index
                     }
                 }
@@ -320,17 +330,19 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                     }
-                    Text {
+                    Item {
                         Layout.preferredWidth: 150
-                        text: "—"
-                        color: Theme.muted
-                        font.pixelSize: 13
+                        Layout.fillHeight: true
+                        DistOutcomes {
+                            anchors.verticalCenter: parent.verticalCenter
+                            outcomes: row.lastDist
+                        }
                     }
                     RowLayout {
                         Layout.preferredWidth: 150
                         spacing: 6
                         Text {
-                            text: row.lastScan
+                            text: i18n.t(row.lastScanKey, { n: row.lastScanN })
                             color: Theme.muted
                             font.pixelSize: 13
                         }

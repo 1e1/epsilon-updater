@@ -8,6 +8,8 @@ public method surface identical while grouping the code by responsibility.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from ..apps.store import AppStore
 from ..cache.store import FirmwareCache
@@ -72,6 +74,18 @@ class SessionBase:
             self.attach_real() if real else self.attach_demo(
                 model_name, os_version=os_version, commit=commit
             )
+
+    # -- exclusive device access ---------------------------------------------------
+    @contextmanager
+    def io(self) -> Iterator[None]:
+        """Hold the device I/O lock for the duration of the block.
+
+        The lock itself stays private: every caller that needs exclusive access to the USB
+        handle — the loopback server, the native UI — goes through here rather than reaching
+        into ``_io_lock``, so the serialisation rule has one documented entry point.
+        """
+        with self._io_lock:
+            yield
 
     # -- device attach / detach ----------------------------------------------------
     def attach_real(self) -> dict:

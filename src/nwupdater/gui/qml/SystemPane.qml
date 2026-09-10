@@ -87,7 +87,7 @@ Flickable {
                     }
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 8
+                        Layout.preferredHeight: 8
                         radius: 4
                         color: Theme.lineStrong
                         Rectangle {
