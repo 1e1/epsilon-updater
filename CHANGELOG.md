@@ -6,6 +6,40 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.0-rc.3] - 2026-09-10
+
+**Intégration visuelle de l'IHM native.** Le portage Qt Quick avait gardé les contrôles bruts du
+style `Basic` : ils peignent avec la palette **système**, quand tout le reste de la fenêtre peint
+avec les tokens du thème. Cette version les remplace, et remet d'aplomb la table du parc.
+
+### Corrigé
+
+- **Le filtre du parc recouvrait le libellé « Nom ».** La cellule d'en-tête n'avait aucune largeur
+  implicite — 0 px, son texte débordant sous le champ placé 8 px plus loin. Elle se dimensionne
+  désormais sur son libellé, ce qui vaut aussi pour les traductions plus longues.
+- **Champs, cases à cocher, listes déroulantes et barres de défilement ignoraient le thème.**
+  Aucune palette Qt n'étant posée, ils restaient **clairs en thème sombre** — cases blanches sur
+  carte sombre, listes déroulantes étrangères au reste — avec des angles droits, un anneau de
+  focus bleu système et des hauteurs qui ne s'alignaient pas sur les boutons. Quatre composants
+  reprennent les tokens (`AppTextField`, `AppCheckBox`, `AppComboBox`, `AppScrollBar`) : dix-sept
+  usages basculés, plus aucun contrôle brut ne subsiste.
+- **Filtrer effaçait la sélection du parc.** Chaque frappe vidait la sélection et faisait
+  disparaître la barre d'actions groupées. La sélection est désormais **élaguée** : seules les
+  calculatrices sorties du registre la quittent, le compteur ne totalise que les lignes visibles
+  et « tout sélectionner » n'agit que sur elles — la sémantique de la table web.
+- **Le champ de filtre ignorait une remise à zéro venue de l'application** : sa liaison mourait à
+  la première frappe. Elle est réaffirmée tant que le champ n'a pas le focus.
+
+### Ajouté
+
+- **Noms accessibles** sur le filtre du parc, la case « tout sélectionner » et le menu « Déplacer
+  vers » — les clés existaient déjà dans le dictionnaire partagé, seule l'IHM web les utilisait.
+
+### Modifié
+
+- Rail des classes élargi à **280 px** (marges 16) et calculatrice du panneau latéral ramenée à
+  150 px, pour que les noms de classe longs cessent d'être tronqués.
+
 ## [3.0.0-rc.2] - 2026-09-07
 
 **Canal figé pour anciens systèmes** (troisième canal de distribution). Le canal actif reste sur
