@@ -14,3 +14,12 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     labels: ["dependencies", "ci"]
+    ignore:
+      # The CodeQL workflow tracks the floating major tag (@v4), so minor and patch
+      # releases land without a pull request. Pinning an exact version here would
+      # freeze that tracking and, once the PR sits for a few weeks, roll the action
+      # backwards. Major bumps are kept: those do require editing the workflow.
+      - dependency-name: "github/codeql-action"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"

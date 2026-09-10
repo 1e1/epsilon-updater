@@ -6,6 +6,15 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Outillage
+
+- **Dependabot n'épingle plus `github/codeql-action` à une version exacte.** Les workflows suivent
+  le tag majeur flottant (`@v4`), donc les versions mineures et correctives arrivent sans PR. Une
+  PR d'épinglage laissée ouverte quelques semaines finit au contraire par **faire reculer**
+  l'action : celle qui proposait `v4.37.3` pointait, à sa fermeture, sur un commit antérieur à
+  celui de `@v4`. Les montées de majeure restent signalées — seules elles exigent d'éditer le
+  workflow.
+
 ## [3.0.0-rc.4] - 2026-09-10
 
 **Passe de qualité avant la 3.0 finale.** Un audit du portage Qt, avant de figer. Il a sorti neuf
