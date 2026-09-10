@@ -23,7 +23,7 @@ from PySide6.QtCore import QEventLoop, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from nwupdater.gui.app import _application, install_context
+from nwupdater.gui.app import _application, configure_identity, install_context
 from nwupdater.gui.backend import Backend
 from nwupdater.gui.i18n import I18n
 from nwupdater.server.session import Session
@@ -33,6 +33,10 @@ QML = Path(__file__).resolve().parents[1] / "src" / "nwupdater" / "gui" / "qml"
 
 @pytest.fixture(scope="session")
 def qt_app():
+    # Same two steps as app.py::run(), in the same order. Naming the application is not
+    # cosmetic: without it QSettings refuses to initialise, the QML `Settings` block warns
+    # twice and persists nothing — which is exactly what CI caught on Linux.
+    configure_identity()
     return QGuiApplication.instance() or _application([])
 
 

@@ -39,6 +39,24 @@ def _application(argv: list[str]):
         return QGuiApplication(argv)
 
 
+def configure_identity() -> None:
+    """Name the application to Qt, before anything reads a setting.
+
+    ``QSettings`` — and therefore the QML ``Settings`` element that persists the window geometry,
+    the language and the theme — refuses to initialise without an organisation and application
+    name. Unset, Qt warns twice and the whole preference block silently does nothing. Called by
+    :func:`run` and by the tests, so both exercise the same setup rather than only the shipped
+    path being correct.
+    """
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtGui import QGuiApplication
+
+    QCoreApplication.setOrganizationName("nwupdater")
+    QCoreApplication.setOrganizationDomain("nwupdater.local")
+    QCoreApplication.setApplicationName("nwupdater")
+    QGuiApplication.setApplicationDisplayName("nwupdater")
+
+
 def install_context(engine, backend, i18n) -> None:
     """Expose the two objects to QML, and make a language switch actually redraw.
 
@@ -62,15 +80,11 @@ def run(
     lang: str = "fr",
     argv: list[str] | None = None,
 ) -> int:
-    from PySide6.QtCore import QCoreApplication, QUrl
-    from PySide6.QtGui import QGuiApplication, QIcon
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QIcon
     from PySide6.QtQml import QQmlApplicationEngine
 
-    QCoreApplication.setOrganizationName("nwupdater")
-    QCoreApplication.setOrganizationDomain("nwupdater.local")
-    QCoreApplication.setApplicationName("nwupdater")
-    QGuiApplication.setApplicationDisplayName("nwupdater")
-
+    configure_identity()
     app = _application(argv if argv is not None else sys.argv)
     icon = Path(__file__).parents[3] / "packaging" / "icon" / "icon_256.png"
     if icon.exists():

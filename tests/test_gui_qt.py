@@ -13,10 +13,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6", reason="native UI extra not installed")
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtGui import QGuiApplication
 
-from nwupdater.gui.app import _application
+from nwupdater.gui.app import _application, configure_identity
 from nwupdater.gui.backend import Backend
 from nwupdater.gui.i18n import I18n
 from nwupdater.gui.jobs import JobRunner
@@ -27,11 +27,11 @@ from nwupdater.server.session import Session
 
 @pytest.fixture(scope="session")
 def qt_app():
-    QCoreApplication.setOrganizationName("nwupdater-tests")
-    QCoreApplication.setApplicationName("nwupdater-tests")
-    # Built the way app.py builds it: Qt.labs.platform's menu bar needs the widgets
-    # application everywhere except macOS, and a test that silently used QGuiApplication
-    # would never see that.
+    # Built the way app.py builds it, identity included: Qt.labs.platform's menu bar needs the
+    # widgets application everywhere except macOS, and QSettings needs the application to be
+    # named. Both suites share one process, so whichever fixture runs first used to decide —
+    # calling the same helper removes the ordering dependency.
+    configure_identity()
     return QGuiApplication.instance() or _application([])
 
 
