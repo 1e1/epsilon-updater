@@ -99,6 +99,16 @@ n'était couverte par rien.
 - Couverture des chemins destructeurs, jusque-là à 0 % : écriture du plan, export, dépôt de
   fichier, et toutes les mutations du registre. Couverture du paquet `gui` : **72 → 82 %**.
 
+### Outillage
+
+- **`configure_identity()`** — les quatre appels qui nomment l'application à Qt sont extraits et
+  partagés entre `run()` et les tests. `QSettings`, donc le bloc `Settings` qui persiste
+  géométrie, langue et thème, refuse de s'initialiser sans eux : le harnais de test les omettait
+  et la scène partait avec deux avertissements **sous Linux uniquement** — macOS retombe sur un
+  plist sans prévenir. Comportement de l'app livrée inchangé, elle les posait déjà.
+- Les étapes CI qui dépendent d'un glob shell s'exécutent sous **bash** sur les trois OS : la
+  console Windows par défaut est PowerShell, qui n'étend pas `*.qml` et transmettait le littéral.
+
 ## [3.0.0-rc.3] - 2026-09-10
 
 **Intégration visuelle de l'IHM native.** Le portage Qt Quick avait gardé les contrôles bruts du
