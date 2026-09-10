@@ -136,7 +136,7 @@ Window {
                         Layout.fillWidth: true
                         visible: !backend.connected || backend.identity.virtual
                         spacing: 6
-                        ComboBox {
+                        AppComboBox {
                             id: simModel
                             Layout.fillWidth: true
                             font.pixelSize: 12
@@ -187,13 +187,11 @@ Window {
                     Layout.margins: 16
                     spacing: 6
                     Repeater {
-                        model: backend.batchSteps
+                        model: DistActions.chain.filter(
+                            (a) => backend.batchSteps.indexOf(a.key) >= 0)
                         delegate: Chip {
-                            required property string modelData
-                            text: modelData === "census" ? i18n.t("roster_dist_recensement")
-                                : modelData === "firmware" ? i18n.t("roster_dist_firmware")
-                                : modelData === "apps" ? i18n.t("roster_dist_apps")
-                                : i18n.t("roster_dist_scripts")
+                            required property var modelData
+                            text: i18n.t(modelData.label)
                         }
                     }
                     Chip {
@@ -222,7 +220,7 @@ Window {
                     clip: true
                     spacing: 6
                     model: backend.batch.journal
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: AppScrollBar {}
 
                     Text {
                         anchors.centerIn: parent
@@ -242,17 +240,6 @@ Window {
                         border.width: 1
                         border.color: Theme.line
 
-                        function outcomeColor(o) {
-                            return o === "ok" ? Theme.ok
-                                 : o === "change" ? Theme.accent
-                                 : o === "error" ? Theme.err : Theme.muted
-                        }
-                        function outcomeBg(o) {
-                            return o === "ok" ? Theme.okSoft
-                                 : o === "change" ? Theme.accentSoft
-                                 : o === "error" ? Theme.blueSoft : Theme.panel
-                        }
-
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 12
@@ -271,19 +258,9 @@ Window {
                                 font.pixelSize: 12
                             }
                             Item { Layout.fillWidth: true }
-                            // one chip per action of the pass, coloured by its outcome
-                            Repeater {
-                                model: ["recensement", "firmware", "apps", "scripts"].filter(
-                                    (a) => (entry.modelData.dist || {})[a] !== undefined)
-                                delegate: Chip {
-                                    required property string modelData
-                                    readonly property string outcome:
-                                        (entry.modelData.dist || {})[modelData] || ""
-                                    text: modelData
-                                    fg: entry.outcomeColor(outcome)
-                                    bg: entry.outcomeBg(outcome)
-                                }
-                            }
+                            // One pill per action of the pass, coloured by its outcome — the
+                            // same component the roster's Distribution column draws.
+                            DistOutcomes { outcomes: entry.modelData.dist || ({}) }
                         }
                     }
                 }

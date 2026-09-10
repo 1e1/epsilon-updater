@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from nwupdater.gui import roster as R
-from nwupdater.gui.format import APP_COLORS, color_for, fmt_bytes, fmt_relative, initial_for
+from nwupdater.gui.format import APP_COLORS, color_for, fmt_bytes, initial_for, relative_key
 from nwupdater.gui.plan import APP_SECTOR, Slot, Stage, footprint, plan_for
 from nwupdater.gui.workshop import ROW_FIELDS, Workshop
 
@@ -33,24 +33,32 @@ def test_fmt_bytes_tolerates_none():
 @pytest.mark.parametrize(
     ("delta", "expected"),
     [
-        (timedelta(seconds=5), "à l'instant"),
-        (timedelta(minutes=20), "il y a 20 min"),
-        (timedelta(hours=5), "il y a 5 h"),
-        (timedelta(days=3), "il y a 3 j"),
+        (timedelta(seconds=5), ("rel_now", 0)),
+        (timedelta(minutes=20), ("rel_min", 20)),
+        (timedelta(hours=5), ("rel_hour", 5)),
+        (timedelta(days=3), ("rel_day", 3)),
     ],
 )
-def test_fmt_relative(delta, expected):
-    assert fmt_relative((NOW - delta).isoformat(), now=NOW) == expected
+def test_relative_key(delta, expected):
+    assert relative_key((NOW - delta).isoformat(), now=NOW) == expected
 
 
 @pytest.mark.parametrize("value", [None, "", "not-a-date"])
-def test_fmt_relative_rejects_junk(value):
-    assert fmt_relative(value, now=NOW) == "—"
+def test_relative_key_rejects_junk(value):
+    assert relative_key(value, now=NOW) == ("rel_never", 0)
 
 
-def test_fmt_relative_assumes_utc_when_naive():
+def test_relative_key_assumes_utc_when_naive():
     naive = (NOW - timedelta(hours=2)).replace(tzinfo=None).isoformat()
-    assert fmt_relative(naive, now=NOW) == "il y a 2 h"
+    assert relative_key(naive, now=NOW) == ("rel_hour", 2)
+
+
+def test_relative_key_never_renders_a_sentence():
+    """The last-scan column has to follow a language switch. Returning a key + count is what
+    lets the QML binding re-evaluate; a formatted string would freeze the table in one
+    language, which is exactly what it used to do (French, always)."""
+    key, n = relative_key((NOW - timedelta(minutes=20)).isoformat(), now=NOW)
+    assert key.startswith("rel_") and isinstance(n, int)
 
 
 def test_color_is_stable_and_in_palette():
@@ -182,7 +190,7 @@ def test_minimize_keeps_only_what_is_already_installed():
     s.add("Tetris", 61580)
     s.remove("Chess")
     s.minimize()
-    assert s.kept_names() == ["Periodic", "Chess", "Snake"]
+    assert [x.name for x in s.slots if not x.deleted] == ["Periodic", "Chess", "Snake"]
     assert s.plan().dirty is False
 
 
@@ -190,7 +198,7 @@ def test_re_adding_a_deleted_slot_rearms_it_in_place():
     s = stage()
     s.remove("Chess")
     assert s.add("Chess", 135168) is True
-    assert s.kept_names() == ["Periodic", "Chess", "Snake"]
+    assert [x.name for x in s.slots if not x.deleted] == ["Periodic", "Chess", "Snake"]
 
 
 def test_adding_something_already_staged_is_refused():
@@ -289,6 +297,7 @@ ROSTER = {
             "known_firmware": "25.2.0",
             "up_to_date": True,
             "last_scan": (NOW - timedelta(days=3)).isoformat(),
+            "last_dist": {"recensement": "ok", "firmware": "error"},
         },
         {
             "key": "n0200:bbb",
@@ -326,7 +335,6 @@ def test_name_filter_is_case_and_space_insensitive(needle):
 def test_row_uses_the_default_name_when_unnamed():
     row = R.roster_rows(ROSTER, R.CLASS_UNFILED)[0]
     assert row["displayName"] == "calc N0200"
-    assert row["name"] == ""
 
 
 def test_roster_rows_never_expose_a_role_named_model_or_id():
@@ -374,3 +382,64 @@ def test_projections_tolerate_an_empty_roster():
     assert R.roster_rows({}, R.CLASS_ALL) == []
     assert [b["classId"] for b in R.class_buckets({})] == [R.CLASS_ALL, R.CLASS_UNFILED]
     assert R.distribution_view({}, "3eB")["actions"] == R.default_distribution()["actions"]
+
+
+def test_row_carries_the_last_pass_outcome():
+    """The Distribution column drew a hard-coded dash while `last_dist` sat unread in the
+    payload — the web table has shown these pills since the batch mode shipped."""
+    row = next(r for r in R.roster_rows(ROSTER, R.CLASS_ALL) if r["key"] == "n0120:aaa")
+    assert row["lastDist"] == {"recensement": "ok", "firmware": "error"}
+
+
+def test_row_without_a_pass_gets_an_empty_map_not_none():
+    """QML iterates this: None would need a guard at every call site."""
+    row = next(r for r in R.roster_rows(ROSTER, R.CLASS_ALL) if r["key"] == "n0200:bbb")
+    assert row["lastDist"] == {}
+
+
+def test_last_scan_is_a_key_and_a_count_not_a_sentence():
+    rows = R.roster_rows(ROSTER, R.CLASS_ALL, now=NOW)  # `now` is why the clock stays frozen
+    row = next(r for r in rows if r["key"] == "n0120:aaa")
+    assert (row["lastScanKey"], row["lastScanN"]) == ("rel_day", 3)
+
+
+def test_journal_keys_match_the_chain_order():
+    """The chain is CONFIGURED as `census` but RECORDED as `recensement`; a lookup by the wrong
+    name renders nothing at all, silently."""
+    assert len(R.DIST_ACTIONS) == len(R.DIST_JOURNAL_KEYS)
+    assert R.DIST_ACTIONS[0] == "census" and R.DIST_JOURNAL_KEYS[0] == "recensement"
+    assert R.DIST_ACTIONS[1:] == R.DIST_JOURNAL_KEYS[1:]
+
+
+# -- API compatibility badge ------------------------------------------------------------
+def test_an_app_above_the_device_api_is_flagged():
+    shop = Workshop(
+        "apps",
+        [{"name": "Old", "size": 1024, "apiLevel": 25}],
+        [],
+        3145728,
+        device_api=20,
+    )
+    assert shop.device_rows()[0]["incompatible"] is True
+
+
+def test_an_app_at_or_below_the_device_api_is_not_flagged():
+    shop = Workshop(
+        "apps",
+        [{"name": "Fine", "size": 1024, "apiLevel": 20}],
+        [],
+        3145728,
+        device_api=20,
+    )
+    assert shop.device_rows()[0]["incompatible"] is False
+
+
+def test_an_unknown_device_api_flags_nothing():
+    """A false "incompatible" on a good app is worse than a missing badge."""
+    shop = Workshop("apps", [{"name": "X", "size": 1024, "apiLevel": 99}], [], 3145728)
+    assert shop.device_rows()[0]["incompatible"] is False
+
+
+def test_scripts_are_never_flagged_incompatible():
+    shop = Workshop("scripts", [{"name": "a.py", "size": 10}], [], 1024, device_api=20)
+    assert shop.device_rows()[0]["incompatible"] is False

@@ -27,6 +27,19 @@ i18n.py             Chaînes FR/EN, partagées avec l'IHM web.
 règle qui compte le plus — quels octets sont réellement réécrits — est donc testable sans Qt,
 alors qu'en V2 il fallait 561 lignes de Playwright et un navigateur pour l'atteindre.
 
+Deux règles transverses tiennent ce découpage. Toutes deux ont été enfreintes dans la première
+coupe, toutes deux sont désormais tenues par un test :
+
+- **Aucune E/S appareil sur le thread graphique — les lectures comprises.** `Backend.refresh()`
+  lit tout l'inventaire dans un worker et renvoie **un** instantané ; le thread graphique se
+  contente de l'affecter. La première version le faisait en ligne : la fenêtre n'apparaissait
+  qu'une fois la calculatrice lue (178 ms mesurés sur appareil *virtuel*, donc sans USB) et se
+  figeait à chaque sondage de branchement à chaud (71 ms). C'est 0 ms des deux côtés aujourd'hui.
+- **Rien ne franchit la frontière QML déjà traduit.** Le backend émet des **clés** i18n — champs
+  de ligne, messages d'état, dates relatives — et QML les rend. Une phrase formatée côté Python
+  fige l'IHM dans une langue : c'est ainsi que la colonne « dernier passage » du parc restait en
+  français quand l'interface était en anglais, et que la barre d'état affichait `install_ok::20.4.0`.
+
 ```
 QML  ──lecture de propriétés / appels de slots──▶  Backend (QObject)
                                                      │
@@ -111,27 +124,66 @@ Deux points structurants du spec :
 - **Qt est LGPL.** Les bibliothèques restent des fichiers séparés et remplaçables (`COLLECT`,
   pas de *one-file*), sur les trois OS. C'est la raison pour laquelle l'app native ne se livre
   pas en fichier unique sous Windows et Linux, contrairement à l'app navigateur.
+- **QtWidgets reste embarqué, pour une raison plus étroite qu'annoncé.** Le spec le gardait au
+  nom du repli non natif des dialogues de fichiers ; c'est faux, ceux-ci viennent de
+  `QtQuick.Dialogs` et ne demandent rien à Widgets. Ce qui l'exige, c'est la **barre de menus**
+  de `Qt.labs.platform` : native sur macOS seulement, et ailleurs un repli à base de widgets qui
+  réclame en plus que l'objet application soit un `QApplication`. Avec un simple
+  `QGuiApplication`, Qt écrit `Qt Labs Platform requires Qt Widgets` sur la sortie d'erreur et la
+  fenêtre part **sans aucune barre de menus** sous Windows et sous les bureaux Linux sans menu
+  global. `gui/app.py::_application` construit donc un `QApplication` quand QtWidgets est là, et
+  se dégrade proprement sinon.
+
+  Coût mesuré du choix, même méthode et même plateforme des deux côtés (`maxRSS` à 3 s,
+  offscreen) : **145,5 Mo** avec `QGuiApplication` contre **154,7 Mo** avec `QApplication`, soit
+  **+9,2 Mo**. C'est le prix d'une barre de menus sur deux OS sur trois ; les 6 Mo de disque
+  étaient déjà payés.
 
 ## 6. Tests
 
 | Fichier | Portée | Dépend de Qt |
 |---|---|---|
-| `tests/test_gui_pure.py` | plan d'écriture, staging, projections parc/distribution, formats | non |
-| `tests/test_gui_i18n.py` | parité FR/EN, toute clé utilisée en QML existe, placeholders alignés | non |
-| `tests/test_gui_qt.py` | modèles de liste, exécuteur de jobs, façade backend | oui (`importorskip`) |
+| `tests/test_gui_pure.py` | plan d'écriture, staging, projections parc/distribution, formats, compat API | non |
+| `tests/test_gui_i18n.py` | parité FR/EN, toute clé utilisée en QML **et tout message d'état** existe, placeholders alignés | non |
+| `tests/test_gui_qt.py` | modèles de liste, exécuteur de jobs, façade backend, chemins destructeurs | oui (`importorskip`) |
+| `tests/test_gui_qml.py` | **la scène elle-même** : elle charge, sans un seul avertissement, dans les deux modes | oui (`importorskip`) |
 
 Les tests Qt tournent en `QT_QPA_PLATFORM=offscreen` : ni écran, ni USB réel — le device virtuel,
 comme partout ailleurs dans le projet. Ceux qui ne dépendent pas de Qt tournent même sans l'extra
 `gui` installé, donc la règle d'écriture reste vérifiée dans une CI minimale.
 
-Trois régressions y sont épinglées nommément, parce qu'elles étaient **silencieuses** :
+`test_gui_qml.py` comble le trou le plus large du portage : **rien ne chargeait les 3 200 lignes
+de QML**. `QQmlApplicationEngine` signale une liaison cassée par un *avertissement* puis continue
+avec un contrôle vide, si bien qu'une faute ne se voyait qu'une fois la fenêtre ouverte. Le test
+charge `Main.qml`, visite chaque onglet des deux modes, ouvre la fenêtre batch, et **échoue au
+premier avertissement**. `pyside6-qmllint` complète le tableau côté statique, en CI.
+
+Un cas mérite d'être connu : le pire bug du portage — un `textRole` posé sur un modèle de chaînes,
+qui vidait le sélecteur de démo du premier écran et transmettait `undefined` au backend — ne
+produisait **aucun** avertissement. Charger proprement ne suffisait donc pas ; le test affirme
+séparément qu'un sélecteur non vide affiche quelque chose. (Vérifié en réintroduisant le bug :
+le test tombe.)
+
+Six régressions y sont épinglées nommément, parce qu'elles étaient toutes **silencieuses** :
 
 1. un `QRunnable` en `autoDelete` détruit son objet de signaux avant que Qt ne livre la
    complétion — l'appel réussit sans que personne ne l'apprenne, et l'IHM reste « occupée » ;
 2. `Policy` porte `classroom`, pas `mode` : lu derrière un `getattr(..., "individual")` par
    défaut, le commutateur paraissait inerte ;
 3. un rôle nommé `model` (ou `id`) dans un modèle de liste : dans un *delegate* QML ces noms sont
-   réservés, et la collision vide **tous** les autres rôles de la ligne.
+   réservés, et la collision vide **tous** les autres rôles de la ligne ;
+4. un `textRole` sur un modèle de chaînes : sélecteur muet, `undefined` transmis au slot ;
+5. un message d'état passé à `Text` sans `i18n.t()` : l'utilisateur lit la clé brute ;
+6. un compte de sélection recalculé d'une **seconde** façon dans la branche Maj-clic : la barre
+   de lot annonçait un nombre que le tableau ne montrait pas, dès qu'un filtre était actif ;
+7. `i18n.t()` est un **slot** : une liaison QML ne dépend que des *propriétés* qu'elle lit, donc
+   changer de langue ne réévaluait aucune étiquette. Le commutateur ne décidait que du prochain
+   lancement — 0 libellé sur 22 suivait.
+
+La septième mérite un mot, parce qu'elle illustre à quoi sert un test de présentation : elle a été
+trouvée **par** le test écrit pour vérifier la barre d'état, pas par une relecture. Personne
+n'avait ouvert la fenêtre et cliqué « English » ; le docstring affirmant que ça marchait a tenu
+lieu de vérification pendant tout le portage.
 
 ## 7. Grille de qualité et auto-évaluation
 
@@ -145,25 +197,31 @@ et son résultat est reproductible avec les commandes indiquées.
 | T1 | Poids du téléchargement | zip publié, macOS arm64 | **6 Mo** | 38 Mo |
 | T2 | Empreinte mémoire | `maxRSS` après 3 s | ≈ 690 Mo (serveur + navigateur dédié) | **194 Mo** |
 | T3 | Surface d'attaque | ports en écoute | 1 (loopback, gardé) | **0** |
-| T4 | Couverture de la logique | `pytest --cov` | logique dans `app.js`, hors couverture Python | **93–100 %** sur les modules purs, 73 % du paquet |
+| T4 | Couverture de la logique | `pytest --cov` | logique dans `app.js`, hors couverture Python | **93–100 %** sur les modules purs, **82 %** du paquet |
 | T5 | Testable sans navigateur | oui/non | non (561 l de Playwright) | **oui** (`test_gui_pure.py`, sans Qt) |
 | T6 | Lint + format | `ruff check`, `ruff format --check` | vert | **vert** |
 | T7 | Plancher système | glibc / macOS minimum | **aucun** | glibc 2.34 / macOS 13 |
-| T8 | Taille du plus gros fichier | `wc -l` | `app.js` 1 691 l | `backend.py` 728 l |
+| T8 | Taille du plus gros fichier | `wc -l` | `app.js` 1 691 l | `backend.py` 941 l · `Main.qml` **230 l** |
+| T9 | La présentation est-elle vérifiée ? | scène chargée en CI, `qmllint` | — (Playwright, navigateur requis) | **oui**, 0 avertissement |
+| T10 | Coût du premier rendu | temps avant que la fenêtre puisse s'afficher | — (page servie, puis `fetch`) | **0 ms** (l'inventaire arrive après) |
 
 ### Ergonomie
 
 | # | Critère | V2 | V3 |
 |---|---|---|---|
 | U1 | Parité fonctionnelle | référence | **1 écart** (renommage depuis le journal batch) |
+| U1b | Parité de la table parc | colonne Distribution dessinée | **dessinée** (pastilles par action, comme le web) |
 | U2 | Progression d'un flash | indéterminée | **déterminée**, octets écrits puis vérifiés |
 | U3 | État conservé au rafraîchissement | non (`innerHTML` complet) | **oui** (mise à jour en place) |
 | U4 | Sélection multiple | cases à cocher seules | cases **+** Maj-clic, ⌘-clic, ⌘A |
 | U5 | Annulation | bouton | bouton **+** ⌘Z |
 | U6 | Export d'une app | bouton | bouton **+** glisser vers le Finder |
 | U7 | Rien d'accessible uniquement par un menu | — | **tenu** (voir §3) |
-| U8 | Parité FR/EN | testée | **testée**, placeholders compris |
-| U9 | Zoom, impression | gratuits (navigateur) | **absents** — assumé, hors périmètre rc.1 |
+| U8 | Parité FR/EN | testée | **testée**, placeholders compris — libellés, **messages d'état et dates relatives** |
+| U8b | Changement de langue à chaud | immédiat (re-render complet) | **immédiat** (liaisons invalidées) |
+| U9 | Zoom, impression | gratuits (navigateur) | **absents** — assumé, hors périmètre 3.0 |
+| U10 | Barre de menus | — (menus du navigateur) | **les trois OS** (voir §5, coût mesuré) |
+| U11 | Avertissement d'incompatibilité API | pastille sur l'app trop récente | **pastille**, même règle |
 
 ### Ce que la grille a fait corriger
 
@@ -179,11 +237,36 @@ Elle n'est pas décorative : appliquée, elle a produit des changements.
 - **U9 → un aveu.** Le zoom et l'impression étaient gratuits dans le navigateur ; ils ne le sont
   plus. C'est le prix explicite de la V3, et c'est pourquoi la V2 reste livrée.
 
+Passée une seconde fois avant la finale, la grille a produit une deuxième série — et, ce qui
+compte davantage, elle a montré que **trois de ses propres lignes étaient fausses** :
+
+- **T9 → le trou qu'aucune ligne ne couvrait.** La grille mesurait la logique et ignorait la
+  présentation. Or c'est là qu'était le pire défaut : un sélecteur muet sur le premier écran.
+  D'où `test_gui_qml.py` et `qmllint` en CI.
+- **T10 → une E/S là où le contrat disait l'inverse.** L'en-tête de `backend.py` affirmait
+  qu'aucun appel appareil ne touchait le thread graphique. C'était vrai des écritures, faux des
+  lectures : constructeur 178 ms, 71 ms par rafraîchissement, 29 ms par frappe dans le filtre du
+  parc — sur appareil virtuel, donc sans USB. Tout est passé en worker.
+- **U1/U8 étaient sur-déclarées.** « 1 écart de parité » en comptait trois de plus (colonne
+  Distribution non dessinée, niveau d'API jamais affiché, dates relatives en français dur), et
+  « parité FR/EN testée » ne testait que les libellés QML : les messages d'état s'affichaient
+  crus, `install_ok::20.4.0`. Le test i18n couvre désormais aussi les messages **émis**.
+
+La leçon se répète : une grille ne vaut que si on la relit contre le code, pas contre le
+souvenir qu'on en a.
+
 ### Reproduire
 
 ```bash
-pytest -q                                   # T4, T5, T6, U1, U8
+pytest -q                                   # T4, T5, T6, T9, U1, U8
 pytest --cov=nwupdater.gui --cov-report=term-missing tests/test_gui_*.py
 ruff check src/ && ruff format --check src/ # T6
+cd src/nwupdater/gui/qml && pyside6-qmllint -I . --unqualified disable *.qml   # T9
 pyinstaller packaging/nwupdater-gui.spec --noconfirm && du -sm dist/*.app   # T1
 ```
+
+`--unqualified disable` n'est pas un tapis sous lequel glisser la poussière : `backend` et `i18n`
+arrivent en QML comme *context properties*, qui sont par construction impossibles à qualifier, et
+pèsent à elles seules ~400 des ~420 signalements. Éteindre cette catégorie est ce qui rend les
+vingt autres lisibles — et elles sont toutes corrigées. Les enregistrer en singletons QML les
+qualifierait, mais ne paie qu'accompagné de `.qmltypes` générés : reporté après la 3.0.

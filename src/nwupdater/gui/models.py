@@ -79,7 +79,3 @@ class RowsModel(QAbstractListModel):
     @Slot(int, result="QVariantMap")
     def get(self, row: int) -> dict:
         return self._rows[row] if 0 <= row < len(self._rows) else {}
-
-    @property
-    def rows(self) -> list[dict[str, Any]]:
-        return self._rows

@@ -7,7 +7,6 @@ Button {
     property bool danger: false
     implicitHeight: 30
     padding: 12
-    enabled: true
     contentItem: Text {
         text: control.text
         color: !control.enabled ? Theme.muted

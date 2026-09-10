@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Basic
 
 /* The web UI's `.seg` control: a pill of mutually exclusive buttons. */
 Rectangle {
@@ -24,24 +23,25 @@ Rectangle {
         Repeater {
             model: root.options
             delegate: Rectangle {
+                id: option
                 required property var modelData
                 readonly property bool active: modelData.key === root.current
                 width: txt.implicitWidth + 22
                 height: 22
                 radius: 7
-                color: active ? root.activeBg : "transparent"
+                color: option.active ? root.activeBg : "transparent"
                 Text {
                     id: txt
                     anchors.centerIn: parent
-                    text: modelData.label
-                    color: parent.active ? root.activeFg : Theme.muted
+                    text: option.modelData.label
+                    color: option.active ? root.activeFg : Theme.muted
                     font.pixelSize: 12
-                    font.weight: parent.active ? Font.DemiBold : Font.Normal
+                    font.weight: option.active ? Font.DemiBold : Font.Normal
                 }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.picked(modelData.key)
+                    onClicked: root.picked(option.modelData.key)
                 }
             }
         }

@@ -29,8 +29,15 @@ def load_strings() -> dict[str, dict[str, str]]:
 
 
 class I18n(QObject):
-    """Exposed to QML as ``i18n``. Every label binds to ``i18n.t("key")``; changing the
-    language re-evaluates those bindings, so there is no manual re-render pass."""
+    """Exposed to QML as ``i18n``. Every label binds to ``i18n.t("key")``.
+
+    ``t`` is a slot, and a QML binding only re-evaluates when a *property* it read changes — a
+    slot call creates no dependency. So switching language does NOT invalidate those bindings on
+    its own, whatever this docstring used to claim: labels stayed in the old language and the
+    menu only decided what the next launch would look like. What makes it work is
+    :func:`~nwupdater.gui.app.install_context`, which re-sets the context property on
+    ``langChanged`` — the documented way to invalidate every binding that references it.
+    """
 
     langChanged = Signal()
 

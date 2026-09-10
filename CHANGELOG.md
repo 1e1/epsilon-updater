@@ -6,6 +6,152 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+### Outillage
+
+- **Dependabot n'épingle plus `github/codeql-action` à une version exacte.** Les workflows suivent
+  le tag majeur flottant (`@v4`), donc les versions mineures et correctives arrivent sans PR. Une
+  PR d'épinglage laissée ouverte quelques semaines finit au contraire par **faire reculer**
+  l'action : celle qui proposait `v4.37.3` pointait, à sa fermeture, sur un commit antérieur à
+  celui de `@v4`. Les montées de majeure restent signalées — seules elles exigent d'éditer le
+  workflow.
+
+## [3.0.0-rc.4] - 2026-09-10
+
+**Passe de qualité avant la 3.0 finale.** Un audit du portage Qt, avant de figer. Il a sorti neuf
+défauts visibles à l'écran, une règle d'architecture que le code n'honorait pas, et trois lignes
+fausses dans la grille de qualité du projet lui-même. Le neuvième — changer de langue ne
+redessinait rien — a été trouvé par un test écrit pour vérifier autre chose : la présentation
+n'était couverte par rien.
+
+### Corrigé
+
+- **Le sélecteur de modèle de démo ne fonctionnait pas** sur l'écran « aucune calculatrice » — le
+  premier que voit quiconque n'a pas de câble branché. Un `textRole` posé sur une liste de chaînes
+  : toutes les entrées s'affichaient **vides**, et « Explorer une démo » transmettait `undefined`.
+  Qt ne signale rien dans ce cas, pas même un avertissement.
+- **La barre d'état affichait les clés de traduction brutes.** L'utilisateur lisait
+  `real_connected`, `install_ok::20.4.0`, `bad_ext::.nwa`. Le backend émet désormais une **clé et
+  ses paramètres** (`toast(key, params, isError)`), la barre appelle `i18n.t()` — et quatre de ces
+  clés n'existaient dans aucun des deux dictionnaires. Toutes réutilisent celles de l'IHM web
+  (`fail`, `fw_done`, `written_ok`, `exported`, `wrong_ext`, `already_staged`) : aucune clé
+  inventée, parité exacte.
+- **La colonne « Distribution » du tableau du parc était un tiret en dur.** `last_dist` était
+  pourtant dans le payload depuis l'arrivée du mode batch, et l'IHM web dessine ces pastilles.
+  Elle les dessine maintenant aussi, par le même composant que le journal de batch.
+- **Les dates « dernier passage » restaient en français** avec l'interface en anglais : la chaîne
+  était formatée en Python. `format.relative_key()` renvoie désormais une **clé + un compte**, que
+  QML rend — la colonne suit donc un changement de langue sans recalcul.
+- **Le niveau d'API des applications n'était jamais affiché**, bien que calculé et exposé. Il l'est
+  — accompagné de la **pastille d'incompatibilité** de l'IHM web, qui signale une app exigeant une
+  API plus récente que celle de la calculatrice.
+- **La barre de menus native était absente sous Windows et Linux** (hors bureaux à menu global).
+  `Qt.labs.platform` n'a d'implémentation native que sur macOS et se replie sur des widgets, repli
+  qui exige un `QApplication` — l'app construisait un `QGuiApplication`. Coût mesuré du correctif :
+  **+9,2 Mo de RAM**, les 6 Mo de disque étant déjà payés.
+- **Le compteur de sélection du parc mentionnait un nombre que le tableau ne montrait pas** après
+  un Maj-clic sous filtre : cette branche seule le recalculait d'une autre façon, en comptant les
+  lignes masquées.
+- **Le journal de batch affichait des clés non traduites** (`recensement`, `firmware`) et peignait
+  l'issue « erreur » avec un fond bleu, faute d'un token `errSoft` dans le thème.
+- **Changer de langue ne redessinait rien.** Le menu Français/English ne décidait en réalité que
+  de l'apparence du **prochain** lancement : sur 22 libellés à l'écran, **zéro** suivait. Une
+  liaison QML ne se réévalue que si une *propriété* qu'elle a lue change, et `i18n.t("clé")` est
+  un appel de slot — il ne crée aucune dépendance. Le docstring de `i18n.py` affirmait pourtant
+  l'inverse depuis l'origine. La propriété de contexte est désormais réinstallée sur
+  `langChanged`, ce qui invalide toutes les liaisons qui la référencent : 15 libellés sur 22
+  basculent (les 7 autres sont des versions et des noms de modèle, identiques dans les deux
+  langues). Trouvé par le test qui vérifiait la barre d'état.
+- **La fermeture générait une volée de `TypeError` QML** : les objets exposés à la scène étaient
+  libérés avant elle. Ils sont parentés à l'application, et le moteur est détruit en premier.
+
+### Modifié
+
+- **Plus aucune E/S appareil sur le thread graphique — les lectures comprises.** L'en-tête de
+  `backend.py` affirmait cette règle ; elle ne valait que pour les écritures. `refresh()` lit tout
+  l'inventaire dans un worker et renvoie un instantané que le thread graphique se contente
+  d'affecter. Sur appareil **virtuel** (donc sans USB) : constructeur **178 → 0 ms**, coût d'un
+  rafraîchissement sur le thread graphique **71 → 0 ms**, six frappes dans le filtre du parc
+  **172 → 1 ms** — le filtre relisait tout le registre à chaque caractère.
+- **`Session.roster()` ne relit plus le registre une fois par classe** (`all_distributions()` en
+  un seul chargement) : **34,4 → 6,1 ms** sur un parc de 240 calculatrices et 8 classes. Les deux
+  IHM en profitent.
+- **`Session.io()`** — un gestionnaire de contexte public remplace l'accès direct à `_io_lock`
+  depuis l'extérieur ; la sérialisation des E/S a désormais un point d'entrée documenté.
+- **`Main.qml` : 502 → 230 lignes.** Barre de menus, bandeau d'onglets, barre de confirmation,
+  barre d'état et les deux états « pas de calculatrice » deviennent des composants ; les deux
+  `StackLayout` concurrents fusionnent en un seul. Les deux colonnes de l'atelier, jusque-là
+  dupliquées à l'identique, partagent un `WorkshopColumn`.
+- **Les tables d'actions de distribution fusionnent** dans un singleton `DistActions`, qui
+  documente au passage le piège du chemin : l'étape est **configurée** sous le nom `census` et
+  **journalisée** sous `recensement`.
+- Constantes de classe (`__all__`, `__unfiled__`) exposées par le backend au lieu d'être écrites
+  en dur huit fois dans le QML.
+- Code mort retiré : `stageMinimize`, `quit`/`quitRequested`, `Stage.kept_names`,
+  `RowsModel.rows`, `switchDemo`, quatre rôles de modèle jamais liés, onze clés de traduction, et
+  deux imports QML inutilisés.
+
+### Ajouté
+
+- **`tests/test_gui_qml.py` — la scène QML est enfin testée.** Rien ne chargeait ces 3 200 lignes :
+  `QQmlApplicationEngine` signale une liaison cassée par un avertissement puis continue avec un
+  contrôle vide. Le test charge `Main.qml`, visite chaque onglet des deux modes, ouvre la fenêtre
+  batch, démarre l'application entière, et **échoue au premier avertissement**. Comme le bug du
+  sélecteur de démo n'en produisait aucun, il affirme séparément qu'un sélecteur peuplé affiche
+  quelque chose — vérifié en réintroduisant le bug.
+- **`pyside6-qmllint` en CI**, seule la catégorie `unqualified` désactivée (les *context
+  properties* sont par construction impossibles à qualifier, et pèsent ~400 des ~420
+  signalements). Les vingt autres sont corrigés : chaînes `parent.parent`, tailles posées sur des
+  enfants de layout, appel de méthode sur un `currentItem` non typé.
+- **Le test i18n couvre les messages d'état émis**, pas seulement les libellés du QML : toute clé
+  émissible doit exister dans les deux langues **et** recevoir les placeholders que sa chaîne
+  attend.
+- Couverture des chemins destructeurs, jusque-là à 0 % : écriture du plan, export, dépôt de
+  fichier, et toutes les mutations du registre. Couverture du paquet `gui` : **72 → 82 %**.
+
+### Outillage
+
+- **`configure_identity()`** — les quatre appels qui nomment l'application à Qt sont extraits et
+  partagés entre `run()` et les tests. `QSettings`, donc le bloc `Settings` qui persiste
+  géométrie, langue et thème, refuse de s'initialiser sans eux : le harnais de test les omettait
+  et la scène partait avec deux avertissements **sous Linux uniquement** — macOS retombe sur un
+  plist sans prévenir. Comportement de l'app livrée inchangé, elle les posait déjà.
+- Les étapes CI qui dépendent d'un glob shell s'exécutent sous **bash** sur les trois OS : la
+  console Windows par défaut est PowerShell, qui n'étend pas `*.qml` et transmettait le littéral.
+
+## [3.0.0-rc.3] - 2026-09-10
+
+**Intégration visuelle de l'IHM native.** Le portage Qt Quick avait gardé les contrôles bruts du
+style `Basic` : ils peignent avec la palette **système**, quand tout le reste de la fenêtre peint
+avec les tokens du thème. Cette version les remplace, et remet d'aplomb la table du parc.
+
+### Corrigé
+
+- **Le filtre du parc recouvrait le libellé « Nom ».** La cellule d'en-tête n'avait aucune largeur
+  implicite — 0 px, son texte débordant sous le champ placé 8 px plus loin. Elle se dimensionne
+  désormais sur son libellé, ce qui vaut aussi pour les traductions plus longues.
+- **Champs, cases à cocher, listes déroulantes et barres de défilement ignoraient le thème.**
+  Aucune palette Qt n'étant posée, ils restaient **clairs en thème sombre** — cases blanches sur
+  carte sombre, listes déroulantes étrangères au reste — avec des angles droits, un anneau de
+  focus bleu système et des hauteurs qui ne s'alignaient pas sur les boutons. Quatre composants
+  reprennent les tokens (`AppTextField`, `AppCheckBox`, `AppComboBox`, `AppScrollBar`) : dix-sept
+  usages basculés, plus aucun contrôle brut ne subsiste.
+- **Filtrer effaçait la sélection du parc.** Chaque frappe vidait la sélection et faisait
+  disparaître la barre d'actions groupées. La sélection est désormais **élaguée** : seules les
+  calculatrices sorties du registre la quittent, le compteur ne totalise que les lignes visibles
+  et « tout sélectionner » n'agit que sur elles — la sémantique de la table web.
+- **Le champ de filtre ignorait une remise à zéro venue de l'application** : sa liaison mourait à
+  la première frappe. Elle est réaffirmée tant que le champ n'a pas le focus.
+
+### Ajouté
+
+- **Noms accessibles** sur le filtre du parc, la case « tout sélectionner » et le menu « Déplacer
+  vers » — les clés existaient déjà dans le dictionnaire partagé, seule l'IHM web les utilisait.
+
+### Modifié
+
+- Rail des classes élargi à **280 px** (marges 16) et calculatrice du panneau latéral ramenée à
+  150 px, pour que les noms de classe longs cessent d'être tronqués.
+
 ## [3.0.0-rc.2] - 2026-09-07
 
 **Canal figé pour anciens systèmes** (troisième canal de distribution). Le canal actif reste sur

@@ -18,4 +18,14 @@ Layering (top depends on bottom, never the reverse)::
 
 Everything that can be decided without a window is decided below ``backend.py``, so the rule that
 matters most — which bytes actually get rewritten — is testable without Qt at all.
+
+Two rules the layering exists to keep, both of which were broken once and are now tested:
+
+* **No device I/O on the GUI thread — reads included.** ``Backend.refresh`` gathers the whole
+  inventory in a worker and hands back one snapshot; the GUI thread only assigns it. The first
+  version did this inline, so the window appeared only after the calculator had been read and
+  froze for every hot-plug poll.
+* **Nothing crosses into QML already translated.** The backend emits i18n *keys* — row fields,
+  toast messages, relative times — and QML renders them. A sentence formatted down here freezes
+  the UI in one language; that is how the roster's last-scan column stayed French in English.
 """

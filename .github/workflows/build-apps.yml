@@ -158,7 +158,12 @@ jobs:
       - name: Check the native UI (headless)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/test_gui_pure.py tests/test_gui_i18n.py tests/test_gui_qt.py -q
+        # bash on every OS: PowerShell does not expand the `*.qml` glob below.
+        shell: bash
+        run: |
+          python -m pytest tests/test_gui_pure.py tests/test_gui_i18n.py \
+                           tests/test_gui_qt.py tests/test_gui_qml.py -q
+          cd src/nwupdater/gui/qml && pyside6-qmllint -I . --unqualified disable *.qml
 
       # PySide6's macOS wheel is universal2, so a single runner can emit both slices — but
       # libusb ships one arch, so merge it first (same reason as the browser app's step).

@@ -13,21 +13,20 @@ from .format import color_for, fmt_bytes, initial_for
 from .plan import Slot, Stage, footprint
 
 # Fields every workshop row exposes to QML. Declared once so the models, the delegates and the
-# tests cannot drift apart.
+# tests cannot drift apart — and kept to what a delegate actually binds: an unread role is
+# rebuilt for every item on every refresh for nothing.
 ROW_FIELDS = (
     "name",
-    "size",
     "sizeText",
     "status",
-    "kind",
     "movable",
     "onDevice",
     "deleted",
     "source",
-    "origin",
     "iconColor",
     "initial",
     "apiLevel",
+    "incompatible",
     "local",
 )
 
@@ -43,11 +42,16 @@ class Workshop:
         capacity: int,
         *,
         enabled: bool = True,
+        device_api: int = 0,
     ):
         self.kind = kind
         self.available = list(available)
         self.capacity = capacity
         self.enabled = enabled
+        # The calculator's own API level. An app asking for a HIGHER one cannot run: the
+        # catalogue is filtered server-side, but an app installed before a firmware downgrade
+        # is still sitting there, and the row has to say so (same badge as the web workshop).
+        self.device_api = int(device_api or 0)
         self.stage = Stage(kind, device, capacity)
 
     # -- projections ------------------------------------------------------------------
@@ -131,19 +135,22 @@ class Workshop:
     ) -> dict[str, Any]:
         extra = extra or {}
         api = extra.get("apiLevel")
+        api_level = -1 if api is None else int(api)
         return {
             "name": name,
-            "size": int(size or 0),
             "sizeText": fmt_bytes(footprint(self.kind, size)),
             "status": status,
-            "kind": self.kind,
             "movable": movable,
             "onDevice": on_device,
             "deleted": deleted,
             "source": extra.get("source", "") or "",
-            "origin": extra.get("origin", "") or "",
             "iconColor": color_for(name),
             "initial": initial_for(name),
-            "apiLevel": -1 if api is None else int(api),
+            "apiLevel": api_level,
+            # An unknown device API (0) judges nothing: a false "incompatible" on a good app
+            # is worse than a missing badge, and the catalogue is already filtered server-side.
+            "incompatible": (
+                self.kind == "apps" and self.device_api > 0 and api_level > self.device_api
+            ),
             "local": bool(extra.get("local")),
         }

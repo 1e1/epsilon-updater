@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Basic
 
 /* One row of a workshop column. Values arrive as plain properties rather than a reference to
    the delegate's model object: Qt recycles that object, and holding it in a `var` makes every
@@ -14,6 +13,7 @@ Rectangle {
     property string initial: "?"
     property color iconColor: Theme.accent
     property int apiLevel: -1
+    property bool incompatible: false
     property bool movable: false
     property bool onDevice: false
     property bool deleted: false
@@ -91,10 +91,18 @@ Rectangle {
                         text: root.status === "un" ? i18n.t("leg_un")
                             : root.status === "rw" ? i18n.t("leg_rw")
                             : root.status === "new" ? i18n.t("leg_new") : i18n.t("del")
-                        fg: root.status === "un" ? Theme.ok
-                          : root.status === "new" ? Theme.blue : Theme.accentInk
-                        bg: root.status === "un" ? Theme.okSoft
-                          : root.status === "new" ? Theme.blueSoft : Theme.accentSoft
+                        fg: Theme.statusInk(root.status)
+                        bg: Theme.statusSoft(root.status)
+                    }
+                    // An app asking for a higher API level than the calculator runs cannot
+                    // start. Same warning as the web workshop, and the reason apiLevel is a
+                    // model role at all.
+                    Chip {
+                        visible: root.incompatible
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: i18n.t("incompatible", { n: root.apiLevel })
+                        fg: Theme.err
+                        bg: Theme.errSoft
                     }
                 }
                 Text {

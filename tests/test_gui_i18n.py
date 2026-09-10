@@ -58,3 +58,46 @@ def test_placeholders_match_across_languages():
     for key, french in strings["fr"].items():
         english = strings["en"].get(key, "")
         assert set(re.findall(r"\{(\w+)\}", french)) == set(re.findall(r"\{(\w+)\}", english)), key
+
+
+# -- the status line --------------------------------------------------------------------
+BACKEND = Path(__file__).resolve().parents[1] / "src" / "nwupdater" / "gui" / "backend.py"
+# `self.toast.emit("key", {"a": …, "b": …}, flag)` — the key and its placeholder names.
+TOAST = re.compile(r'self\.toast\.emit\(\s*"(\w+)"\s*,\s*\{(.*?)\}', re.DOTALL)
+
+
+def emitted_toasts() -> dict[str, set[str]]:
+    source = BACKEND.read_text(encoding="utf-8")
+    found: dict[str, set[str]] = {}
+    for key, params in TOAST.findall(source):
+        found.setdefault(key, set()).update(re.findall(r'"(\w+)"\s*:', params))
+    assert found, "no toast found — the scan is broken, not the backend"
+    return found
+
+
+def test_every_toast_key_resolves_in_both_languages():
+    """The status bar renders `i18n.t(key, params)`. A key with no entry falls back to the key
+    itself, which is how a teacher ended up reading `install_ok::20.4.0` on screen."""
+    strings = merged()
+    missing = {
+        lang: sorted(k for k in emitted_toasts() if k not in strings[lang]) for lang in LANGS
+    }
+    assert missing == {"fr": [], "en": []}
+
+
+def test_every_toast_supplies_the_placeholders_its_string_needs():
+    """`already_staged` is "« {name} » est déjà dans le plan." — emitting it without `name`
+    leaves the braces on screen."""
+    strings = merged()
+    for key, supplied in emitted_toasts().items():
+        for lang in LANGS:
+            needed = set(re.findall(r"\{(\w+)\}", strings[lang][key]))
+            assert needed <= supplied, f"{key} ({lang}) needs {sorted(needed - supplied)}"
+
+
+def test_the_relative_time_keys_exist_for_every_bucket():
+    """`format.relative_key` can only ever return these five."""
+    strings = merged()
+    for key in ("rel_never", "rel_now", "rel_min", "rel_hour", "rel_day"):
+        for lang in LANGS:
+            assert strings[lang].get(key), f"{key} missing in {lang}"

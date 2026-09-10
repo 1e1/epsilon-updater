@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 /* One "push this set to the whole class" list: chosen items as removable chips, plus a picker
@@ -71,7 +70,7 @@ Card {
     RowLayout {
         Layout.fillWidth: true
         spacing: 8
-        ComboBox {
+        AppComboBox {
             id: picker
             Layout.preferredWidth: 260
             font.pixelSize: 13

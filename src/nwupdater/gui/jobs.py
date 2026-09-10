@@ -45,11 +45,16 @@ class _Job(QRunnable):
 
 
 class JobRunner:
-    """Keeps in-flight jobs alive until Qt has delivered their result."""
+    """Keeps in-flight jobs alive until Qt has delivered their result.
+
+    The pool is the runner's own, not ``QThreadPool.globalInstance()``: configuring the global
+    pool from a constructor is a process-wide side effect, and two runners in one process (the
+    tests do exactly that) would each re-cap the other's threads.
+    """
 
     def __init__(self, owner: QObject, max_threads: int = 2):
         self._owner = owner
-        self._pool = QThreadPool.globalInstance()
+        self._pool = QThreadPool(owner)
         self._pool.setMaxThreadCount(max_threads)
         self._inflight: set[_Job] = set()
 
@@ -74,4 +79,11 @@ class JobRunner:
 
     @property
     def busy_count(self) -> int:
+        """Jobs started but not yet delivered. The observable behind the auto-delete
+        regression test: a runnable that Qt freed early never reaches zero."""
         return len(self._inflight)
+
+    def wait(self, msecs: int = 5000) -> bool:
+        """Block until every started job has returned. Called at shutdown so a worker cannot
+        touch a session the window is already tearing down."""
+        return self._pool.waitForDone(msecs)

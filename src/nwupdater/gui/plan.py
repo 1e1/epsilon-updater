@@ -181,6 +181,3 @@ class Stage:
     # -- read -----------------------------------------------------------------------
     def plan(self) -> Plan:
         return plan_for(self.kind, self.device, self.slots, self.capacity)
-
-    def kept_names(self) -> list[str]:
-        return [s.name for s in self.slots if not s.deleted]

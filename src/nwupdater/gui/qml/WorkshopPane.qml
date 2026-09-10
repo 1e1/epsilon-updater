@@ -11,7 +11,7 @@ Item {
     property var plan: ({})
     property var deviceModel
     property var availModel
-    readonly property bool busy: backend.busy.indexOf("write:") === 0
+    readonly property bool busy: backend.busy === "write:" + root.kind
 
     FileDialog {
         id: picker
@@ -22,7 +22,7 @@ Item {
     FolderDialog {
         id: exportDir
         property string pendingName: ""
-        onAccepted: backend.exportItem(root.kind, pendingName, selectedFolder)
+        onAccepted: backend.exportItem(root.kind, exportDir.pendingName, selectedFolder)
     }
 
     ColumnLayout {
@@ -80,71 +80,24 @@ Item {
                 SplitView.fillWidth: true
                 SplitView.minimumWidth: 260
                 spacing: 6
-                ColumnHeader {
+
+                WorkshopColumn {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    kind: root.kind
+                    rows: root.deviceModel
+                    busy: root.busy
                     title: i18n.t("on_calc")
                     subtitle: root.kind === "apps" ? i18n.t("mem_order") : i18n.t("storage_order")
                     count: root.plan.deviceCount || 0
+                    emptyText: i18n.t("no_installed")
+                    onPrimary: (name, deleted) => deleted ? backend.stageRestore(root.kind, name)
+                                                          : backend.stageRemove(root.kind, name)
+                    onMoveUp: (name) => backend.stageMove(root.kind, name, -1)
+                    onMoveDown: (name) => backend.stageMove(root.kind, name, 1)
+                    onExportRequested: (name) => { exportDir.pendingName = name; exportDir.open() }
                 }
-                ListView {
-                    id: deviceList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: 7
-                    model: root.deviceModel
-                    // The model updates rows in place, so this scroll position survives a refresh.
-                    ScrollBar.vertical: ScrollBar {}
-                    // The delegate root is a plain Item so the required properties do not
-                    // shadow ItemRow's own API; it forwards them as values.
-                    delegate: Item {
-                        id: devCell
-                        required property string name
-                        required property string sizeText
-                        required property string status
-                        required property bool movable
-                        required property bool onDevice
-                        required property bool deleted
-                        required property bool local
-                        required property string source
-                        required property string initial
-                        required property string iconColor
-                        width: deviceList.width
-                        height: row.height
-                        ItemRow {
-                            id: row
-                            width: parent.width
-                            kind: root.kind
-                            busy: root.busy
-                            name: devCell.name
-                            sizeText: devCell.sizeText
-                            status: devCell.status
-                            movable: devCell.movable
-                            onDevice: devCell.onDevice
-                            deleted: devCell.deleted
-                            isLocal: devCell.local
-                            source: devCell.source
-                            initial: devCell.initial
-                            iconColor: devCell.iconColor
-                            onPrimary: devCell.deleted
-                                ? backend.stageRestore(root.kind, devCell.name)
-                                : backend.stageRemove(root.kind, devCell.name)
-                            onMoveUp: backend.stageMove(root.kind, devCell.name, -1)
-                            onMoveDown: backend.stageMove(root.kind, devCell.name, 1)
-                            onExportRequested: {
-                                exportDir.pendingName = devCell.name
-                                exportDir.open()
-                            }
-                        }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: deviceList.count === 0
-                        text: i18n.t("no_installed")
-                        color: Theme.muted
-                        font.pixelSize: 12
-                    }
-                }
+
                 // Drop zone — accepts a real drop from Finder/Explorer, or click to browse.
                 DropArea {
                     id: drop
@@ -172,7 +125,8 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: (root.kind === "apps" ? ".nwa" : ".py") + " — "
-                                      + (root.kind === "apps" ? i18n.t("choose_nwa") : i18n.t("choose_py"))
+                                      + (root.kind === "apps" ? i18n.t("choose_nwa")
+                                                              : i18n.t("choose_py"))
                                 color: Theme.accentInk
                                 font.pixelSize: 12
                                 font.underline: true
@@ -185,64 +139,24 @@ Item {
             }
 
             // available
-            ColumnLayout {
+            WorkshopColumn {
                 // 50/50 by default — recomputed only while the user has not moved the divider.
-                SplitView.preferredWidth: columns.userSized
-                                          ? undefined : (columns.width - 9) / 2
+                SplitView.preferredWidth: columns.userSized ? undefined : (columns.width - 9) / 2
                 SplitView.minimumWidth: 260
-                spacing: 6
-                ColumnHeader {
-                    Layout.fillWidth: true
-                    title: i18n.t("available")
-                    subtitle: i18n.t("src_clr")
-                    count: root.plan.availCount || 0
-                }
-                ListView {
-                    id: availList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: 7
-                    model: root.availModel
-                    ScrollBar.vertical: ScrollBar {}
-                    delegate: Item {
-                        id: availCell
-                        required property string name
-                        required property string sizeText
-                        required property string status
-                        required property string source
-                        required property string initial
-                        required property string iconColor
-                        width: availList.width
-                        height: availRow.height
-                        ItemRow {
-                            id: availRow
-                            width: parent.width
-                            kind: root.kind
-                            available: true
-                            busy: root.busy
-                            name: availCell.name
-                            sizeText: availCell.sizeText
-                            status: availCell.status
-                            source: availCell.source
-                            initial: availCell.initial
-                            iconColor: availCell.iconColor
-                            onPrimary: backend.stageAdd(root.kind, availCell.name)
-                        }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: availList.count === 0
-                        text: i18n.t("no_compat")
-                        color: Theme.muted
-                        font.pixelSize: 12
-                    }
-                }
+                kind: root.kind
+                rows: root.availModel
+                available: true
+                busy: root.busy
+                title: i18n.t("available")
+                subtitle: i18n.t("src_clr")
+                count: root.plan.availCount || 0
+                emptyText: i18n.t("no_compat")
+                onPrimary: (name) => backend.stageAdd(root.kind, name)
             }
         }
 
         // -- footer plan + actions ---------------------------------------------------
-        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.line }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
         RowLayout {
             Layout.fillWidth: true
             spacing: 22

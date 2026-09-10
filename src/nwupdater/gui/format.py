@@ -35,24 +35,29 @@ def fmt_bytes(n: int | None) -> str:
     return f"{n} o"
 
 
-def fmt_relative(iso: str | None, *, now: datetime | None = None) -> str:
-    """Coarse "how long ago", the granularity the roster's last-scan column needs.
+def relative_key(iso: str | None, *, now: datetime | None = None) -> tuple[str, int]:
+    """Coarse "how long ago" as an ``(i18n key, count)`` pair, NOT a rendered string.
+
+    The web UI hands this to ``Intl.RelativeTimeFormat(LANG)``; the native one hands the pair to
+    ``i18n.t(key, {n})`` in QML. Returning the pair rather than a sentence is what makes the
+    roster's last-scan column follow a language switch: the QML binding re-evaluates on its own,
+    with no row re-projection and no i18n dependency down here.
 
     ``now`` is injectable so the behaviour is testable without freezing the clock.
     """
     if not iso:
-        return "—"
+        return ("rel_never", 0)
     try:
         then = datetime.fromisoformat(iso)
     except (TypeError, ValueError):
-        return "—"
+        return ("rel_never", 0)
     if then.tzinfo is None:
         then = then.replace(tzinfo=timezone.utc)
     seconds = ((now or datetime.now(timezone.utc)) - then).total_seconds()
     if seconds < 90:
-        return "à l'instant"
+        return ("rel_now", 0)
     if seconds < 5400:
-        return f"il y a {round(seconds / 60)} min"
+        return ("rel_min", round(seconds / 60))
     if seconds < 129600:
-        return f"il y a {round(seconds / 3600)} h"
-    return f"il y a {round(seconds / 86400)} j"
+        return ("rel_hour", round(seconds / 3600))
+    return ("rel_day", round(seconds / 86400))

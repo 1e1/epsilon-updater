@@ -107,9 +107,17 @@ Essentials et pèsent **moins de 1 Mo chacune** :
 | `QtQuick.Dialogs` | sélecteurs de fichiers/dossiers **natifs** | < 1 Mo |
 | `Qt.labs.settings` | persistance de la géométrie et des préférences | < 1 Mo |
 
-Autrement dit : **aucun besoin d'ajouter QtWidgets** (qui coûterait, lui, 18 Mo de binding + 13 Mo
-de framework = **31 Mo installés**) pour obtenir menus natifs, dialogues natifs, tray et
-persistance. Les 40 Mo de zip de la V3 QML couvrent **déjà** toutes les optimisations 1 à 12.
+Autrement dit : **aucun besoin d'ajouter PySide6-Addons** pour obtenir menus natifs, dialogues
+natifs, tray et persistance. Les 40 Mo de zip de la V3 QML couvrent **déjà** toutes les
+optimisations 1 à 12.
+
+> **Corrigé à l'implémentation.** Ce paragraphe disait « aucun besoin d'ajouter QtWidgets », et
+> c'était faux pour un cas précis : la barre de menus de `Qt.labs.platform` n'est native que sur
+> macOS ; ailleurs elle passe par un repli à base de widgets qui exige aussi que l'application
+> soit un `QApplication`. Sans les deux, Windows et Linux (hors menu global) partaient sans
+> barre de menus du tout. QtWidgets est dans les Essentials, donc déjà dans le bundle : le coût
+> réel s'est révélé être **+9,2 Mo de RAM**, pas 31 Mo de disque. Voir
+> [`native-ui-implementation.md`](native-ui-implementation.md) §5.
 
 Pour mémoire, la répartition qui explique l'écart QML/Widgets : `Qt/qml` **42 Mo** +
 QtQml 12 + QtQuick 15 + Controls2 2 ≈ **71 Mo installés** — c'est le prix du moteur déclaratif,
@@ -166,7 +174,7 @@ Audit fonction par fonction du mode classe de `server/web/app.js` (`renderParc`,
 | **Barre de lot** (N sélectionnées · déplacer vers… · Supprimer) | ✅ | — |
 | **Filtre par nom** dans l'en-tête de colonne | ✅ | — |
 | Case « tout sélectionner » | ✅ | — |
-| Table : type · nom · firmware + pastille · distribution · dernier passage | ✅ | — |
+| Table : type · nom · firmware + pastille · distribution · dernier passage | ✅ | la colonne Distribution a été un `—` en dur jusqu'à la finale : `last_dist` était dans le payload, personne ne le lisait |
 | Renommage de calculatrice en place | ✅ | + `F2`, `Échap` |
 | Corbeille au survol de la ligne | ✅ | — |
 | Ligne draggable | ✅ | — |
@@ -184,3 +192,9 @@ Audit fonction par fonction du mode classe de `server/web/app.js` (`renderParc`,
 
 **Reste ouvert** : le renommage depuis le journal de batch. Tout le reste du mode classe est
 au niveau de la V2, avec les gestes desktop en plus.
+
+> **Relu avant la finale.** Ce tableau annonçait la parité à un écart près ; l'audit du code en a
+> trouvé trois de plus, tous du même genre — une donnée calculée, transmise, et jamais dessinée :
+> la colonne Distribution, le niveau d'API des applications, et les dates relatives (rendues en
+> français quel que soit la langue). Les trois sont corrigés. Un tableau de parité rempli de
+> mémoire ne vaut rien : il se relit contre le code.
