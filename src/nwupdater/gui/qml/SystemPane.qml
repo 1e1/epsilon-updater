@@ -7,6 +7,13 @@ import QtQuick.Layouts
 Flickable {
     id: root
     contentHeight: col.implicitHeight + 32
+    readonly property bool reinstall: !!backend.catalog.up_to_date && !!backend.catalog.reinstall
+    // A real calculator only takes the official image: an official cache of this version, or a
+    // download, which needs the sign-in. Same rule as the web UI's install button.
+    readonly property bool officialSource: backend.identity.virtual === true
+        || backend.auth.authenticated === true
+        || (backend.cacheStatus.entries || []).some((e) => e.real
+               && e.model === backend.identity.model && e.version === versionBox.currentText)
     clip: true
     ScrollBar.vertical: AppScrollBar {}
 
@@ -44,15 +51,27 @@ Flickable {
                     AppComboBox {
                         id: versionBox
                         Layout.preferredWidth: 150
-                        model: (backend.catalog.updates || []).map((u) => u.version)
+                        // Up to date: the same version, to write again (repair / inactive slot).
+                        model: root.reinstall ? [backend.catalog.reinstall]
+                                              : (backend.catalog.updates || []).map((u) => u.version)
                         font.pixelSize: 12
                     }
                     Item { Layout.fillWidth: true }
                     AppButton {
-                        text: i18n.t("install")
-                        enabled: backend.connected && backend.busy === ""
+                        text: root.reinstall ? i18n.t("reinstall") : i18n.t("install")
+                        enabled: backend.connected && backend.busy === "" && versionBox.count > 0
+                                 && root.officialSource
                         onClicked: backend.installFirmware(versionBox.currentText, false, false)
                     }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: versionBox.count > 0 && !root.officialSource
+                    text: i18n.t("dl_need_auth")
+                    color: Theme.muted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
                 }
 
                 Text {
@@ -71,8 +90,9 @@ Flickable {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: backend.progressLabel === "verify" ? i18n.t("verifying")
-                                                                     : i18n.t("writing")
+                            text: ({ download: i18n.t("fw_downloading"), erase: i18n.t("erasing"),
+                                     write: i18n.t("writing"), verify: i18n.t("verifying")
+                                   })[backend.progressLabel] || i18n.t("writing")
                             color: Theme.muted
                             font.pixelSize: 12
                         }
@@ -90,11 +110,17 @@ Flickable {
                         Layout.preferredHeight: 8
                         radius: 4
                         color: Theme.lineStrong
+                        // One bar, read by colour and direction: the download comes IN from the
+                        // Internet (blue, filling right to left), erase + write go OUT to the
+                        // calculator (accent, left to right), the read-back check is green.
                         Rectangle {
+                            readonly property bool incoming: backend.progressLabel === "download"
                             width: parent.width * Math.max(0, backend.progress)
+                            x: incoming ? parent.width - width : 0
                             height: parent.height
                             radius: 4
-                            color: backend.progressLabel === "verify" ? Theme.ok : Theme.accent
+                            color: incoming ? Theme.blue
+                                 : backend.progressLabel === "verify" ? Theme.ok : Theme.accent
                             Behavior on width { NumberAnimation { duration: 80 } }
                         }
                     }
@@ -159,7 +185,8 @@ Flickable {
                     }
                     AppButton {
                         id: loginBtn
-                        text: i18n.t("auth_login")
+                        busy: backend.busy === "auth"
+                        text: busy ? i18n.t("auth_signing_in") : i18n.t("auth_login")
                         enabled: emailField.text !== "" && pwField.text !== ""
                                  && backend.busy === ""
                         onClicked: {
@@ -167,6 +194,17 @@ Flickable {
                             pwField.text = ""
                         }
                     }
+                }
+                // The outcome of the last attempt, kept until the next one: the status-bar line
+                // fades after a few seconds, a rejected password must not.
+                Text {
+                    Layout.fillWidth: true
+                    visible: !!backend.authError.key && backend.busy !== "auth"
+                    text: backend.authError.key
+                          ? i18n.t(backend.authError.key, { msg: backend.authError.msg || "" }) : ""
+                    color: Theme.err
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
                 }
                 Text {
                     Layout.fillWidth: true
@@ -210,6 +248,7 @@ Flickable {
                         }
                         AppButton {
                             id: tokenBtn
+                            busy: backend.busy === "auth"
                             text: i18n.t("auth_save")
                             enabled: tokenField.text !== "" && backend.busy === ""
                             onClicked: {

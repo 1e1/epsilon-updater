@@ -5,6 +5,7 @@ No local HTTP server, no browser — the QML front-end talks to :class:`Session`
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -91,8 +92,8 @@ def run(
         app.setWindowIcon(QIcon(str(icon)))
 
     # The shipped app starts DISCONNECTED unless asked otherwise — same contract as the web UI:
-    # it never silently pretends a calculator is plugged in.
-    session = Session(model, connect=False)
+    # it never silently pretends a calculator is plugged in. Live catalogue on, like the web UI.
+    session = Session(model, connect=False, live_catalog=True)
     if real:
         try:
             session.attach_real()
@@ -123,6 +124,12 @@ def run(
     # root objects and their bindings; left to interpreter shutdown, the context properties can
     # go first and every live binding logs a "TypeError: ... of null" on the way out.
     del engine
+    if not backend.settled:
+        # A worker is still inside libusb: skip the native teardown (libusb_exit, ~QApplication)
+        # that would crash under it. The kernel releases the USB interface with the process.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
     return code
 
 

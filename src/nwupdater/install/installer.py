@@ -165,17 +165,45 @@ class Installer:
 
     # -- flash + verify ------------------------------------------------------------
     def flash(self, plan: InstallPlan, *, verify: bool = True) -> None:
-        done = 0
-        total = plan.total_bytes
+        """Erase + write every segment, then read them all back. Progress is reported per
+        phase (``"erase"`` in sectors, ``"write"``/``"verify"`` in bytes) and per DFU chunk, so
+        a bar moves steadily instead of jumping once per (slot-sized) segment."""
+        total = sum(len(s.data) for s in plan.segments)
+        erase = self.model.flash_erase
+        # Sector count per segment, for the erase phase; a client that cannot tell (test
+        # double) reports no erase progress, only the write.
+        count = getattr(self.client, "sectors_to_erase", None)
+
+        def n_sectors(seg) -> int:
+            return len(count(seg.address, len(seg.data))) if erase and count else 0
+
+        sectors = sum(n_sectors(s) for s in plan.segments)
+        done = erased = 0
         for seg in plan.segments:
-            self.client.write(seg.address, seg.data, erase=self.model.flash_erase)
+            base, base_erased = done, erased
+
+            def wrote(n, base=base):
+                self._progress("write", base + n, total)
+
+            def cleared(n, base_erased=base_erased):
+                self._progress("erase", base_erased + n, sectors)
+
+            self.client.write(seg.address, seg.data, erase=erase, progress=wrote, on_erase=cleared)
             done += len(seg.data)
-            self._progress("write", done, total)
-            if verify:
-                back = self.client.read(seg.address, len(seg.data))
-                if back != seg.data:
-                    raise VerificationError(f"read-back mismatch at 0x{seg.address:08x}")
-                self._progress("verify", done, total)
+            erased += n_sectors(seg)
+        if not verify:
+            return
+        done = 0
+        for seg in plan.segments:
+            base = done
+
+            def checked(n, base=base):
+                self._progress("verify", base + n, total)
+
+            back = self.client.read(seg.address, len(seg.data), progress=checked)
+            if back != seg.data:
+                raise VerificationError(f"read-back mismatch at 0x{seg.address:08x}")
+            done += len(seg.data)
 
     # -- full install --------------------------------------------------------------
     def install(

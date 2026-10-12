@@ -120,7 +120,10 @@ class UrllibTransport:
         data=None,
         timeout: float = 20.0,
         allow_redirects: bool = False,
+        progress=None,
     ) -> Response:
+        """``progress(done, total)``, when given, follows the body as it arrives (``total`` is
+        the Content-Length, 0 if the server sends none)."""
         import urllib.error
 
         https = urllib.request.HTTPSHandler(context=_ssl_context())
@@ -135,7 +138,14 @@ class UrllibTransport:
             reason = getattr(e, "reason", e)
             raise TransportError(f"cannot connect to {url}: {reason}") from e
         status = getattr(r, "status", None) or r.getcode()
-        return Response(status, list(r.headers.items()), r.read())
+        if progress is None:
+            return Response(status, list(r.headers.items()), r.read())
+        total = int(r.headers.get("Content-Length") or 0)
+        body = bytearray()
+        while chunk := r.read(64 * 1024):
+            body += chunk
+            progress(len(body), total)
+        return Response(status, list(r.headers.items()), bytes(body))
 
 
 def _cookie_header(cookies: dict[str, str]) -> str:

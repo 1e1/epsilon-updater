@@ -5,6 +5,13 @@ from __future__ import annotations
 from ._session_base import SessionBase
 
 
+def _reinstall(latest: str | None, current: str | None) -> str | None:
+    """The version the System pane offers to write again when the calculator already runs the
+    latest: repairing a slot, or refreshing the inactive one. ``None`` while an update exists.
+    The classroom batch never uses it — it skips up-to-date calculators."""
+    return latest if latest and current and latest == current else None
+
+
 class CatalogMixin(SessionBase):
     def set_channel(self, channel: str) -> dict:
         from ..catalog import download as D
@@ -28,6 +35,7 @@ class CatalogMixin(SessionBase):
             newer = V.is_newer(man.version, cur)
             return {
                 **base,
+                "reinstall": _reinstall(man.version, i.os_version),
                 "source": "official",
                 "latest": man.version,
                 "up_to_date": not newer,
@@ -44,6 +52,7 @@ class CatalogMixin(SessionBase):
         ups = cat.updates_for(cur)
         return {
             **base,
+            "reinstall": _reinstall(latest.version if latest else None, i.os_version),
             "source": "sample",
             "latest": latest.version if latest else None,
             "up_to_date": cat.is_up_to_date(cur),

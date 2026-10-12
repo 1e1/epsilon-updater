@@ -296,7 +296,7 @@ class _FakeClient:
     def get_string_descriptor(self, index, langid=0x0409):
         return self._serial
 
-    def read(self, address, length):
+    def read(self, address, length, **_kw):
         return (self._mem.get(address) or b"\x00" * length)[:length]
 
 
@@ -393,3 +393,36 @@ def test_full_multislot_image_flashes_inactive_slot_only():
     done = inst.install(image, active_slot="A", verify=True)
     assert done.target_slot == "B"
     assert inst.read_installed_version(done) == "25.2.0"
+
+
+def test_download_dfu_reports_progress_against_the_manifest_size():
+    """No Content-Length from the server: the total falls back to the manifest's size, so the
+    download phase of the bar still moves."""
+    blob = dfuse_blob()
+
+    class Streaming:
+        def open(
+            self,
+            method,
+            url,
+            *,
+            headers=None,
+            data=None,
+            timeout=20.0,
+            allow_redirects=False,
+            progress=None,
+        ):
+            for done in (len(blob) // 2, len(blob)):
+                progress(done, 0)
+            return Response(200, [], blob)
+
+    seen = []
+    D.download_dfu(
+        "n0110",
+        "stable",
+        _auth(),
+        expected_size=len(blob),
+        transport=Streaming(),
+        progress=lambda d, t: seen.append((d, t)),
+    )
+    assert seen == [(len(blob) // 2, len(blob)), (len(blob), len(blob))]

@@ -147,6 +147,7 @@ Flickable {
                 AppButton {
                     ghost: true
                     text: i18n.t("update_caches")
+                    busy: backend.busy === "cache"
                     enabled: backend.busy === ""
                     onClicked: backend.updateCaches()
                 }

@@ -71,15 +71,25 @@ class FirmwareCatalog:
         return cls.from_json(raw)
 
     @classmethod
-    def fetch(cls, url: str = CATALOG_URL, *, timeout: float = 10.0) -> FirmwareCatalog:
-        """Live fetch. Only place in Lot 2 that touches the network; never used in tests."""
-        import urllib.request
+    def fetch(
+        cls, url: str = CATALOG_URL, *, timeout: float = 10.0, transport=None
+    ) -> FirmwareCatalog:
+        """Live fetch of the public catalogue (no auth). Tests inject ``transport``."""
+        from .auth import UrllibTransport
 
         if not url.startswith(("http://", "https://")):  # never file:/ or custom schemes
             raise ValueError(f"URL de catalogue invalide : {url!r}")
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - schéma http(s) validé ci-dessus
-            return cls.from_json(resp.read())
+        tr = transport or UrllibTransport()
+        resp = tr.open(
+            "GET",
+            url,
+            headers={"Accept": "application/json"},
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        if resp.status != 200:
+            raise ValueError(f"HTTP {resp.status} sur {url}")
+        return cls.from_json(resp.body)
 
     # -- queries -------------------------------------------------------------------
     def latest(self) -> FirmwareRelease | None:

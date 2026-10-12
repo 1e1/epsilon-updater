@@ -51,10 +51,10 @@ class _RecClient:
     def __init__(self):
         self.writes = []
 
-    def write(self, address, data, *, erase=False):
+    def write(self, address, data, *, erase=False, **_kw):
         self.writes.append(erase)
 
-    def read(self, address, length):
+    def read(self, address, length, **_kw):
         return b""
 
     def leave(self, jump_address):

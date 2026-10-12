@@ -163,6 +163,8 @@
     color:#1b1c1e; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
   .btn svg { width:14px; height:14px; } .btn.ghost { background:var(--panel); color:var(--ink); border:1px solid var(--line-strong); }
   .btn.sm { padding:6px 11px; font-size:12px; } .btn:disabled { opacity:.5; cursor:default; }
+  .btn.loading svg { animation:spin .9s linear infinite; } .btn.loading:disabled { opacity:.8; cursor:progress; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   .riskline { font-size:11.5px; color:var(--accent-ink); margin:11px 0 0; display:flex; gap:7px; align-items:flex-start; }
   .riskline svg { width:13px; height:13px; flex:none; margin-top:1px; }
   .hint { color:var(--muted); font-size:11.5px; margin:9px 0 0; }

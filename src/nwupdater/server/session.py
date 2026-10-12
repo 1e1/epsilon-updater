@@ -75,6 +75,13 @@ class Session(
         if acts.get("scripts"):
             dist["scripts"] = self._batch_scripts(cfg.get("scripts") or [])
         R.set_last_dist(key, dist)
+        if dist.get("firmware") == "change":
+            # Apps and scripts went through the same connection first; boot onto the new firmware
+            # last, through the bootloader (official status, no RESET button).
+            try:
+                self.boot()
+            except Exception:
+                pass  # flashed and verified: a manual RESET still finishes the job
         return self._batch_journal(key, i, dist)
 
     def _batch_journal(self, key: str, i, dist: dict) -> dict:
@@ -105,7 +112,9 @@ class Session(
                 return "ok"
             if not V.is_newer(latest.version, i.os_version):
                 return "ok"
-            self.install_firmware(latest.version, from_cache=True, channel=self.channel)
+            self.install_firmware(
+                latest.version, from_cache=True, channel=self.channel, reboot=False
+            )
             return "change"
         except Exception:
             return "error"

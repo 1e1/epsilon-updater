@@ -200,10 +200,15 @@ class DfuClient:
         self._current_alt = alt
 
     def _route(self, address: int) -> None:
-        """Before a write, select the alt-setting owning ``address`` (Flash / SRAM / …). This is
-        the whole point of discovering the layouts: writing scripts (SRAM) vs firmware/apps
-        (Flash) picks the right backend by address, with nothing model-specific hard-coded."""
+        """Before a transfer, select the alt-setting owning ``address`` (Flash / SRAM / …). This
+        is the whole point of discovering the layouts: scripts and SlotInfo (SRAM) vs
+        firmware/apps (Flash) pick the right backend by address, nothing model-specific
+        hard-coded."""
         alt = self._alt_for(address)
+        if alt is None and self._alt_map():
+            # Advertised by no alt: the running slot's headers (a real N0120 leaves them out of
+            # the @Flash map) or internal flash. The Flash alt serves them; SRAM times out.
+            alt = C.ALT_FLASH
         if alt is not None and alt != self._current_alt:
             self.select_alt(alt)
 
@@ -233,8 +238,13 @@ class DfuClient:
         return read_string_descriptor(self.dev, index, langid=langid, timeout_ms=self.timeout_ms)
 
     # -- memory read/write ---------------------------------------------------------
-    def read(self, address: int, length: int) -> bytes:
-        """UPLOAD ``length`` bytes starting at ``address`` (Flash backend memcpy)."""
+    def read(self, address: int, length: int, *, progress=None) -> bytes:
+        """UPLOAD ``length`` bytes starting at ``address``, through the alt-setting owning it.
+
+        Routing matters for reads too: on a real N0120 an UPLOAD of SRAM (the SlotInfo) through
+        the Flash alt times out, so the running slot went undetected and the installer then
+        targeted it (errTARGET on erase)."""
+        self._route(address)
         self.set_address(address)
         self.abort()  # return to dfuIDLE so UPLOAD block numbering starts clean
         out = bytearray()
@@ -245,26 +255,37 @@ class DfuClient:
                 break
             out += chunk
             block += 1
+            if progress is not None:
+                progress(min(len(out), length))
         return bytes(out[:length])
 
-    def write(self, address: int, data: bytes, *, erase: bool = False) -> None:
+    def write(
+        self, address: int, data: bytes, *, erase: bool = False, progress=None, on_erase=None
+    ) -> None:
         """DNLOAD ``data`` at ``address`` in <=2048-byte chunks (dfu.py strategy).
 
         When ``erase`` is set, every flash sector overlapping the write range is erased
         **once, aligned to its sector boundary**, before any data is written. A DfuSe erase
         wipes the whole containing sector (4–128 KiB), so erasing per 2048-byte chunk would
         re-wipe the sector and destroy the chunks already written into it — only the last
-        chunk of each sector would survive (docs §6.4, §8.2)."""
+        chunk of each sector would survive (docs §6.4, §8.2).
+
+        ``progress(bytes_written)`` follows every chunk and ``on_erase(sectors_erased)`` every
+        erased sector, so a caller can draw a bar that moves instead of jumping per segment."""
         self._route(address)  # select the alt-setting (Flash/SRAM/…) whose region owns address
         if erase:
-            for base in self._sectors_to_erase(address, len(data)):
+            for n, base in enumerate(self.sectors_to_erase(address, len(data)), 1):
                 self.erase_page(base)
+                if on_erase is not None:
+                    on_erase(n)
         for off in range(0, len(data), C.TRANSFER_SIZE):
             chunk = data[off : off + C.TRANSFER_SIZE]
             addr = address + off
             self.set_address(addr)
             self._out(C.DFU_DNLOAD, C.DNLOAD_BLOCK_BASE, chunk)
             self._wait_idle_after_command(f"write 0x{addr:08x}")
+            if progress is not None:
+                progress(off + len(chunk))
 
     def _memory_layout(self):
         """The device's advertised flash layout (a MemoryLayout), or None. Resolved once."""
@@ -273,7 +294,7 @@ class DfuClient:
             self._layout_resolved = True
         return self._layout
 
-    def _sectors_to_erase(self, address: int, length: int) -> list[int]:
+    def sectors_to_erase(self, address: int, length: int) -> list[int]:
         """Aligned sector base addresses to erase before writing ``[address, address+length)``.
 
         Uses the device's real sector geometry when advertised. Without a layout it falls

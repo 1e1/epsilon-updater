@@ -31,6 +31,8 @@ from .models import RowsModel
 from .workshop import ROW_FIELDS, Workshop
 
 HOTPLUG_INTERVAL_MS = 4000
+# How long quitting waits for an in-flight USB job before giving up on a clean teardown.
+SHUTDOWN_WAIT_MS = 10000
 KINDS = ("apps", "scripts")
 
 
@@ -65,6 +67,7 @@ class Backend(QObject):
         self._device_name: dict = {}
         self._roster: dict = {}
         self._auth: dict = {}
+        self._auth_error: dict = {}
         self._parc_class = R.CLASS_ALL
         self._parc_filter = ""
         self._batch: dict[str, Any] = {
@@ -78,6 +81,8 @@ class Backend(QObject):
         self._refreshing = False
         self._refresh_again = False
         self._stopped = False
+        self._settled = True
+        self._probed_once = False
 
         self.appsDevice = RowsModel(ROW_FIELDS)
         self.appsAvail = RowsModel(ROW_FIELDS)
@@ -100,6 +105,8 @@ class Backend(QObject):
     def _run(self, key: str, fn, then=None, ok_key: str | None = None, ok_params=None) -> None:
         """Submit a blocking call; report back on the GUI thread. One at a time, by design:
         the device is a single serial resource and the UI mirrors that honestly."""
+        if self._stopped:
+            return  # shutting down: no new USB work once the workers are being drained
         if self._busy:
             # Controls bind to `busy`, but a keyboard shortcut can still get here. Say so
             # rather than dropping the gesture in silence.
@@ -188,6 +195,12 @@ class Backend(QObject):
     @Property(dict, notify=authChanged)
     def auth(self) -> dict:
         return self._auth
+
+    @Property(dict, notify=authChanged)
+    def authError(self) -> dict:
+        """The last sign-in failure as ``{key, msg}`` (an i18n key + the raw cause), shown under
+        the form until the next attempt; empty when there is none."""
+        return self._auth_error
 
     @Property(str, notify=modeChanged)
     def mode(self) -> str:
@@ -325,6 +338,10 @@ class Backend(QObject):
         self.rosterChanged.emit()
         self.distChanged.emit()
         self._drain_refresh()
+        if not self._probed_once:
+            # Look for a plugged calculator right away instead of on the first timer tick.
+            self._probed_once = True
+            self._tick()
 
     def _read_workshop(self, kind: str, identity: dict) -> Workshop:
         """Read one workshop off the device. The caller holds the session lock.
@@ -436,17 +453,24 @@ class Backend(QObject):
         elif not self._identity.get("virtual"):
             self._jobs.submit(self._probe_health, self._probed_health, lambda _m: None)
 
-    def _probe_attach(self) -> bool:
+    def _probe_attach(self) -> str:
+        """``"new"`` when a calculator was just attached, ``"held"`` when the session already
+        had one (a previous probe won the race against the screen's snapshot), ``""`` if none.
+        "held" must not re-open: that would drop the handle the pending refresh is about to
+        read through, and push the panel back once more."""
         try:
             with self._s.io():
-                return bool(self._s.attach_real().get("connected"))
+                if self._s.connected:
+                    return "held"
+                return "new" if self._s.attach_real().get("connected") else ""
         except Exception:
-            return False
+            return ""
 
-    def _probed_attach(self, attached: bool) -> None:
+    def _probed_attach(self, attached: str) -> None:
         if attached and not self._stopped:
             self.refresh()
-            self.toast.emit("real_connected", {}, False)
+            if attached == "new":
+                self.toast.emit("real_connected", {}, False)
 
     def _probe_health(self) -> bool:
         """True when the cable is gone. Detaching is part of the probe so the session is never
@@ -469,19 +493,43 @@ class Backend(QObject):
         self.refresh()
 
     def _installed(self, result: dict) -> None:
+        # A real calculator has just left the bus to reboot onto the new firmware; the session
+        # detached it, so this refresh shows the scanning state and the hotplug probe re-attaches.
         self.refresh()
-        # Same key as the web UI. `slot` and `cache` are its optional tails, empty here.
-        self.toast.emit(
-            "fw_done", {"v": result.get("to_version", ""), "slot": "", "cache": ""}, False
-        )
+        # Same keys as the web UI. `slot` and `cache` are their optional tails, empty here.
+        key = "fw_rebooting" if result.get("rebooted") else "fw_done"
+        version = result.get("verified_version") or result.get("to_version", "")
+        self.toast.emit(key, {"v": version, "slot": "", "cache": ""}, False)
 
     def _caches_updated(self, _: object) -> None:
         self.refresh()
         self.toast.emit("caches_updated", {}, False)
 
-    def _signed_in(self, _: object) -> None:
-        self.refresh_auth()
-        self.toast.emit("auth_saved", {}, False)
+    def _signed_in(self, result: object) -> None:
+        failure = result.get("failure") if isinstance(result, dict) else None
+        self._auth_error = failure or {}
+        self.refresh_auth()  # emits authChanged: the form shows the error, or the signed-in state
+        if failure:
+            self.toast.emit(failure["key"], {"msg": failure["msg"]}, True)
+        else:
+            self.toast.emit("auth_saved", {}, False)
+
+    def _sign_in(self, call) -> dict:
+        """Run a sign-in in the worker and turn its failure into a result the form can show: a
+        rejected password or an unreachable server is an expected outcome, not a crash."""
+        from ..catalog import auth as A
+
+        try:
+            return call()
+        except A.TransportError as exc:
+            key = "auth_offline"
+            msg = str(exc)
+        except A.AuthError as exc:
+            key = "auth_rejected" if "credentials" in str(exc) else "auth_failed"
+            msg = str(exc)
+        except Exception as exc:
+            key, msg = "auth_failed", str(exc) or exc.__class__.__name__
+        return {"failure": {"key": key, "msg": msg}}
 
     def _demo_attached_for_batch(self, _: object) -> None:
         self.refresh()
@@ -546,16 +594,33 @@ class Backend(QObject):
 
     @Slot(str, bool, bool)
     def installFirmware(self, version: str, from_cache: bool, download: bool):
+        last: list[tuple[str, int] | None] = [None]
+
         def progress(phase: str, done: int, total: int) -> None:
-            # Emitted from the worker thread; Qt queues the change onto the GUI thread.
-            self._set_progress(done / total if total else -1.0, phase)
+            # Emitted from the worker thread; Qt queues the change onto the GUI thread. Reports
+            # now arrive per DFU chunk (hundreds per slot): forward only a new phase or a new
+            # half-percent step.
+            value = done / total if total else -1.0
+            step = (phase, int(value * 200))
+            if step != last[0]:
+                last[0] = step
+                self._set_progress(value, phase)
 
         def work():
             with self._s.io():
+                cache_hit, fetch = from_cache, download
+                if not self._s.virtual:
+                    # A real calculator takes the official image only, like the web UI: the
+                    # cached one when it is official and this version, else a fresh download.
+                    entry = (
+                        self._s.cache.entry_for_model(self._s.model.name) if self._s.model else None
+                    )
+                    cache_hit = bool(entry and entry.real and entry.version == version)
+                    fetch = not cache_hit
                 return self._s.install_firmware(
                     version,
-                    from_cache=from_cache,
-                    download=download,
+                    from_cache=cache_hit,
+                    download=fetch,
                     channel=self._s.channel,
                     progress=progress,
                 )
@@ -580,12 +645,22 @@ class Backend(QObject):
 
     @Slot(str)
     def loginToken(self, token: str):
-        self._run("auth", lambda: self._s.login_token(token), self._signed_in)
+        self._auth_error = {}
+        self.authChanged.emit()
+        self._run(
+            "auth", lambda: self._sign_in(lambda: self._s.login_token(token)), self._signed_in
+        )
 
     @Slot(str, str)
     def loginPassword(self, email: str, password: str):
         # The password buys a token once and is never stored (Session's contract).
-        self._run("auth", lambda: self._s.login_password(email, password), self._signed_in)
+        self._auth_error = {}
+        self.authChanged.emit()
+        self._run(
+            "auth",
+            lambda: self._sign_in(lambda: self._s.login_password(email, password)),
+            self._signed_in,
+        )
 
     @Slot()
     def logout(self):
@@ -933,11 +1008,24 @@ class Backend(QObject):
         """
         self._stopped = True
         self._timer.stop()
-        self._jobs.wait()
+        if not self._jobs.wait(SHUTDOWN_WAIT_MS):
+            # A worker is still inside libusb (an open can block for seconds on a busy device).
+            # Detaching under it would race it; the caller ends the process without the libusb
+            # teardown instead (see `settled`).
+            self._settled = False
+            return
+        self._settled = True
         try:
             self._s.detach()
         except Exception:
             pass
+
+    @property
+    def settled(self) -> bool:
+        """False when shutdown gave up waiting for a worker. The process must then end without
+        running native teardown: ``libusb_exit`` or ``~QApplication`` under a thread still in
+        libusb crashes (SIGBUS/abort) — the "crash on quit" seen on macOS."""
+        return self._settled
 
 
 __all__ = ["Backend", "fmt_bytes"]
