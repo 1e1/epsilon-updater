@@ -272,7 +272,7 @@ def test_catalog_is_family_aware():
     # A demo picker attach (no explicit os) puts the device on its own family's version line.
     g = Session(connect=False)
     g.attach_demo("n0110")
-    assert g.catalog_updates()["latest"] == "25.2.0"
+    assert g.catalog_updates()["latest"] == "26.4.0"
 
     s = Session(connect=False)
     s.attach_demo("n0200")
@@ -336,6 +336,29 @@ def test_catalog_live_off_never_touches_network():
     s.attach_demo("n0200")
     s._transport = _FakeTransport({})  # any network use would KeyError on an empty route table
     assert s.catalog_updates()["source"] == "sample"
+
+
+def test_catalog_live_public_when_anonymous():
+    # Live mode, not signed in: the PUBLIC firmwares.json replaces the bundled snapshot.
+    from nwupdater.catalog.auth import Response
+    from nwupdater.catalog.firmware import CATALOG_URL
+
+    s = Session(connect=False, live_catalog=True)
+    s.attach_demo("n0110")
+    s._auth_override = None
+    s._transport = _FakeTransport(
+        {("GET", CATALOG_URL): Response(200, [], b'[{"version":"99.1.0","patch_level":"f00"}]')}
+    )
+    c = s.catalog_updates()
+    assert c["source"] == "sample"
+    assert c["latest"] == "99.1.0"
+
+
+def test_catalog_live_public_falls_back_to_snapshot_when_offline():
+    s = Session(connect=False, live_catalog=True)
+    s.attach_demo("n0110")
+    s._transport = _FakeTransport({})  # unreachable catalogue → KeyError → bundled snapshot
+    assert s.catalog_updates()["latest"] == FirmwareCatalog.bundled().latest().version
 
 
 def test_preload_caches_real_firmware_when_signed_in(tmp_path, monkeypatch):
@@ -579,3 +602,160 @@ def test_set_scripts_rewrites_store_in_order():
     got = s.scripts()["scripts"]
     assert [x["name"] for x in got] == ["alpha.py", "beta.py"]
     assert got[0]["auto_import"] is True and got[1]["auto_import"] is False
+
+
+def test_install_firmware_reboots_through_the_bootloader():
+    # No RESET button: a verified flash ends like the official WebUSB flow, with a DFU leave to
+    # the internal-flash base (the bootloader), never into the flashed slot.
+    from nwupdater.dfu import constants as C
+
+    s = Session(model_name="n0110")
+    r = s.install_firmware("25.2.0")
+    assert r["rebooted"] is True and r["verified_version"] == "25.2.0"
+    assert s.device.left is True
+    assert s.device.jump_address == C.BOOTLOADER_RESET_ADDRESS + C.USERLAND_HEADER_SIZE
+    assert s.connected  # a virtual device stays attached (demo continuity)
+
+
+def test_install_firmware_without_reboot_keeps_the_link():
+    s = Session(model_name="n0110")
+    r = s.install_firmware("25.2.0", reboot=False)
+    assert r["rebooted"] is False and s.device.left is False
+    assert s.boot()["ok"] is True  # "boot now" stays available
+    assert s.device.left is True
+
+
+def test_reboot_detaches_a_real_calculator(tmp_path):
+    # A real calculator leaves the bus as it resets: the session lets go, and the UI's hotplug
+    # watch re-attaches it once it is back.
+    s = _as_real_with_official_cache(Session(model_name="n0110", cache_dir=tmp_path), "25.2.0")
+    s.install_firmware("25.2.0", from_cache=True)
+    assert s.connected is False and s.device is None
+
+
+def _as_real_with_official_cache(s, version):
+    """Stand-in for real hardware (only the bookkeeping differs) whose cache holds an image
+    flagged official, as a signed-in download leaves it."""
+    from nwupdater.install.image import FirmwareImage
+
+    blob = FirmwareImage.synthetic(s.model, version=version).to_dfuse()
+    s.cache.put(s.model.name, version, blob, real=True, channel=s.channel)
+    s.virtual = False
+    return s
+
+
+def test_a_real_calculator_never_gets_a_demo_image(tmp_path):
+    # Not signed in, nothing cached: the old fallback flashed a synthetic image — unsigned bytes
+    # meant for the demo device — onto the real calculator.
+    s = Session(model_name="n0110", cache_dir=tmp_path)
+    s.virtual = False
+    with pytest.raises(ValueError, match="official firmware"):
+        s.install_firmware("25.2.0")
+    assert s.device.left is False  # nothing written, no reboot
+
+
+def test_a_cache_filled_signed_out_is_not_flashed_on_a_real_calculator(tmp_path):
+    s = Session(model_name="n0110", cache_dir=tmp_path)
+    s.preload("25.2.0")  # signed out → a synthetic image, flagged real=False
+    s.virtual = False
+    with pytest.raises(ValueError, match="official firmware"):
+        s.install_firmware("25.2.0", from_cache=True)
+
+
+def test_install_firmware_reboots_a_single_slot_model():
+    # N0200's firmware is opaque (no userland header to find), yet the official flow ends with
+    # the same bootloader leave — the reboot must not depend on a boot address.
+    s = Session(model_name="n0200")
+    r = s.install_firmware("3.0.0")
+    assert r["rebooted"] is True and s.device.left is True
+
+
+def test_batch_run_boots_once_everything_is_pushed(tmp_path, monkeypatch):
+    # Firmware, then scripts over the SAME connection: the reboot comes last, not after the flash.
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("NWUPDATER_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    from nwupdater import classroom_roster as R
+
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "stats.py").write_text("print(1)\n", encoding="utf-8")
+    s = Session(model_name="n0110", cache_dir=tmp_path / "cache")
+    latest = s._catalog_for("graphique").latest()
+    s.preload(latest.version)
+    R.set_distribution(
+        "Seconde A",
+        {
+            "actions": {"census": True, "firmware": True, "apps": False, "scripts": True},
+            "onboarding": "move",
+            "apps": [],
+            "scripts": ["stats.py"],
+        },
+    )
+    j = s.batch_run("Seconde A")
+    assert j["dist"]["firmware"] == "change"
+    assert j["dist"]["scripts"] == "change"  # pushed after the flash, before the reboot
+    assert s.device.left is True
+
+
+def _n0120_running_slot_b():
+    """A Session on an alt-gated N0120 running slot B, modelled on a real one: SRAM answers
+    only through the SRAM alt, and the @Flash map (captured from the device) leaves out the
+    running slot's first 192 KiB, where its kernel and userland headers live."""
+    from nwupdater.dfu.layout import parse_memory_layout
+    from nwupdater.dfu.protocol import DfuClient
+    from nwupdater.formats import headers
+    from nwupdater.testing.virtual_dfu import virtual_calculator
+
+    s = Session(connect=False)
+    dev = virtual_calculator("n0120", alt_settings=True)
+    dev.alt_regions = [
+        (
+            0,
+            parse_memory_layout("@Flash/0x90000000/08*004Kg,01*032Kg,63*064Kg/0x90430000/61*064Kg"),
+        ),
+        (1, parse_memory_layout("@SRAM/0x24000000/01*220Ke")),
+    ]
+    mem = dev.model.memory
+    slot_b = mem.external_flash_origin + mem.slot_size
+    dev.memory.write(slot_b + 8, headers.pack_kernel_header("26.4.0", "abcdef0"))
+    dev.memory.write(
+        slot_b + 0x20000,
+        headers.pack_userland_header(
+            "26.4.0", storage_addr_ram=0, storage_size_ram=0, external_apps_flash=(0, 0)
+        ),
+    )
+    dev.memory.write(mem.sram_origin, headers.pack_slot_info(slot_b + 8, slot_b + 0x20000))
+    s.device, s.bcd = dev, dev.bcdDevice
+    s.client = DfuClient(dev, sleep=lambda *_: None)
+    s.virtual = True
+    s._on_attached()
+    return s
+
+
+def test_active_slot_is_read_through_the_sram_alt():
+    # Regression (real N0120): the SlotInfo read went through the Flash alt and timed out, the
+    # running slot B was taken for A, and the installer erased B → errTARGET.
+    s = _n0120_running_slot_b()
+    assert s._identity().os_version == "26.4.0"  # B's headers, read through the Flash alt
+    assert s._active_slot() == "B"
+    r = s.install_firmware("25.2.0", reboot=False)
+    assert r["target_slot"] == "A"
+
+
+def test_unreadable_slot_info_refuses_to_flash():
+    s = _n0120_running_slot_b()
+    s.device.memory.write(s.model.memory.sram_origin, b"\x00" * 16)  # SlotInfo gone
+    with pytest.raises(ValueError, match="which slot"):
+        s.install_firmware("25.2.0")
+
+
+def test_an_up_to_date_calculator_is_offered_a_reinstall():
+    latest = Session(model_name="n0110").catalog_updates()["latest"]
+    s = Session(model_name="n0110", os_version=latest)
+    c = s.catalog_updates()
+    assert c["up_to_date"] is True and c["updates"] == []
+    assert c["reinstall"] == latest
+
+
+def test_no_reinstall_while_an_update_exists():
+    s = Session(model_name="n0110", os_version="23.2.4")
+    assert s.catalog_updates()["reinstall"] is None

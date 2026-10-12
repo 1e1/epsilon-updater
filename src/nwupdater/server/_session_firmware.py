@@ -95,8 +95,10 @@ class FirmwareMixin(SessionBase):
 
     def _active_slot(self) -> str:
         """Which A/B slot the device is currently running, from SlotInfo's userland pointer.
-        ``"A"`` for single-slot models or when it can't be read — the installer then flashes the
-        *other* (inactive) slot, which is the only one writable on a live device."""
+        ``"A"`` for single-slot models. The installer flashes the *other* (inactive) slot, the
+        only one writable on a live device — so on an A/B model an unreadable SlotInfo is an
+        error, never a guess: guessing "A" while B runs targets the running slot (errTARGET,
+        DFU session left in dfuERROR)."""
         mem = self.model.memory if self.model else None
         if not mem or not mem.has_ab_slots or mem.external_flash_origin is None:
             return "A"
@@ -106,11 +108,14 @@ class FirmwareMixin(SessionBase):
         try:
             si = SlotInfo.unpack(self._conn()[0].read(mem.sram_origin, C.SLOT_INFO_SIZE))
         except Exception:
-            return "A"
+            si = SlotInfo(0, 0, valid=False)
+        if not si.valid:
+            raise ValueError(
+                "cannot tell which slot the calculator is running; nothing was written "
+                "(unplug and replug it, then retry)"
+            )
         slot_b = mem.external_flash_origin + mem.slot_size
-        return (
-            "B" if si.valid and slot_b <= si.userland_header_addr < slot_b + mem.slot_size else "A"
-        )
+        return "B" if slot_b <= si.userland_header_addr < slot_b + mem.slot_size else "A"
 
     # -- writes (against the virtual device) ---------------------------------------
     def install_firmware(
@@ -121,18 +126,25 @@ class FirmwareMixin(SessionBase):
         download: bool = False,
         channel: str = "stable",
         progress=None,
+        reboot: bool = True,
     ) -> dict:
-        """Flash the inactive slot and verify it.
+        """Flash the inactive slot, verify it, then reboot the calculator onto it.
 
-        ``progress`` is the optional ``Installer`` callback ``(phase, done, total)`` with
-        phase ``"write"`` or ``"verify"`` — the native UI binds it to a determinate progress
-        bar; the HTTP layer leaves it unset (no streaming channel to report on).
+        ``progress`` is the optional callback ``(phase, done, total)``, phase ``"download"``
+        (the official .dfu arriving), then the ``Installer``'s ``"erase"``, ``"write"`` and
+        ``"verify"`` — the native UI binds it to a determinate progress bar; the HTTP layer
+        leaves it unset (no streaming channel to report on).
+
+        ``reboot`` ends the flash the way the official WebUSB flow does: a cold boot through the
+        bootloader (see :meth:`boot`), so nobody has to press RESET. A caller that still has work
+        to do on the same connection (the classroom batch) passes ``False`` and boots last.
         """
         if not self.connected:
             raise ValueError("no calculator connected")
         if self.model is None:
             raise ValueError(f"unknown model (bcd 0x{self.bcd:04x})")
         used_cache = used_download = False
+        official = False  # the image is the official signed .dfu (downloaded, or cached as such)
         sha256 = None
         if download:
             # Vrai firmware officiel via my.numworks.com (nécessite un jeton).
@@ -144,13 +156,19 @@ class FirmwareMixin(SessionBase):
             a = A.load_auth()
             if a is None or a.is_expired():
                 raise ValueError("authentication required — sign in first (login)")
-            manifest, blob = D.fetch_firmware(self.model.name, channel, a)
+            fetched = None
+            if progress is not None:
+
+                def fetched(done: int, total: int) -> None:
+                    progress("download", done, total)
+
+            manifest, blob = D.fetch_firmware(self.model.name, channel, a, progress=fetched)
             image = FirmwareImage.from_dfuse(blob)
             to_version = manifest.version
             # Provenance : empreinte du binaire officiel + journal local (preuve d'intégrité).
             sha256 = D.sha256_hex(blob)
             D.record_download(manifest, sha256, when=datetime.now(timezone.utc).isoformat())
-            used_download = True
+            used_download = official = True
         else:
             cached = None
             if from_cache:
@@ -164,22 +182,37 @@ class FirmwareMixin(SessionBase):
             if cached is not None:
                 image = FirmwareImage.from_dfuse(cached)
                 used_cache = True
+                entry = self.cache.entry_for_model(self.model.name)
+                official = bool(entry and entry.version == to_version and entry.real)
             else:
                 image = FirmwareImage.synthetic(self.model, version=to_version or "0.0.0")
+        if not self.virtual and not official:
+            # A synthetic image (or a cache filled while signed out, which holds one) is for the
+            # demo device only. Never write it to a real calculator.
+            raise ValueError(
+                "only the official firmware can be flashed onto a real calculator: sign in to "
+                "download it (a cache filled while signed out holds a demo image)"
+            )
         inst = Installer(self._conn()[0], self.model, progress=progress)
         # Detect the running slot so the installer flashes the INACTIVE one (the active slot is
         # hardware-protected; writing it errTARGETs and wedges the DFU session on real hardware).
         plan = inst.install(image, active_slot=self._active_slot(), verify=True, boot=False)
-        self._last_boot_address = plan.boot_address  # enables "boot now" (DFU detach+jump)
+        self._flashed = True  # enables "boot now"
+        verified_version = inst.read_installed_version(plan)  # before the reboot drops the link
+        rebooted = False
+        if reboot:
+            self.boot()
+            rebooted = True
         return {
             "ok": True,
+            "rebooted": rebooted,
             "to_version": to_version,
             "from_cache": used_cache,
             "downloaded": used_download,
             "full_image": plan.full_image,
             "target_slot": plan.target_slot,
             "boot_address": (f"0x{plan.boot_address:08x}" if plan.boot_address else None),
-            "verified_version": inst.read_installed_version(plan),
+            "verified_version": verified_version,
             "bytes": plan.total_bytes,
             "sha256": sha256,
         }
@@ -191,9 +224,14 @@ class FirmwareMixin(SessionBase):
         flashed slot. A leave *into* a QSPI slot boots it unauthenticated → "UNOFFICIAL SOFTWARE";
         leaving to the bootloader triggers a cold boot that re-verifies the slot signature and
         keeps the device **official**, with no manual RESET — this mirrors the official WebUSB
-        flow (see docs/reference/official-webusb-analysis.md). The USB handle drops as the device
-        resets; callers re-enumerate. Requires a prior install in this session."""
-        if not self._last_boot_address:
+        flow (see docs/reference/official-webusb-analysis.md), on every model. Requires a prior
+        install in this session.
+
+        A real calculator leaves the bus as it resets, so the session detaches: the UI's hotplug
+        watch re-attaches it once it is back. A virtual device stays attached (demo continuity)."""
+        if not self._flashed:
             raise ValueError("no freshly installed firmware to boot")
         self._conn()[0].leave(C.BOOTLOADER_RESET_ADDRESS)
+        if not self.virtual:
+            self.detach()
         return {"ok": True, "jumped_to": f"0x{C.BOOTLOADER_RESET_ADDRESS:08x}"}

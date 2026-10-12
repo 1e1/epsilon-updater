@@ -36,7 +36,7 @@ class SessionBase:
         self.api_level = api_level
         self._cache_dir = cache_dir
         self._cache: FirmwareCache | None = None
-        self._last_boot_address: int | None = None  # set after a flash: jump address for "boot now"
+        self._flashed = False  # a verified flash happened on this attach: "boot now" allowed
         self.channel = "stable"
         self.catalog = FirmwareCatalog.bundled()  # Graphing N01xx (2x.x)
         self.sci_catalog = FirmwareCatalog.bundled("firmwares-n0200")  # Scientific N0200 (3.x)
@@ -54,6 +54,7 @@ class SessionBase:
         # `ui` server turns it on. Bundled snapshots stay the offline/anonymous fallback.
         self._live_catalog = live_catalog
         self._manifest_cache: dict = {}
+        self._public_fetched = False  # the public Graphing catalogue is re-read once per session
         self._auth_override = None  # tests inject an Auth here; production reads the stored token
         self._transport = None  # tests inject a fake transport here
         # Device state. The shipped app starts DISCONNECTED and either attaches a real
@@ -93,6 +94,10 @@ class SessionBase:
         plugged in, so a long-running server stays up and reports it instead of exiting."""
         from ..dfu import usbio
 
+        # Re-attaching (a rescan, or the hot-plug probe racing a slow first read) must let go
+        # of the handle we already hold: macOS claims the interface exclusively, so a second
+        # open from this same process fails with "Access denied" (errno 13).
+        self._release_usb()
         try:
             od = usbio.open_calculator()
         except usbio.UsbError as exc:
@@ -135,7 +140,7 @@ class SessionBase:
         assert self.bcd is not None
         self.model = MODELS.get(self.bcd)
         self.connected = True
-        self._last_boot_address = None
+        self._flashed = False
         self._after_scan()
 
     def _after_scan(self) -> None:
@@ -143,7 +148,17 @@ class SessionBase:
         never depends on the mixin order; ``RosterMixin`` overrides it to enrol the scanned
         calculator into the local roster under classroom policy."""
 
+    def _release_usb(self) -> None:
+        """Release a real device's interface and libusb handle (best effort: the device may
+        already be gone). The virtual device holds nothing."""
+        if self.device is None or self.virtual:
+            return
+        from ..dfu import usbio
+
+        usbio.release(self.device)
+
     def detach(self) -> dict:
+        self._release_usb()
         self.device = self.client = self.model = self.bcd = None
         self.connected = self.virtual = False
         return self.identity()
@@ -194,7 +209,7 @@ class SessionBase:
         return "2.9.0" if (model and model.family == "scientifique") else default
 
     def _catalog_for(self, family: str, channel: str = "stable") -> FirmwareCatalog:
-        base = self.sci_catalog if family == "scientifique" else self.catalog
+        base = self.sci_catalog if family == "scientifique" else self._graphing_catalog()
         if channel != "beta":
             return base
         # Illustrative beta line for the offline/demo fallback: a pre-release one minor ahead of
@@ -208,6 +223,20 @@ class SessionBase:
         p = latest.version.split(".")
         beta_v = f"{p[0]}.{(int(p[1]) + 1) if len(p) > 1 and p[1].isdigit() else 0}.0"
         return FirmwareCatalog([FirmwareRelease(beta_v, "beta")] + list(base.releases))
+
+    def _graphing_catalog(self) -> FirmwareCatalog:
+        """The Graphing catalogue. In live mode the PUBLIC ``firmwares.json`` (no sign-in) replaces
+        the bundled snapshot on first use, so an anonymous user still sees the real latest; any
+        network error keeps the snapshot. Read once per session so a render never re-hits it."""
+        if self._live_catalog and not self._public_fetched:
+            self._public_fetched = True
+            try:
+                live = FirmwareCatalog.fetch(transport=self._transport)
+                if len(live):
+                    self.catalog = live
+            except Exception:  # offline / HTTP / parse error → the bundled snapshot stays
+                pass
+        return self.catalog
 
     def _live_latest(self, model: str, channel: str):
         """Real per-model latest from the official manifest (needs sign-in). Returns None when

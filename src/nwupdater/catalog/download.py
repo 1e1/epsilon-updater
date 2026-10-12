@@ -85,14 +85,17 @@ def _check_channel(channel: str) -> None:
         raise ValueError(f"canal inconnu : {channel!r} (attendu : {', '.join(CHANNELS)})")
 
 
-def _get(url: str, auth: Auth, *, transport=None):
+def _get(url: str, auth: Auth, *, transport=None, progress=None):
     tr = transport or UrllibTransport()
+    # Only a caller that tracks progress passes it on: injected test transports need not know it.
+    extra = {"progress": progress} if progress is not None else {}
     try:
         resp = tr.open(
             "GET",
             url,
             headers={"User-Agent": UA, "Accept": "*/*", "Cookie": auth.cookie_header()},
             allow_redirects=True,
+            **extra,
         )
     except TransportError as exc:
         raise DownloadError(str(exc)) from exc
@@ -113,11 +116,26 @@ def fetch_manifest(model: str, channel: str, auth: Auth, *, transport=None) -> F
 
 
 def download_dfu(
-    model: str, channel: str, auth: Auth, *, expected_size: int | None = None, transport=None
+    model: str,
+    channel: str,
+    auth: Auth,
+    *,
+    expected_size: int | None = None,
+    transport=None,
+    progress=None,
 ) -> bytes:
-    """Télécharge le ``.dfu`` et le valide (signature DfuSe + taille si connue)."""
+    """Télécharge le ``.dfu`` et le valide (signature DfuSe + taille si connue).
+
+    ``progress(done, total)`` suit la réception ; ``total`` vaut la taille du manifeste quand
+    le serveur n'annonce pas de Content-Length."""
     _check_channel(channel)
-    resp = _get(dfu_url(model, channel), auth, transport=transport)
+    relay = None
+    if progress is not None:
+
+        def relay(done: int, total: int) -> None:
+            progress(done, total or expected_size or 0)
+
+    resp = _get(dfu_url(model, channel), auth, transport=transport, progress=relay)
     blob = resp.body
     if blob[:5] != b"DfuSe":
         raise DownloadError(f"contenu inattendu pour {model}/{channel} : pas un fichier DfuSe")
@@ -127,12 +145,17 @@ def download_dfu(
 
 
 def fetch_firmware(
-    model: str, channel: str, auth: Auth, *, transport=None
+    model: str, channel: str, auth: Auth, *, transport=None, progress=None
 ) -> tuple[FirmwareManifest, bytes]:
     """Manifeste puis ``.dfu``, avec contrôle d'intégrité par la taille du manifeste."""
     manifest = fetch_manifest(model, channel, auth, transport=transport)
     blob = download_dfu(
-        model, channel, auth, expected_size=manifest.size or None, transport=transport
+        model,
+        channel,
+        auth,
+        expected_size=manifest.size or None,
+        transport=transport,
+        progress=progress,
     )
     return manifest, blob
 

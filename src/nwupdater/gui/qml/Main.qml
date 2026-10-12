@@ -145,7 +145,9 @@ ApplicationWindow {
                 classroom: win.classroom
                 canDeleteClass: backend.parcClass !== backend.classAll
                                 && backend.parcClass !== backend.classUnfiled
+                mode: backend.mode
                 onPicked: (k) => win.currentTab = k
+                onModePicked: (m) => backend.setMode(m)
                 onDeleteClassRequested: win.classDeletePending = backend.parcClass
                 onBatchRequested: win.openBatch()
             }

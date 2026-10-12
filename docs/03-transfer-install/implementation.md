@@ -29,11 +29,11 @@ le device virtuel — **aucun USB réel**.
 
 On flashe **toujours le slot inactif**, jamais celui en cours d'exécution → un flash
 interrompu ne peut pas rendre la calculatrice non bootable (le slot actif reste intact).
-Le boot bascule ensuite via `leave(boot_address)` (detach + jump vers `boot_address + 0x30`,
-cf. [../01-specs/usb-dfu-protocol.md §8.3](../01-specs/usb-dfu-protocol.md)). ⚠️ Ce **saut DFU**
-fait afficher **temporairement** « UNOFFICIAL SOFTWARE » (le noyau ne peut pas vérifier un slot
-atteint par saut) ; pour un statut **officiel**, préférer un **démarrage à froid** (RESET) qui
-laisse le bootloader re-vérifier la signature — cf.
+Le flash se termine par un `leave` vers le **bootloader** `0x08000000` (cf.
+[../01-specs/usb-dfu-protocol.md §8.3](../01-specs/usb-dfu-protocol.md)) : démarrage à froid, le
+bootloader re-vérifie la signature et la calculatrice reste **officielle**, sans RESET manuel.
+⚠️ Un `leave` **dans le slot** (saut DFU) afficherait « UNOFFICIAL SOFTWARE » (le noyau ne peut
+pas vérifier un slot atteint par saut) — cf.
 [../01-specs/firmware-authenticity.md](../01-specs/firmware-authenticity.md).
 
 Les modèles **mono-slot** (N0100, N02xx) n'ont pas de slot inactif : flash direct en flash

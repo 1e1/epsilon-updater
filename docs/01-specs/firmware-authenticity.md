@@ -22,7 +22,7 @@ l'appareil, **[fermé]** = logique dans le bootloader propriétaire, inférée.
   boot à froid par le bootloader — est **forcé à `ThirdParty`**, ce qui déclenche le bandeau
   **« UNOFFICIAL SOFTWARE »** et désactive le mode examen.
 - **Conséquence pratique** : flasher l'**image officielle signée** puis **redémarrer à froid**
-  (RESET) rend l'appareil **officiel**, hors ligne. Le « UNOFFICIAL » n'apparaît que si on entre
+  (RESET, ou un `leave` DFU vers le bootloader `0x08000000`) rend l'appareil **officiel**, hors ligne. Le « UNOFFICIAL » n'apparaît que si on entre
   dans le slot par le **saut DFU** (`leave`) ; un boot à froid l'efface. Un firmware **non signé**
   reste « non officiel » (la signature ne se forge pas).
 
@@ -119,14 +119,17 @@ officiels signés bootent **officiel** dès qu'on passe par un **boot à froid**
 
 - **MàJ hors ligne vers un firmware officiel conforme examen : FAISABLE.** Conditions : (1) image
   **officielle signée** (téléchargée via `catalog.download`, jamais un binaire modifié) ; (2)
-  entrer dans le slot par un **boot à froid** (RESET / extinction), **pas** par le `boot()` in-app
-  (saut DFU).
-- **`boot()` (`_session_firmware.py`)** fait un saut DFU → « UNOFFICIAL » **transitoire**. Après un
-  flash firmware, l'UI doit orienter vers un **RESET** (cf. `fw_reboot`/`exam_warn`), pas le saut.
+  entrer dans le slot par un **boot à froid** (RESET / extinction / `leave` vers le bootloader),
+  **jamais** par un saut DFU dans le slot.
+- **`boot()` (`_session_firmware.py`)** fait un `leave` vers le **bootloader** `0x08000000` (et non
+  vers le slot) → boot à froid, signature revérifiée, **officiel**. Depuis la 3.0.1,
+  `install_firmware` l'enchaîne **automatiquement** après la vérification : plus de RESET manuel
+  (`leave` vers le bootloader validé sur N0120 réelle). Le bouton RESET reste le recours si la
+  calculatrice ne redémarre pas.
 - **On ne peut pas signer.** Un firmware custom/modifié restera « non officiel » — c'est le design
   (intégrité examen), et c'est correct.
-- **Mode classe** : le flash « en un clic » depuis le cache (image officielle, sans auto-boot) est
-  compatible « officiel » à condition que l'élève **redémarre à froid** ensuite.
+- **Mode classe** : le lot (firmware, apps, scripts sur la même connexion) se termine par ce même
+  redémarrage via le bootloader → l'appareil reste « officiel » sans geste de l'élève.
 
 ## 8. Limites / zones fermées
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from ..dfu import constants as C
 from ..dfu.protocol import DfuClient
-from ..formats.nwa import iter_apps
+from ..formats.nwa import APPINFO_SIZE, AppInfo, iter_apps
 from ..regions import PlanItem, plan
 from .installer import validate_nwa, write_verified
 
@@ -66,10 +66,29 @@ class AppManager:
         self.region_ram = external_apps_ram
         self.userland_header_addr = userland_header_addr
 
+    def _used_extent(self) -> int:
+        """Bytes from the region start to the end of the last app, found by hopping from one
+        32-byte AppInfo header to the next sector-aligned one — the OS iterator's walk, without
+        reading the app bodies or the free space behind them."""
+        off = end = 0
+        while off + APPINFO_SIZE <= self.capacity:
+            info = AppInfo.parse(self.client.read(self.start + off, APPINFO_SIZE))
+            if not info.valid:
+                break
+            end = min(self.capacity, off + (info.app_size or APPINFO_SIZE))
+            nxt = ((end + SECTOR - 1) // SECTOR) * SECTOR
+            if nxt <= off:
+                break
+            off = nxt
+        return end
+
     def installed(self) -> list[ManagedApp]:
         if self.capacity <= 0:
             return []
-        blob = self.client.read(self.start, self.capacity)
+        # Only the occupied prefix: reading the whole region (several MiB over DFU) took ~5 s
+        # on a real N0120 at every refresh, mostly to fetch erased flash.
+        used = self._used_extent()
+        blob = self.client.read(self.start, used) if used else b""
         apps = []
         for a in iter_apps(blob):
             size = a.info.app_size or 0

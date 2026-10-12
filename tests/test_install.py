@@ -119,3 +119,21 @@ def test_headers_unpack_short_buffer_is_invalid():
     assert SlotInfo.unpack(b"\x00\x00").valid is False
     assert KernelHeader.unpack(b"\xf0\x0d").valid is False
     assert UserlandHeader.unpack(b"\xfe\xed").valid is False
+
+
+def test_flash_progress_moves_per_chunk_through_each_phase():
+    """The bar used to sit at 0 then jump to ~96 %: progress came once per (slot-sized)
+    segment. It now follows every erased sector and every DFU chunk, phase by phase."""
+    model = _model("n0120")
+    dev = virtual_calculator("n0120", os_version="23.2.4")
+    seen = []
+    inst = Installer(_client(dev), model, progress=lambda *r: seen.append(r))
+    inst.install(FirmwareImage.synthetic(model, version="99.9.9"), active_slot="A")
+    phases = [p for p, _d, _t in seen]
+    assert phases == sorted(phases, key=["erase", "write", "verify"].index)  # in order
+    for phase in ("erase", "write", "verify"):
+        steps = [(d, t) for p, d, t in seen if p == phase]
+        # many small steps, not one jump (the virtual layout has 2 big sectors; a real N0120 26)
+        assert len(steps) > (1 if phase == "erase" else 10), phase
+        assert [d for d, _ in steps] == sorted(d for d, _ in steps)  # never goes back
+        assert steps[-1][0] == steps[-1][1]  # ends full

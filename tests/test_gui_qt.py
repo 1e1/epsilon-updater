@@ -560,10 +560,20 @@ def test_the_hotplug_probe_reports_a_lost_cable(backend, monkeypatch):
 
 def test_the_hotplug_probe_swallows_a_usb_error(backend, monkeypatch):
     """The poll runs every 4 s forever; an exception there must not reach the user."""
+    backend._s.detach()
     monkeypatch.setattr(
         backend._s, "attach_real", lambda: (_ for _ in ()).throw(RuntimeError("no device"))
     )
-    assert backend._probe_attach() is False
+    assert backend._probe_attach() == ""
+
+
+def test_the_hotplug_probe_does_not_reopen_a_held_calculator(backend, monkeypatch):
+    """A probe that fires while the first attach's snapshot is still on its way finds the
+    session already connected: it must leave the handle alone, not re-open the device."""
+    opened = []
+    monkeypatch.setattr(backend._s, "attach_real", lambda: opened.append(1) or {"connected": True})
+    assert backend._probe_attach() == "held"
+    assert opened == []
 
 
 def test_a_refused_channel_switch_leaves_the_session_alone(backend):
@@ -580,3 +590,98 @@ def test_switching_channel_re_reads_the_catalogue(backend, qt_app):
     backend.setChannel("beta")
     assert wait_until(qt_app, lambda: backend.busy == "")
     assert backend._s.channel == "beta"
+
+
+def test_a_flash_announces_the_reboot(backend, qt_app):
+    """The calculator restarts on its own after a verified flash: the toast says so instead of
+    leaving the user to find the RESET button."""
+    seen = toasts(backend)
+    backend.installFirmware("", False, False)
+    assert wait_until(qt_app, lambda: any(k == "fw_rebooting" for k, _p, _e in seen))
+    _key, params, err = next(t for t in seen if t[0] == "fw_rebooting")
+    assert err is False and params["v"]
+
+
+def test_shutdown_reports_a_worker_it_could_not_drain(backend, monkeypatch):
+    """A USB open can block for seconds. Quitting must not detach under it, and must tell the
+    app to skip the native teardown that crashes under a thread still in libusb."""
+    import threading
+
+    from nwupdater.gui import backend as B
+
+    release = threading.Event()
+    backend._jobs.submit(release.wait, lambda _r: None, lambda _m: None)
+    monkeypatch.setattr(B, "SHUTDOWN_WAIT_MS", 50)
+    backend.shutdown()
+    assert backend.settled is False
+    assert backend._s.connected  # not detached under the running worker
+    release.set()
+    assert backend._jobs.wait(5000)
+
+
+def test_no_new_job_once_shutting_down(backend):
+    backend.shutdown()
+    backend.rescan()
+    assert backend.busy == ""
+
+
+def test_a_plugged_calculator_is_looked_for_at_launch(qt_app, tmp_path, monkeypatch):
+    """The first probe follows the first snapshot, not the first 4 s timer tick."""
+    monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
+    session = Session("n0120", connect=False, cache_dir=tmp_path / "cache")
+    probes = []
+    monkeypatch.setattr(session, "attach_real", lambda: probes.append(1) or {"connected": False})
+    made = Backend(session)
+    try:
+        assert wait_until(qt_app, lambda: probes, timeout_ms=1500)
+    finally:
+        made.shutdown()
+
+
+def test_a_real_calculator_flash_asks_for_the_official_download(backend, qt_app):
+    """No official image cached: the desktop app must go for the download (sign-in), never the
+    demo image it used to fall back to."""
+    backend._s.virtual = False
+    seen = toasts(backend)
+    backend.installFirmware("", False, False)
+    assert wait_until(qt_app, lambda: any(err for _k, _p, err in seen))
+    key, params, _err = next(t for t in seen if t[2])
+    assert key == "fail" and "sign in" in params.get("msg", "")
+    assert backend._s.device.left is False
+
+
+def test_a_rejected_sign_in_stays_on_the_form(backend, qt_app, monkeypatch):
+    """A wrong password is an expected outcome: it lands under the form (kept until the next
+    attempt) and in the status line, never as a crash."""
+    from nwupdater.catalog import auth as A
+
+    def reject(_e, _p):
+        raise A.AuthError("credentials rejected (no token returned) — check email/password")
+
+    monkeypatch.setattr(backend._s, "login_password", reject)
+    seen = toasts(backend)
+    backend.loginPassword("prof@example.org", "wrong")
+    assert wait_until(qt_app, lambda: backend.authError.get("key") == "auth_rejected")
+    assert seen[-1][0] == "auth_rejected" and seen[-1][2] is True
+    assert backend.busy == ""
+
+
+def test_an_unreachable_server_says_so(backend, qt_app, monkeypatch):
+    from nwupdater.catalog import auth as A
+
+    def offline(_e, _p):
+        raise A.TransportError("cannot connect to https://my.numworks.com: timed out")
+
+    monkeypatch.setattr(backend._s, "login_password", offline)
+    backend.loginPassword("prof@example.org", "pw")
+    assert wait_until(qt_app, lambda: backend.authError.get("key") == "auth_offline")
+
+
+def test_a_successful_sign_in_clears_the_last_error(backend, qt_app, monkeypatch):
+    backend._auth_error = {"key": "auth_rejected", "msg": "x"}
+    ok = {"authenticated": True, "expired": False, "expires_at": "2026-12-01"}
+    monkeypatch.setattr(backend._s, "login_password", lambda _e, _p: ok)
+    seen = toasts(backend)
+    backend.loginPassword("prof@example.org", "pw")
+    assert wait_until(qt_app, lambda: any(k == "auth_saved" for k, _p, _e in seen))
+    assert backend.authError == {}

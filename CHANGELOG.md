@@ -6,6 +6,96 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.1] - 2026-10-12
+
+### Ajouté
+
+- **Réinstaller la version en place.** Une calculatrice déjà à jour se voit proposer
+  « Réinstaller » dans l'onglet Système, sur le bureau comme dans l'interface web. Cela sert à
+  réparer un slot ou à rafraîchir le slot inactif. Le lot du mode classe continue de sauter les
+  calculatrices à jour.
+
+### Corrigé
+
+- **Une vraie calculatrice ne reçoit plus jamais d'image de démonstration.** Faute de firmware
+  officiel (pas de connexion au compte, rien en cache), l'installation se rabattait sans rien dire
+  sur l'image synthétique prévue pour l'appareil de démo, puis l'écrivait sur la calculatrice
+  branchée. Le bouton « Installer » de l'application de bureau y menait toujours, car il ne
+  demandait jamais le téléchargement. Un cache rempli sans être connecté contient aussi ce type
+  d'image, et l'installation depuis le cache ne le vérifiait pas. Désormais, une vraie calculatrice
+  ne reçoit que l'image officielle : téléchargée, ou en cache et marquée comme telle. Sinon, le
+  flash est refusé avant toute écriture et l'utilisateur est invité à se connecter. L'application
+  de bureau choisit sa source comme l'interface web : le cache officiel de cette version, sinon le
+  téléchargement. Tant qu'aucune de ces deux sources n'est disponible, son bouton reste grisé et
+  invite à se connecter.
+- **Plus besoin d'appuyer sur RESET après une mise à jour du firmware.** Une fois le flash vérifié,
+  la calculatrice redémarre d'elle-même sur la nouvelle version, comme avec le flux officiel : un
+  `leave` DFU vers le **bootloader** (`0x08000000`), qui revérifie la signature. Le statut
+  **officiel** (mode examen) est donc conservé. Le mécanisme existait depuis la 2.x (`/api/boot`),
+  mais aucune des deux interfaces ne l'appelait, et les textes renvoyaient encore vers le bouton
+  RESET. Le `leave` vers le bootloader a été validé sur une N0120 réelle.
+- **L'interface suit le redémarrage.** La calculatrice quitte le bus USB : la session la détache
+  et la reprend à son retour, sans afficher l'erreur « calculatrice déconnectée ». Le message
+  annonce le redémarrage, et le bouton RESET n'est plus cité qu'en recours.
+- **Mode classe** : le lot pousse firmware, apps et scripts sur la même connexion, puis redémarre
+  une seule fois à la fin.
+- **N0200** : le redémarrage ne dépend plus d'une adresse de boot. Le firmware chiffré n'en expose
+  pas, alors que le flux officiel termine aussi par ce `leave`.
+- **Versions firmware à jour sans connexion au compte.** Le catalogue public
+  (`my.numworks.com/firmwares.json`) est relu une fois par session. Le snapshot embarqué ne sert
+  plus que hors ligne, et il passe à 26.4.0. L'application de bureau active désormais ce mode live,
+  comme l'interface web : jusqu'ici, elle s'en tenait au snapshot.
+- **« Mettre à jour les caches firmware » montre son activité.** Pendant les téléchargements, une
+  icône tourne et le bouton reste verrouillé, dans l'application de bureau comme dans l'interface
+  web.
+- **Le slot en cours d'exécution est enfin bien détecté sur N0120.** La lecture de l'info de
+  slot (en SRAM) passait par l'interface DFU Flash, où elle expire sur le vrai matériel. L'outil
+  supposait alors le slot A actif. Quand la calculatrice tournait sur B, il effaçait B : refus
+  `errTARGET`, rien d'écrit, mais la mise à jour échouait. Les lectures sont désormais routées
+  vers l'interface qui possède l'adresse, comme les écritures. Les zones qu'aucune interface
+  n'annonce passent par l'interface Flash : c'est le cas des en-têtes du slot actif, que le plan
+  mémoire de la N0120 masque. Si l'info de slot reste illisible, le flash est refusé au lieu de
+  deviner. Autre effet : l'identification ne cumule plus les expirations et devient immédiate
+  (0,1 s, contre plusieurs dizaines de secondes avant que le panneau principal n'apparaisse).
+- **« Access denied » (erreur 13) en relançant la recherche.** Une nouvelle connexion libère
+  désormais celle que la session tenait déjà : macOS réserve l'interface USB à un seul
+  détenteur, même au sein d'un même processus.
+- **La recherche de calculatrice démarre dès l'ouverture** de l'application de bureau, sans
+  attendre le premier cycle de 4 s.
+- **Le panneau d'une calculatrice branchée s'affiche en moins d'une seconde**, contre plus de
+  6 s sur N0120. Lister les apps installées relisait toute la zone des apps à chaque
+  rafraîchissement (plusieurs Mio par DFU, 5,3 s), surtout de la flash vide. Seuls les en-têtes
+  d'apps, puis la partie occupée, sont désormais lus (0,09 s). Pendant cette attente, la
+  recherche automatique suivante rouvrait aussi la calculatrice que la session tenait déjà, ce
+  qui repoussait encore l'affichage : elle laisse maintenant la connexion en place.
+- **La barre de progression du flash avance vraiment.** Elle restait longtemps à 0, puis sautait
+  d'un coup à 96 %. Le téléchargement du firmware officiel n'était pas suivi, l'effacement non
+  plus, et l'écriture comme la vérification ne remontaient qu'une fois par segment, soit presque
+  le slot entier. Chaque phase est maintenant suivie bloc par bloc et a sa couleur. Le
+  téléchargement, qui arrive d'Internet, est en bleu et se remplit de droite à gauche.
+  L'effacement puis l'écriture, qui partent vers la calculatrice, sont orange et se remplissent de
+  gauche à droite. La vérification est en vert.
+- **La connexion au compte NumWorks donne un retour visible** dans l'application de bureau. Le
+  bouton « Se connecter » s'anime et affiche « Connexion… » pendant la requête. Un échec reste
+  affiché sous le formulaire jusqu'à la tentative suivante : identifiants refusés, serveur
+  injoignable, ou autre cause avec son détail. Jusqu'ici, il n'apparaissait que quelques secondes
+  dans la barre d'état. Une erreur attendue n'imprime plus non plus de trace complète dans le
+  terminal, ce qui ressemblait à un plantage. Une seule ligne s'affiche, ou la trace entière avec
+  `NWUPDATER_DEBUG=1`.
+- **Le choix Individuel | Classe est de retour dans la fenêtre** de l'application de bureau, en
+  haut à droite comme dans l'interface web. Il n'était plus accessible que par la barre de menus
+  (menu Mode, ⌘1 / ⌘2).
+- **Plus de plantage à la fermeture de l'application de bureau** (« bus error » ou « abort » sur
+  macOS). Quitter pendant qu'une ouverture USB était bloquée (jusqu'à plusieurs secondes sur un
+  appareil occupé) libérait libusb sous le fil qui l'utilisait encore. La fermeture attend
+  désormais la fin des tâches USB. Si l'une d'elles ne rend pas la main, le processus se termine
+  sans cette libération : le système rend l'interface USB de lui-même.
+- **La suite de tests ne s'empare plus de la calculatrice branchée.** Les tests qui retiraient
+  leur appareil de démo laissaient la détection de branchement ouvrir la vraie calculatrice et la
+  garder jusqu'à la fin de l'exécution. Une application lancée en parallèle recevait alors
+  « Access denied » (erreur 13) sur sa propre calculatrice. L'accès USB réel est maintenant
+  bloqué pour toute la suite.
+
 ## [3.0.0] - 2026-09-10
 
 Version **stable** de la lignée 3.0.0 (promotion de la rc.4). Faits marquants depuis la 2.x :

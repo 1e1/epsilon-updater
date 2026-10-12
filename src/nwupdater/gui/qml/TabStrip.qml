@@ -1,16 +1,19 @@
 import QtQuick
 import QtQuick.Layouts
 
-/* Tab navigation, plus the two class-mode actions that belong on this line. Navigation only:
-   what a tab DOES lives in the pane it opens. */
+/* Tab navigation, the class-mode actions that belong on this line, and the mode switch — the
+   web UI's header pill, so switching to Classroom never depends on finding the menu bar.
+   Navigation only: what a tab DOES lives in the pane it opens. */
 Rectangle {
     id: root
     property var tabs: []          // [{ k, l, n }] — n < 0 hides the count chip
     property string current: ""
     property bool classroom: false
     property bool canDeleteClass: false
+    property string mode: "individual"
 
     signal picked(string key)
+    signal modePicked(string mode)
     signal deleteClassRequested()
     signal batchRequested()
 
@@ -75,6 +78,13 @@ Rectangle {
             visible: root.classroom
             text: "▶  " + i18n.t("batch_mode")
             onClicked: root.batchRequested()
+        }
+        Segmented {
+            Layout.leftMargin: 8
+            options: [{ key: "individual", label: i18n.t("mode_individual") },
+                      { key: "classroom", label: i18n.t("mode_classroom") }]
+            current: root.mode
+            onPicked: (k) => root.modePicked(k)
         }
     }
 }

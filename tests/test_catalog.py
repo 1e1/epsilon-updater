@@ -46,7 +46,7 @@ def test_bundled_snapshot_loads():
     cat = FirmwareCatalog.bundled()
     assert len(cat) >= 50
     assert cat.latest() is not None
-    # snapshot captured 2026-07 had 25.2.0 as latest
+    # snapshot captured 2026-10 has 26.4.0 as latest; 25.2.0 stays listed
     assert cat.get("25.2.0") is not None
 
 

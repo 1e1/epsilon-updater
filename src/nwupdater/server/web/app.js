@@ -425,7 +425,7 @@ function renderCache() {
   const head = `<h3>${FLEET_ICON}<span>${t("fleet")}</span></h3>
     <div class="cls-head">
       <span class="offline">${SHIELD_SM}${t("offline_ready")}</span>
-      <button class="btn ghost sm" onclick="updateCaches()">${REFRESH_SM}${t("update_caches")}</button></div>`;
+      <button class="btn ghost sm" onclick="updateCaches(this)">${REFRESH_SM}${t("update_caches")}</button></div>`;
   if (!entries.length) {
     el.innerHTML = head + `<p class="muted" style="margin:0">${t("cache_intro")}</p>`;
     return;
@@ -442,11 +442,14 @@ function renderCache() {
       <span class="muted">${t("cache_summary", { n: entries.length, d: c.expires_in_days ?? 30 })}</span>
       <button class="btn ghost sm" onclick="clearCache()">${t("clear")}</button></div>`;
 }
-async function updateCaches() {
+async function updateCaches(btn) {
+  // Downloads can take a while: the refresh icon turns and the button locks until they finish.
+  if (btn) { btn.disabled = true; btn.classList.add("loading"); }
   try {
     STATE.cache = await post("/api/cache/preload-all"); toast(t("caches_updated"));
     renderCache(); if (STATE.mode === "classroom") renderDistPane();  // firmware panel lives in Distribution
   } catch (e) { toast(t("fail", { msg: e.message }), true); }
+  finally { if (btn) { btn.disabled = false; btn.classList.remove("loading"); } }
 }
 async function preload(v) {
   try { STATE.cache = await post("/api/cache/preload", { version: v }); toast(t("preloaded", { v })); renderCache(); }
@@ -549,7 +552,7 @@ function renderCatalog() {
   const c = STATE.catalog; if (!c) return;
   $("chan-stable").setAttribute("aria-pressed", STATE.channel === "stable");
   $("chan-beta").setAttribute("aria-pressed", STATE.channel === "beta");
-  $("c-exam-warn").textContent = t("exam_warn");  // guide: cold-boot (RESET) after flashing keeps official status
+  $("c-exam-warn").textContent = t("exam_warn");  // guide: the post-flash bootloader reboot keeps official status
   const up = c.up_to_date;
   $("updot").style.display = up ? "none" : "block";  // pulsing dot on the System tab
   const srcTag = c.source === "official"
@@ -557,29 +560,33 @@ function renderCatalog() {
     : `<span class="tag imp" style="margin-left:7px">${t("cat_sample")}</span>`;
   $("c-text").innerHTML = (up ? t("uptodate_txt", { v: esc(c.current) })
     : t("updates_txt", { cur: esc(c.current), n: c.updates.length })) + srcTag;
-  $("c-row").style.display = up ? "none" : "flex";
-  $("c-risk").style.display = up ? "none" : "flex";
+  // Up to date: offer to write the same version again (repair / refresh the inactive slot).
+  const reinstall = up && !!c.reinstall;
+  const offer = reinstall ? [{ version: c.reinstall }] : c.updates;
+  $("c-row").style.display = (up && !reinstall) ? "none" : "flex";
+  $("c-risk").style.display = (up && !reinstall) ? "none" : "flex";
   // A firmware cached for THIS model can be flashed with no account (classroom / offline). When
   // present, pre-select it and tag the option so it's the obvious one-click choice.
   const ce = cachedEntryForDevice();
-  const cachedHit = !!(ce && c.updates.some(u => u.version === ce.version));
-  $("c-select").innerHTML = c.updates.map((u, i) =>
+  const cachedHit = !!(ce && offer.some(u => u.version === ce.version));
+  $("c-select").innerHTML = offer.map((u, i) =>
     `<option value="${esc(u.version)}"${(cachedHit ? u.version === ce.version : i === 0) ? " selected" : ""}>`
-    + `Epsilon ${esc(u.version)}${i === 0 ? " — " + t("latest_opt") : ""}`
+    + `Epsilon ${esc(u.version)}${i === 0 ? " — " + t(reinstall ? "reinstall_opt" : "latest_opt") : ""}`
     + `${(ce && u.version === ce.version) ? " · " + t("cached") : ""}</option>`).join("");
   const isReal = !STATE.identity.virtual;
-  $("c-install").textContent = (cachedHit && isReal) ? t("install_cache") : t("install");
+  $("c-install").textContent = reinstall ? t("reinstall")
+    : ((cachedHit && isReal) ? t("install_cache") : t("install"));
   const authed = !!(STATE.auth && STATE.auth.authenticated);
   const dl = $("c-download");
   if (isReal) {
     $("c-dl-toggle").style.display = "none"; if (dl) dl.checked = true;
     // Enable when there's an update AND we can source an image: a cached one (no sign-in) or a
     // signed-in official download.
-    $("c-install").disabled = up || (!cachedHit && !authed);
+    $("c-install").disabled = (up && !reinstall) || (!cachedHit && !authed);
     // The atomic-slot note is gone; keep only the meaningful cache / sign-in hints.
-    $("c-slot").textContent = up ? "" : (cachedHit ? t("slot_cache", { v: ce.version }) : (authed ? "" : t("dl_need_auth")));
+    $("c-slot").textContent = (up && !reinstall) ? "" : (cachedHit ? t("slot_cache", { v: ce.version }) : (authed ? "" : t("dl_need_auth")));
   } else {
-    $("c-dl-toggle").style.display = up ? "none" : "flex";
+    $("c-dl-toggle").style.display = (up && !reinstall) ? "none" : "flex";
     if (dl) { dl.disabled = !authed; if (!authed) dl.checked = false; }
     $("c-dl-label").textContent = authed ? t("dl_label") : t("dl_need_auth");
     $("c-install").disabled = false;
@@ -610,7 +617,9 @@ async function installFw() {
   const version = $("c-select").value;
   // The selected version is cached for THIS model → flash it with no account (classroom/offline).
   // renderCatalog pre-selects the cached version, so this is the one-click default.
-  const cacheable = !!(ce && ce.version === version);
+  // A real calculator only takes an OFFICIAL cached image (a cache filled while signed out holds
+  // a demo one); otherwise it downloads, which asks for the sign-in.
+  const cacheable = !!(ce && ce.version === version && (ce.real || !isReal));
   let download, fromCache;
   if (isReal) {
     download = !cacheable; fromCache = cacheable;  // cache first; else official download (sign-in)
@@ -630,10 +639,21 @@ async function installFw() {
     const r = await post("/api/install/firmware",
       { version, from_cache: !!fromCache, download, channel: STATE.channel });
     await meterP;
+    const done = { v: r.verified_version || version,
+      slot: r.target_slot ? t("fw_slot_b") : "", cache: r.from_cache ? t("fw_from_cache") : "" };
+    if (r.rebooted && isReal) {
+      // The calculator restarts through its bootloader and leaves the bus: wait for it like a
+      // re-plug (the poll re-attaches it), without the "disconnected" error toast.
+      STATE.identity = { connected: false };
+      STATE.catalog = STATE.cache = STATE.apps = STATE.scripts = STATE.name = STATE.sources = null;
+      STATE.lastResult = null;
+      renderAll();
+      toast(t("fw_rebooting", done));
+      return;
+    }
     STATE.identity = await api("/api/identity"); STATE.catalog = await api("/api/catalog");
     STATE.lastResult = { version: r.verified_version || version, slot: r.target_slot };
-    toast(t("fw_done", { v: r.verified_version || version,
-      slot: r.target_slot ? t("fw_slot_b") : "", cache: r.from_cache ? t("fw_from_cache") : "" }));
+    toast(t(r.rebooted ? "fw_rebooting" : "fw_done", done));
     renderRail(); renderCatalog(); renderTabs();
   } catch (e) {
     toast(t("fail", { msg: e.message }), true);
@@ -1095,7 +1115,7 @@ function distFirmwareCard() {  // the firmware-cache manager, moved here from th
   return `<div class="dist-card"><h4>${t("dist_fw_title")}</h4>
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <span class="offline">${SHIELD_SM}${t("offline_ready")}</span>
-      <button class="btn ghost sm" onclick="updateCaches()">${REFRESH_SM}${t("update_caches")}</button></div>
+      <button class="btn ghost sm" onclick="updateCaches(this)">${REFRESH_SM}${t("update_caches")}</button></div>
     ${rows}
     <p class="hint">${t("dist_fw_ttl", { n: ttl })}</p></div>`;
 }

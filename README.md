@@ -7,10 +7,10 @@
 > (« brick »)**. **Utilisation à vos seuls risques.** Voir [`DISCLAIMER.md`](DISCLAIMER.md).
 >
 > ⚠️ **Examens :** le statut « officiel » est une **signature vérifiée par le bootloader au
-> démarrage à froid** (hors ligne). Flasher l'**image officielle** puis **redémarrer à froid**
-> (bouton RESET) laisse la calculatrice **officielle** ; seul le **« boot » in-app** (saut DFU)
-> affiche **temporairement** « UNOFFICIAL SOFTWARE », effacé par un démarrage à froid. Un
-> firmware **non signé** reste non officiel — cf. [`DISCLAIMER.md`](DISCLAIMER.md).
+> démarrage à froid** (hors ligne). Après le flash de l'**image officielle**, nwupdater fait
+> **redémarrer la calculatrice par son bootloader** (comme le flux officiel), qui revérifie la
+> signature : elle reste **officielle**, sans bouton RESET. Un firmware **non signé** reste non
+> officiel — cf. [`DISCLAIMER.md`](DISCLAIMER.md).
 
 Utilitaire pour mettre à jour les calculatrices **NumWorks** (famille **Graphique N01xx** et
 **Scientifique N02xx**) et y installer des applications tierces, **sans passer par Chrome +

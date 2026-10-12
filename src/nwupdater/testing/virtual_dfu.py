@@ -335,6 +335,17 @@ class VirtualDfuDevice:
             lo <= addr and end <= hi for lo, hi in self._alt_ranges.get(self.current_alt, [])
         )
 
+    def _read_allowed(self, addr: int) -> bool:
+        """Whether an UPLOAD at ``addr`` answers. Alt-gated: an address owned by ANOTHER alt's
+        region does not (it times out on real hardware); one no alt advertises (the running
+        slot's headers, internal flash) is served by the Flash alt only."""
+        if not self._alt_gated:
+            return True
+        owners = [
+            alt for alt, rs in self._alt_ranges.items() if any(lo <= addr < hi for lo, hi in rs)
+        ]
+        return self.current_alt in owners if owners else self.current_alt == C.ALT_FLASH
+
     # -- standard requests (GET_DESCRIPTOR string) --------------------------------
     def _handle_standard_in(self, request, wValue, length):
         if request != C.STD_GET_DESCRIPTOR:
@@ -409,6 +420,9 @@ class VirtualDfuDevice:
             if wValue < C.DNLOAD_BLOCK_BASE:
                 raise UsbStall("upload block < 2")
             addr = (wValue - C.DNLOAD_BLOCK_BASE) * C.TRANSFER_SIZE + self.address_pointer
+            if not self._read_allowed(addr):
+                # Real hardware (N0120): an UPLOAD of another alt's region times out.
+                raise UsbStall(f"upload 0x{addr:08x} outside alt {self.current_alt}'s region")
             return self.memory.read(addr, min(length, C.TRANSFER_SIZE))
         raise UsbStall(f"unsupported IN request {request}")
 

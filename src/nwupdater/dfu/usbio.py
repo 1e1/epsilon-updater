@@ -162,6 +162,7 @@ def find_calculator(
     try:
         util.claim_interface(dev, interface)
     except Exception as exc:
+        release(dev, util)  # don't keep the handle set_configuration() opened
         raise InterfaceClaimError(
             f"cannot claim DFU interface {interface}: {exc}\n"
             "  • macOS/Linux: insufficient USB permissions (libusb / udev rule),\n"
@@ -200,6 +201,23 @@ def find_calculator(
         memory_layout=layout,
         alt_regions=alt_regions,
     )
+
+
+def release(dev, util=None) -> None:
+    """Release every interface and the libusb handle pyusb holds for ``dev``. Best effort:
+    never raises (the device may have left the bus already)."""
+    if util is None:
+        try:
+            from usb import util
+        except ImportError:
+            return
+    dispose = getattr(util, "dispose_resources", None)
+    if dispose is None:
+        return
+    try:
+        dispose(dev)
+    except Exception:
+        pass
 
 
 def open_calculator(core=None, util=None, *, backend=None) -> OpenDevice:

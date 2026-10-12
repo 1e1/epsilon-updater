@@ -114,10 +114,10 @@ def test_make_idle_recovers_from_busy_and_error_states():
 def test_write_storage_raises_on_readback_mismatch():
     # A silent no-op must fail loudly, not pretend success.
     class Dud:
-        def write(self, addr, data, *, erase=False):
+        def write(self, addr, data, *, erase=False, **_kw):
             pass  # accept but drop
 
-        def read(self, addr, n):
+        def read(self, addr, n, **_kw):
             return b"\x00" * n
 
     with pytest.raises(StorageWriteError):

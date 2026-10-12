@@ -7,6 +7,8 @@ through :class:`JobRunner`.
 
 from __future__ import annotations
 
+import os
+import sys
 import traceback
 from collections.abc import Callable
 from typing import Any
@@ -40,7 +42,13 @@ class _Job(QRunnable):
         try:
             self._signals.done.emit(self._fn())
         except Exception as exc:  # reported in the UI; the app stays up
-            traceback.print_exc()
+            # The UI shows the cause; a full traceback in the terminal reads like a crash, so it
+            # is printed only when NWUPDATER_DEBUG is set — otherwise one line.
+            if os.environ.get("NWUPDATER_DEBUG"):
+                traceback.print_exc()
+            else:
+                first = (str(exc) or exc.__class__.__name__).splitlines()[0]
+                print(f"nwupdater: {first}", file=sys.stderr)
             self._signals.failed.emit(str(exc) or exc.__class__.__name__)
 
 
