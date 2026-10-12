@@ -594,7 +594,7 @@ class Backend(QObject):
 
     @Slot(str, bool, bool)
     def installFirmware(self, version: str, from_cache: bool, download: bool):
-        last = [None]
+        last: list[tuple[str, int] | None] = [None]
 
         def progress(phase: str, done: int, total: int) -> None:
             # Emitted from the worker thread; Qt queues the change onto the GUI thread. Reports

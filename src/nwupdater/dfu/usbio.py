@@ -208,9 +208,10 @@ def release(dev, util=None) -> None:
     never raises (the device may have left the bus already)."""
     if util is None:
         try:
-            from usb import util
+            import usb.util
         except ImportError:
             return
+        util = usb.util
     dispose = getattr(util, "dispose_resources", None)
     if dispose is None:
         return
