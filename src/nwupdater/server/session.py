@@ -107,14 +107,12 @@ class Session(
 
         try:
             i = self._identity()
-            latest = self._catalog_for(i.family, self.channel).latest()
+            latest = self._latest_version(self.model, self.channel) if self.model else None
             if latest is None or not i.os_version:
                 return "ok"
-            if not V.is_newer(latest.version, i.os_version):
+            if not V.is_newer(latest, i.os_version):
                 return "ok"
-            self.install_firmware(
-                latest.version, from_cache=True, channel=self.channel, reboot=False
-            )
+            self.install_firmware(latest, from_cache=True, channel=self.channel, reboot=False)
             return "change"
         except Exception:
             return "error"

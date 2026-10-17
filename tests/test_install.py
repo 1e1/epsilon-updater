@@ -60,13 +60,24 @@ def test_install_and_boot_leaves_to_bootloader():
 
 
 def test_install_single_slot_scientific_n0200():
+    # The running N0200 refuses its image; the installer reboots it into its updater (where the
+    # firmware window is write-only, so nothing is read back) and writes there.
     model = _model("n0200")
     dev = virtual_calculator("n0200", os_version="1.0.0")
-    inst = Installer(_client(dev), model)
+    inst = Installer(_client(dev), model, reconnect=lambda: _client(dev))
     img = FirmwareImage.synthetic(model, version="1.1.0")
     plan = inst.install(img, verify=True)
     assert plan.target_slot is None
-    assert inst.read_installed_version(plan) == "1.1.0"
+    assert dev.in_updater is True
+    assert dev.memory.read(img.segments[0].address, 64) == img.segments[0].data[:64]
+    assert inst.read_installed_version(plan) is None
+
+
+def test_install_refuses_a_running_n0200_without_reconnect():
+    model = _model("n0200")
+    inst = Installer(_client(virtual_calculator("n0200")), model)
+    with pytest.raises(CompatibilityError, match="updater"):
+        inst.install(FirmwareImage.synthetic(model, version="1.1.0"))
 
 
 def test_compatibility_rejects_wrong_model():

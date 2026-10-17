@@ -118,3 +118,10 @@ def test_identify_real_without_pyusb_exits(monkeypatch):
     with pytest.raises(SystemExit) as ei:
         cli.main(["identify"])
     assert ei.value.code == 2
+
+
+def test_catalog_follows_the_device_family(capsys):
+    # An N0200 is checked against the Scientific track, not the Graphing releases of the public list.
+    assert cli.main(["catalog", "--virtual", "n0200", "--os-version", "3.0.0"]) == 0
+    out = capsys.readouterr().out
+    assert "latest 4.1.0" in out and "26.4.0" not in out

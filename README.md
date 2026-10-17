@@ -38,6 +38,9 @@ réécrit que la portion de mémoire qui change.
 **N0200 (Scientifique) — mode classe.** Pas de flash QSPI ni de Python : les ateliers *apps* et
 *scripts* sont **masqués automatiquement** selon le matériel détecté ; ne restent que la mise à jour
 système et la gestion de parc (pré-téléchargement des caches firmware, une version par modèle).
+Comme sur le site officiel, la mise à jour redémarre d'abord la calculatrice dans son mode mise à
+jour, le seul où elle accepte son firmware, puis la redémarre sur la nouvelle version (validé sur
+une N0200 réelle, de 3.0.0 à 4.1.0).
 
 ![nwupdater — N0200, mode classe](docs/screenshots/nwupdater-n0200-classroom.png)
 

@@ -20,6 +20,13 @@ from . import version as V
 
 CATALOG_URL = "https://my.numworks.com/firmwares.json"
 
+# Family -> its own bundled snapshot, for a family the public list cannot be trusted for. The
+# public ``firmwares.json`` has no model field and mixes the families (the Scientific 2.1.0 /
+# 3.0.0 / 4.1.0 sit among the Graphing releases), so a family listed here keeps its own track and
+# the others read the public list minus every release one of these snapshots claims. Data only:
+# a new family with its own numbering adds one line here and one ``data/firmwares-<family>.json``.
+FAMILY_SNAPSHOTS = {"scientifique": "firmwares-scientifique"}
+
 
 @dataclass(frozen=True)
 class FirmwareRelease:
@@ -60,15 +67,32 @@ class FirmwareCatalog:
     def bundled(cls, name: str = "firmwares") -> FirmwareCatalog:
         """A snapshot shipped with the package (offline default).
 
-        ``name`` selects the track: ``firmwares`` = the public Graphing catalog (N01xx),
-        ``firmwares-n0200`` = the Scientific (N0200) 3.x line — they use unrelated version
-        numbers, so the session picks the right one per detected family."""
+        ``name`` selects the file: ``firmwares`` = the public list as published (all families
+        mixed), ``firmwares-<family>`` = a family's own track (see ``FAMILY_SNAPSHOTS``). Use
+        ``for_family`` to get the releases of one family."""
         rel = f"data/{name}.json"
         try:
             raw = resources.files("nwupdater.catalog").joinpath(rel).read_text()
         except (ModuleNotFoundError, FileNotFoundError, AttributeError):
             raw = (Path(__file__).parent / "data" / f"{name}.json").read_text()
         return cls.from_json(raw)
+
+    @classmethod
+    def for_family(cls, family: str, *, public: FirmwareCatalog | None = None) -> FirmwareCatalog:
+        """The releases of one family: its own snapshot when ``FAMILY_SNAPSHOTS`` names one,
+        else ``public`` (default: the bundled public snapshot) minus every release another
+        family's snapshot claims."""
+        own = FAMILY_SNAPSHOTS.get(family)
+        if own is not None:
+            return cls.bundled(own)
+        claimed = {
+            r.version
+            for other, name in FAMILY_SNAPSHOTS.items()
+            if other != family
+            for r in cls.bundled(name).releases
+        }
+        base = public if public is not None else cls.bundled()
+        return cls([r for r in base.releases if r.version not in claimed])
 
     @classmethod
     def fetch(

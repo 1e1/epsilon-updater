@@ -42,22 +42,36 @@ c'est donc là qu'on écrit. Pas de QSPI, **pas de double-slot A/B**.
 > (bcd `0x0200`, Product `NumWorks Scientific Calculator`) et n'annonce dans sa chaîne de layout DFU
 > qu'**une** région : `@FirmwareHeader/0x080040C0/01*64Ba` — **64 octets en lecture seule** (type
 > `a`, `01*64B` = 64 **octets**), la **fenêtre d'identité** (voir *FirmwareHeader* ci-dessous),
-> **pas** la cible d'écriture. **Ce layout est trompeur** : le mode `0xA51A` **accepte directement
-> les écritures DfuSe vers `0x98000000`** bien qu'aucune région inscriptible n'y soit annoncée —
-> il n'y a **pas** de « mode flasher » séparé à déclencher.
+> **pas** la cible d'écriture. **Ce layout dit vrai** : en marche, la N0200 **refuse** toute
+> écriture à `0x98000000` (`errTARGET` dès le premier bloc, vérifié sur matériel le 2026-10-17).
 
-> **[CONFIRMÉ — capture WebUSB du flux officiel, N0200 réelle]** Voir
-> [../reference/official-webusb-analysis.md](../reference/official-webusb-analysis.md). **Aucune
-> bascule de mode, aucun changement de PID** — tout se fait dans `0xA51A`. Séquence :
-> `SET_ADDRESS 0x98000000` **par bloc de 2048 o** + `DNLOAD`, **sans aucune commande ERASE** (le
-> bootloader efface implicitement) ; handshake de fin `SET_ADDRESS 0x08000000` + `DNLOAD` de
-> longueur nulle (boot). Les seuls appels serveur (`POST /devices/<serial>`, avant/après) sont de la
+> **[CONFIRMÉ matériel, 2026-10-17 — code officiel `scandiumUpgrade` + rejeu]** Il y a **deux
+> modes**, même PID `0xA51A`, même numéro de série. Un `leave` vers `0x08000000` passe de l'un à
+> l'autre (la calculatrice redémarre et se réénumère) :
+>
+> | Mode | Layout annoncé | Rôle |
+> |---|---|---|
+> | En marche | `@FirmwareHeader/0x080040C0/01*64Ba` | identité, **lecture seule** (`a`) |
+> | Mise à jour (« rescue ») | `@EncryptedFlash/0x98000000/01*256Kd` + alt 1 `@EncryptedSRAM/0x98040000/01*256Kd` | firmware, **écriture seule** (`d`) |
+>
+> Le site fait : `leave 0x08000000` (→ mise à jour) → réouverture par numéro de série →
+> `SET_ADDRESS` + `DNLOAD` par bloc de 2048 o, **sans erase ni relecture** → `leave 0x08000000`
+> (→ nouveau firmware) → relecture de la version dans le FirmwareHeader. L'installeur fait la même
+> chose, guidé par la carte mémoire annoncée (aucun code propre au modèle) : une zone visée non
+> annoncée en écriture déclenche le redémarrage en mode mise à jour.
+
+> **[Capture WebUSB du flux officiel, N0200 réelle, juillet 2026]** Voir
+> [../reference/official-webusb-analysis.md](../reference/official-webusb-analysis.md). Aucun
+> changement de PID (tout se fait dans `0xA51A`), mais **un changement de mode** que cette capture
+> avait manqué (voir ci-dessus). Écriture : `SET_ADDRESS` **par bloc de 2048 o** + `DNLOAD`,
+> **sans aucune commande ERASE** ; fin : `SET_ADDRESS 0x08000000` + `DNLOAD` de longueur nulle. Les seuls appels serveur (`POST /devices/<serial>`, avant/après) sont de la
 > **télémétrie de compte**, **pas** une attestation ; le `.dfu` est un **téléchargement statique
 > protégé par compte** (`401` sans login). Chrono capturé : ~8 s d'écriture.
 >
 > **➡️ Le flash hors-ligne du firmware N0200 EST viable** (corrige la conclusion antérieure « ni
 > viable ni sûr ») : télécharger le `.dfu` → écrire l'élément à `0x98000000` en DfuSe, sans erase.
-> `install/installer.py` le fait **déjà** (mono-slot, `flash_erase=False`). **Réserve mono-slot** :
+> `install/installer.py` le fait (mono-slot, `flash_erase=False`, passage en mode mise à jour,
+> validé de 3.0.0 à 4.1.0 le 2026-10-17). **Réserve mono-slot** :
 > on écrit le firmware actif (pas de repli A/B), mais le **bootloader `0xA51A` persiste** (hors
 > `0x98000000`) → un flash interrompu reste **re-flashable** (risque de brick faible). Firmware
 > **officiel signé uniquement** (on ne signe pas). Le mode examen : voir ci-dessous.

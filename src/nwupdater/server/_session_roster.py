@@ -85,7 +85,9 @@ class RosterMixin(SessionBase):
                     "family": e["known_family"],
                     "class": cls,
                     "known_firmware": e["known_firmware"],
-                    "up_to_date": self._roster_up_to_date(e["known_family"], e["known_firmware"]),
+                    "up_to_date": self._roster_up_to_date(
+                        e["known_model"], e["known_family"], e["known_firmware"]
+                    ),
                     "last_scan": e["last_scan"],
                     # Per-action outcome of the last distribution pass (None until a batch runs).
                     "last_dist": e.get("last_dist"),
@@ -182,15 +184,26 @@ class RosterMixin(SessionBase):
 
         return R.delete_class(name, mode=mode)
 
-    def _roster_up_to_date(self, family: str | None, firmware: str | None) -> bool | None:
-        """``True``/``False`` if ``firmware`` matches / is behind the latest for its family (the
-        bundled snapshot), ``None`` when either is unknown. Labelled "up to date at last scan" in
-        the UI — it compares the firmware SEEN at the last scan, not a live device state."""
-        if not firmware or not family:
+    def _roster_up_to_date(
+        self, model: str | None, family: str | None, firmware: str | None
+    ) -> bool | None:
+        """``True``/``False`` if ``firmware`` matches / is behind the latest for its model (the
+        same answer as the System pane), ``None`` when unknown. Labelled "up to date at last
+        scan" in the UI — it compares the firmware SEEN at the last scan, not a live device
+        state."""
+        if not firmware:
             return None
         from ..catalog import version as V
+        from ..models import MODELS
 
-        latest = self._catalog_for(family).latest()
+        known = next((m for m in MODELS.values() if m.name == model), None)
+        if known is not None:
+            latest = self._latest_version(known, self.channel)
+        elif family:
+            release = self._catalog_for(family, self.channel).latest()
+            latest = release.version if release else None
+        else:
+            return None
         if latest is None:
             return None
-        return not V.is_newer(latest.version, firmware)
+        return not V.is_newer(latest, firmware)

@@ -20,6 +20,7 @@ from ..models import Model
 from .image import FirmwareImage, FirmwareSegment
 
 Progress = Callable[[str, int, int], None]  # (phase, done_bytes, total_bytes)
+Reconnect = Callable[[], DfuClient]  # re-opens the calculator after it rebooted, returns its client
 
 # Slot-internal offsets, confirmed empirically on the real N0110 25.2.0 firmware:
 # each 4 MiB slot holds KernelHeader at +0x8 and UserlandHeader at +0x10000.
@@ -141,10 +142,18 @@ def plan_install(model: Model, image: FirmwareImage, *, active_slot: str = "A") 
 
 
 class Installer:
-    def __init__(self, client: DfuClient, model: Model, *, progress: Progress | None = None):
+    def __init__(
+        self,
+        client: DfuClient,
+        model: Model,
+        *,
+        progress: Progress | None = None,
+        reconnect: Reconnect | None = None,
+    ):
         self.client = client
         self.model = model
         self._progress = progress or (lambda *a: None)
+        self._reconnect = reconnect
 
     # -- compatibility -------------------------------------------------------------
     def check_compatibility(self, image: FirmwareImage) -> None:
@@ -193,8 +202,13 @@ class Installer:
             erased += n_sectors(seg)
         if not verify:
             return
+        # Read back what the device can read. A write-only window (N0200 @EncryptedFlash) takes an
+        # encrypted stream the device checks itself: the official flow goes straight to the leave.
+        readable = getattr(self.client, "readable", None)
+        checked_segments = [s for s in plan.segments if readable is None or readable(s.address)]
+        total = sum(len(s.data) for s in checked_segments)
         done = 0
-        for seg in plan.segments:
+        for seg in checked_segments:
             base = done
 
             def checked(n, base=base):
@@ -216,19 +230,48 @@ class Installer:
     ) -> InstallPlan:
         self.check_compatibility(image)
         plan = plan_install(self.model, image, active_slot=active_slot)
+        self._enter_updater(plan)
         self.flash(plan, verify=verify)
-        if boot and plan.boot_address is not None:
+        if boot:
             # Leave to the bootloader (internal-flash base), NOT the flashed slot: a leave into a
             # reflashable QSPI slot makes the kernel mark it unauthenticated ("UNOFFICIAL
             # SOFTWARE"). Leaving to 0x08000000 triggers a cold boot through the bootloader, which
             # re-verifies the slot signature and keeps the device official (official WebUSB flow).
+            # It never targets plan.boot_address, so an opaque N02xx image (none) reboots too.
             self.client.leave(C.BOOTLOADER_RESET_ADDRESS)
         return plan
 
+    def _accepts(self, plan: InstallPlan) -> bool:
+        writable = getattr(self.client, "writable", None)
+        return writable is None or all(writable(s.address, len(s.data)) for s in plan.segments)
+
+    def _enter_updater(self, plan: InstallPlan) -> None:
+        """Make sure the device takes the plan where it stands. A running firmware may advertise
+        no writable region for it (a N0200 only shows its read-only header and refuses the image
+        with errTARGET): then reboot it into its updater with the same leave as the final boot —
+        what the official flow does — and write there. Nothing model-specific: the device's own
+        memory map decides."""
+        if self._accepts(plan):
+            return
+        if self._reconnect is None:
+            raise CompatibilityError(
+                "the calculator does not accept this firmware in its current mode "
+                "(it must be rebooted into its updater first)"
+            )
+        self._progress("restart", 0, 1)
+        self.client.leave(C.BOOTLOADER_RESET_ADDRESS)
+        self.client = self._reconnect()
+        self._progress("restart", 1, 1)
+        if not self._accepts(plan):
+            raise CompatibilityError(
+                "the calculator does not accept this firmware, even in its updater"
+            )
+
     # -- post-flash sanity: read headers back from where we flashed ----------------
     def read_installed_version(self, plan: InstallPlan) -> str | None:
-        if plan.boot_address is None:
-            return None
+        readable = getattr(self.client, "readable", None)
+        if plan.boot_address is None or (readable is not None and not readable(plan.boot_address)):
+            return None  # nothing to read, or a write-only window
         raw = self.client.read(plan.boot_address, C.USERLAND_HEADER_SIZE)
         uh = headers.UserlandHeader.unpack(raw)
         return uh.expected_software_version if uh.valid else None

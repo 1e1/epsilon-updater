@@ -51,7 +51,8 @@
   .brand img { width:30px; height:30px; }
   .brand small { font-weight:500; color:var(--muted); }
   .spacer { flex:1; }
-  .ctrls { display:flex; gap:8px; align-items:center; }
+  .ctrls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  @media (max-width:520px) { .brand small { display:none; } .topbar { gap:8px; } }
   .btn { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line-strong);
     background:var(--card); color:var(--ink); padding:8px 14px; border-radius:11px; font:inherit;
     font-weight:600; cursor:pointer; text-decoration:none; transition:.15s; }
@@ -79,17 +80,55 @@
   h2 { font-size:clamp(1.4rem, 3vw, 1.9rem); letter-spacing:-.01em; margin:0 0 .2em; }
   .sub { color:var(--muted); margin:0 0 26px; }
 
-  /* Download */
-  .dl-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:16px; }
-  .dl-card { border:1px solid var(--line); background:var(--card); border-radius:var(--radius);
-    padding:22px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:6px; }
-  .dl-card.reco { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft), var(--shadow); }
-  .dl-card .os { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.1rem; }
-  .dl-card .os .glyph { font-size:1.3rem; line-height:1; }
-  .dl-card .meta { color:var(--muted); font-size:.88rem; min-height:1.2em; }
-  .dl-card .btn { margin-top:10px; justify-content:center; }
-  .reco-tag { align-self:flex-start; font-size:.72rem; font-weight:700; text-transform:uppercase;
-    letter-spacing:.04em; color:var(--accent-ink); background:var(--accent-soft); padding:2px 8px; border-radius:6px; }
+  /* Download: one detected button, a chooser to fix the guess, then every file of the release. */
+  .dl-main { border:1px solid var(--accent); background:var(--card); border-radius:var(--radius);
+    box-shadow:0 0 0 2px var(--accent-soft), var(--shadow); padding:22px; display:grid; gap:10px; }
+  .dl-main .btn.primary { justify-content:center; font-size:1.05rem; padding:13px 18px; }
+  .dl-file { font-family:var(--mono); font-size:.8rem; color:var(--muted); overflow-wrap:anywhere; }
+  .dl-why { font-size:.9rem; color:var(--muted); }
+  .dl-why b { color:var(--ink); font-weight:600; }
+  .linkbtn { border:0; background:none; padding:0; font:inherit; color:var(--blue-ink); cursor:pointer;
+    text-decoration:underline; text-underline-offset:2px; }
+  .chooser { margin-top:16px; border:1px solid var(--line); background:var(--panel); border-radius:var(--radius);
+    padding:20px; display:grid; gap:16px; }
+  .field-l { font-size:.86rem; color:var(--muted); margin-bottom:6px; }
+  .seg { display:flex; flex-wrap:wrap; gap:6px; }
+  .seg button { border:1px solid var(--line-strong); background:var(--card); color:var(--ink); border-radius:10px;
+    padding:7px 12px; cursor:pointer; font:inherit; font-weight:600; font-size:.94rem; }
+  .seg button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .eds { display:grid; gap:10px; }
+  .ed { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:2px 12px; align-items:start; width:100%;
+    border:1px solid var(--line); border-radius:12px; padding:13px 15px; cursor:pointer; background:var(--card);
+    color:var(--ink); text-align:left; font:inherit; }
+  .ed[aria-checked="true"] { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .ed:disabled { cursor:not-allowed; opacity:.55; }
+  .ed .dot { width:18px; height:18px; border-radius:50%; border:2px solid var(--line-strong); margin-top:3px; }
+  .ed[aria-checked="true"] .dot { border-color:var(--accent); background:radial-gradient(var(--accent) 45%, transparent 50%); }
+  .ed .n { font-weight:700; }
+  .ed .sz { font-size:.88rem; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ed .d { grid-column:2 / 4; color:var(--muted); font-size:.9rem; }
+  .ed .f { grid-column:2 / 4; font-size:.84rem; color:var(--muted); }
+  .ed .f.no { color:var(--accent-ink); }
+  .reco-tag { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-left:6px;
+    color:var(--accent-ink); background:var(--accent-soft); padding:2px 7px; border-radius:6px; vertical-align:2px; }
+  .signals { font-size:.82rem; color:var(--muted); }
+  .signals summary { cursor:pointer; }
+  .signals ul { margin:6px 0 0; padding-left:18px; font-family:var(--mono); font-size:.78rem; }
+  details.files { margin-top:16px; border:1px solid var(--line); background:var(--panel); border-radius:var(--radius); }
+  details.files > summary { cursor:pointer; padding:13px 18px; font-weight:700; }
+  details.files > summary span { color:var(--muted); font-weight:500; }
+  .tablewrap { overflow-x:auto; padding:0 18px 16px; }
+  .tablewrap table { border-collapse:collapse; width:100%; min-width:520px; font-size:.92rem; }
+  .tablewrap th, .tablewrap td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  .tablewrap thead th { font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .tablewrap tbody th { font-weight:600; white-space:nowrap; }
+  .tablewrap td a { font-weight:600; text-decoration:none; font-variant-numeric:tabular-nums; }
+  .tablewrap td .none { color:var(--muted); }
+  .tablewrap tr.mine > * { background:var(--accent-soft); }
+  .older { margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:.92rem; color:var(--muted); }
+  .older a { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:4px 11px;
+    text-decoration:none; color:var(--ink); font-weight:600; }
+  .older a:hover { border-color:var(--accent); }
   .dl-note { margin-top:16px; color:var(--muted); font-size:.9rem; }
 
   /* Features */
@@ -153,35 +192,28 @@
 
   <section id="download">
     <h2 data-i18n="dl_h">Télécharger</h2>
-    <p class="sub" data-i18n="dl_s">Binaires de la dernière version publiée. Détection automatique de votre système.</p>
-    <div class="dl-grid">
-      <div class="dl-card" id="card-mac">
-        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
-        <span class="os"><span class="glyph">🍎</span> macOS</span>
-        <span class="meta" data-i18n="mac_m">Universal (Intel + Apple Silicon)</span>
-        <a class="btn primary" id="dl-mac" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
-      </div>
-      <div class="dl-card" id="card-win">
-        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
-        <span class="os"><span class="glyph">🪟</span> Windows</span>
-        <span class="meta" data-i18n="win_m">64-bit (.exe dans un .zip)</span>
-        <a class="btn primary" id="dl-win" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
-      </div>
-      <div class="dl-card" id="card-linux">
-        <span class="reco-tag" hidden data-i18n="reco">Recommandé pour vous</span>
-        <span class="os"><span class="glyph">🐧</span> Linux</span>
-        <span class="meta" data-i18n="linux_m">x86-64 (binaire dans un .zip)</span>
-        <a class="btn primary" id="dl-linux" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
-      </div>
+    <p class="sub" data-i18n="dl_s">Le bon fichier pour cet ordinateur est choisi automatiquement. Vous pouvez le changer.</p>
+    <div class="dl-main">
+      <a class="btn primary" id="dl-go" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
+      <span class="dl-file" id="dl-file"></span>
+      <span class="dl-why" id="dl-why"></span>
+      <span><button class="linkbtn" type="button" id="dl-toggle" aria-expanded="false" aria-controls="dl-chooser" data-i18n="dl_choose">Pas le bon fichier ? Choisir…</button></span>
     </div>
+    <div class="chooser" id="dl-chooser" hidden>
+      <div><div class="field-l" id="dl-os-l" data-i18n="dl_os">Système</div><div class="seg" id="dl-os" role="group" aria-labelledby="dl-os-l"></div></div>
+      <div><div class="field-l" id="dl-arch-l" data-i18n="dl_arch">Processeur</div><div class="seg" id="dl-arch" role="group" aria-labelledby="dl-arch-l"></div></div>
+      <div><div class="field-l" data-i18n="dl_ed">Version de l'application</div><div class="eds" id="dl-eds" role="radiogroup"></div></div>
+      <details class="signals"><summary data-i18n="dl_sig">Ce que votre navigateur révèle</summary><ul id="dl-signals"></ul></details>
+    </div>
+    <details class="files" id="dl-files">
+      <summary><span data-i18n="dl_all_t" style="color:inherit;font-weight:700">Tous les fichiers de cette version</span> <span id="dl-count"></span></summary>
+      <div class="tablewrap"><table><thead><tr id="dl-thead"></tr></thead><tbody id="dl-tbody"></tbody></table></div>
+    </details>
+    <div class="older" id="dl-older"></div>
     <p class="dl-note">
       <span id="ver"></span>
       <span data-i18n="dl_unsigned">Binaires non signés (pas de compte de signature payant) : au premier lancement, votre système peut afficher un avertissement « développeur non identifié ».</span>
       <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/docs/05-packaging-ui/desktop-app.md" target="_blank" rel="noopener" data-i18n="dl_help">Comment l'ouvrir →</a>
-      <br>
-      <a href="https://github.com/1e1/epsilon-updater/releases" target="_blank" rel="noopener" data-i18n="dl_all">Toutes les versions et notes de publication →</a>
-      <br>
-      <a id="dl-legacy" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_legacy">Ancien poste (macOS 10.12, Ubuntu 20.04, Windows 8.1) : build figé →</a>
     </p>
   </section>
 
@@ -241,12 +273,11 @@
     cta: "↓ Download", cta2: "How it works",
     disc_t: "Independent, unofficial project.",
     disc_b: " Not affiliated with NumWorks SAS. Provided with no warranty: updating or flashing a calculator can damage it, erase data or brick it. Use entirely at your own risk. Firmware comes from NumWorks' official channels, under your own account.",
-    dl_h: "Download", dl_s: "Binaries from the latest published release. Your system is detected automatically.",
-    reco: "Recommended for you", dl_btn: "Download",
-    mac_m: "Universal (Intel + Apple Silicon)", win_m: "64-bit (.exe inside a .zip)", linux_m: "x86-64 (binary inside a .zip)",
+    dl_h: "Download", dl_s: "The right file for this computer is picked automatically. You can change it.",
+    dl_btn: "Download", dl_choose: "Not the right file? Choose…", dl_os: "System", dl_arch: "Processor",
+    dl_ed: "App edition", dl_sig: "What your browser reveals", dl_all_t: "All files in this release",
     dl_unsigned: "Unsigned binaries (no paid signing account): on first launch your system may show an “unidentified developer” warning.",
-    dl_help: "How to open it →", dl_all: "All releases and release notes →",
-    dl_legacy: "Older machine (macOS 10.12, Ubuntu 20.04, Windows 8.1): frozen build →",
+    dl_help: "How to open it →",
     f_h: "Why nwupdater", f_s: "A complement to the official tool, for the cases it doesn't cover today.",
     f1_t: "No WebUSB", f1_b: "Works on browsers and machines without WebUSB: Chromebooks, locked-down school computers, restricted browsers, filtered networks.",
     f2_t: "Classroom mode", f2_b: "Preload a version once, then flash a whole fleet without re-downloading. One version per model.",
@@ -262,6 +293,7 @@
   var FR = {}; // FR text is the default already present in the DOM.
   document.querySelectorAll("[data-i18n]").forEach(function (el) { FR[el.getAttribute("data-i18n")] = el.innerHTML; });
 
+  var onLangChange = function () {}; // the download block re-renders its own strings
   function applyLang(lang) {
     var dict = lang === "en" ? EN : FR;
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
@@ -271,6 +303,7 @@
     document.documentElement.lang = lang;
     document.getElementById("lang").textContent = lang === "en" ? "FR" : "EN";
     try { localStorage.setItem("nwu-lang", lang); } catch (e) {}
+    onLangChange();
   }
   var savedLang;
   try { savedLang = localStorage.getItem("nwu-lang"); } catch (e) {}
@@ -292,59 +325,261 @@
     try { localStorage.setItem("nwu-theme", next); } catch (e) {}
   });
 
-  // ---- OS detection: highlight the recommended card ---------------------------
-  var ua = navigator.userAgent || "";
-  var plat = navigator.platform || "";
-  var osKey = /Win/i.test(ua + plat) ? "win" : /Mac|iP(hone|ad|od)/i.test(ua + plat) ? "mac"
-            : /Linux|X11|Android/i.test(ua + plat) ? "linux" : null;
-  if (osKey) {
-    var card = document.getElementById("card-" + osKey);
-    if (card) { card.classList.add("reco"); card.querySelector(".reco-tag").hidden = false; }
+  // ---- download: detect the visitor's system, pick the file, let them change it ----------
+  // Three editions per release: "browser" (default, lowest floor), "native" (Qt window) and
+  // "legacy" (frozen toolchain for machines below the browser floor). Assets are classified by
+  // name, so a new OS/arch/edition shows up without touching this page.
+  var EDITIONS = ["browser", "native", "legacy"];
+  var OSES = ["mac", "win", "linux"];
+  var ARCHS = ["arm64", "x86_64"];
+  // Measured floors (docs/05-packaging-ui/desktop-app.md): [macOS, Windows, Linux].
+  var FLOOR = {
+    browser: { mac: [10, 13], win: [8, 1], linux: "glibc 2.34 (Ubuntu 22.04+)" },
+    native: { mac: [13, 0], win: [10, 0], linux: "glibc 2.34 (Ubuntu 22.04+)" },
+    legacy: { mac: [10, 12], win: [8, 1], linux: "glibc 2.17 (Ubuntu 14.04+, CentOS 7)" }
+  };
+  var TXT = {
+    fr: {
+      os: { mac: "macOS", win: "Windows", linux: "Linux" },
+      arch: { arm64: "ARM", x86_64: "Intel / AMD" }, archMac: { arm64: "Apple Silicon", x86_64: "Intel" },
+      ed: { browser: "Navigateur", native: "Fenêtre native", legacy: "Ancien poste" },
+      edd: { browser: "L'interface s'ouvre dans votre navigateur. Légère, et la plus compatible.",
+             native: "Une vraie fenêtre d'application, sans navigateur. Plus lourde, demande un système récent.",
+             legacy: "Version figée pour les machines que les deux autres excluent." },
+      reco: "Recommandé", from: "À partir de ", sys: "Système",
+      go: function (what) { return "↓ Télécharger pour " + what; },
+      sure: "Détecté : ", guess: "Supposé : ", cpuGuess: " (processeur supposé, vérifiez si besoin)",
+      none: "Pas de fichier pour cette combinaison.", tooOld: "Votre système est trop ancien pour cette version.",
+      macArmLegacy: "Inutile ici : les Mac Apple Silicon ont au moins macOS 11.",
+      noNativeArm: "Pas de version native pour Linux ARM.", x86only: "Uniquement pour processeur Intel / AMD.",
+      unknown: "Système non reconnu : choisissez votre fichier ci-dessous.",
+      files: function (n) { return "(" + n + " fichiers)"; },
+      older: "Versions précédentes :", latest: "Dernière version", mb: " Mo", dec: ","
+    },
+    en: {
+      os: { mac: "macOS", win: "Windows", linux: "Linux" },
+      arch: { arm64: "ARM", x86_64: "Intel / AMD" }, archMac: { arm64: "Apple Silicon", x86_64: "Intel" },
+      ed: { browser: "Browser", native: "Native window", legacy: "Older machine" },
+      edd: { browser: "The interface opens in your browser. Light, and the most compatible.",
+             native: "A real app window, no browser. Heavier, needs a recent system.",
+             legacy: "Frozen build for machines the other two leave out." },
+      reco: "Recommended", from: "From ", sys: "System",
+      go: function (what) { return "↓ Download for " + what; },
+      sure: "Detected: ", guess: "Assumed: ", cpuGuess: " (processor assumed, check if needed)",
+      none: "No file for this combination.", tooOld: "Your system is too old for this edition.",
+      macArmLegacy: "Not needed: Apple Silicon Macs run macOS 11 or later.",
+      noNativeArm: "No native build for Linux ARM.", x86only: "Intel / AMD processors only.",
+      unknown: "System not recognised: pick your file below.",
+      files: function (n) { return "(" + n + " files)"; },
+      older: "Previous releases:", latest: "Latest version", mb: " MB", dec: "."
+    }
+  };
+  function L() { return TXT[document.documentElement.lang === "en" ? "en" : "fr"]; }
+
+  function classify(name) {
+    if (!/\.zip$/i.test(name) || /capture/i.test(name)) return null;
+    var os = /mac|darwin|osx/i.test(name) ? "mac" : /win/i.test(name) ? "win" : /linux/i.test(name) ? "linux" : null;
+    if (!os) return null;
+    return {
+      os: os,
+      arch: /arm64|aarch64/i.test(name) ? "arm64" : "x86_64", // no suffix = x86_64 (Windows)
+      edition: /native/i.test(name) ? "native" : /legacy/i.test(name) ? "legacy" : "browser"
+    };
   }
 
-  // ---- dynamic download links from the latest GitHub release ------------------
-  // Falls back to the /releases/latest page (already set in the href) on any error.
-  // The download buttons always point at the COMPATIBILITY build (browser-based): its system
-  // floor is far lower than Qt's and it runs where the native window cannot. The native build is
-  // an opt-in from the releases page, so it is filtered out here — otherwise `find` would return
-  // "…-native-windows…" simply because it sorts before "…-windows…". The frozen build is an
-  // opt-in too, offered by its own link for machines below even this floor.
-  var MATCH = { mac: /mac|darwin|osx/i, win: /win/i, linux: /linux/i };
-  // Preferred architecture per OS when several are published (first match wins).
-  var ARCH = { mac: [/arm64/i, /x86_64/i], win: [/./], linux: [/x86_64/i, /arm64/i] };
-  fetch("https://api.github.com/repos/" + REPO + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (rel) {
-      var assets = (rel.assets || []);
-      Object.keys(MATCH).forEach(function (os) {
-        // the app zip for this OS: not the capture tooling, not the native build, and not the
-        // frozen one (it has its own link below — it would otherwise win on Windows, where
-        // "…-legacy-windows…" sorts before "…-windows…" and no arch pattern separates them)
-        var pool = assets.filter(function (x) {
-          return MATCH[os].test(x.name) && /\.zip$/i.test(x.name)
-            && !/capture/i.test(x.name) && !/native/i.test(x.name) && !/legacy/i.test(x.name);
+  // -- what the browser tells us ------------------------------------------------------------
+  var ua = navigator.userAgent || "", plat = navigator.platform || "";
+  var signals = ["userAgent: " + ua];
+  function osOf(x) { return /Win/i.test(x) ? "win" : /Mac/i.test(x) ? "mac" : /Linux|X11|CrOS/i.test(x) ? "linux" : null; }
+  var det = {
+    os: osOf(ua) || osOf(plat),
+    arch: null, archSure: false, version: null // version: [major, minor] when the browser reveals it
+  };
+  if (/aarch64|arm64|armv8/i.test(ua + plat)) { det.arch = "arm64"; det.archSure = true; signals.push("arm in userAgent"); }
+  // Browsers freeze the macOS version at 10.15 (Safari "10_15_7", Firefox "10.15") and Windows at
+  // NT 10.0; any other value is real, and older than the freeze.
+  var mv = ua.match(/Mac OS X (\d+)[_.](\d+)/);
+  if (mv && !(+mv[1] === 10 && +mv[2] === 15)) det.version = [+mv[1], +mv[2]];
+  var nt = ua.match(/Windows NT (\d+)\.(\d+)/);
+  if (nt && +nt[1] < 10) det.version = +nt[2] >= 3 ? [8, 1] : +nt[2] === 2 ? [8, 0] : [7, 0];
+  var safari = !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/.test(ua) && ua.match(/Version\/(\d+)/);
+  if (safari) signals.push("Safari " + safari[1]);
+
+  // The GPU is the best hint where the browser hides the processor. Firefox names it ("Apple M1,
+  // or similar" vs an Intel/AMD part); Safari masks the name ("Apple GPU") but Apple Silicon
+  // decodes ASTC textures, which the Intel/AMD GPUs of Intel Macs do not. A hint, not a certainty.
+  function gpuArch() {
+    try {
+      var gl = document.createElement("canvas").getContext("webgl");
+      if (!gl) { signals.push("WebGL: none"); return null; }
+      var info = gl.getExtension("WEBGL_debug_renderer_info");
+      var name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+      var astc = !!gl.getExtension("WEBGL_compressed_texture_astc");
+      signals.push("WebGL: " + name + " · ASTC " + astc);
+      if (/Apple M\d/i.test(name)) return "arm64";
+      if (/Intel|AMD|Radeon|NVIDIA|GeForce/i.test(name)) return "x86_64";
+      return astc ? "arm64" : "x86_64";
+    } catch (e) { return null; }
+  }
+
+  // Mac processor, most reliable first: macOS ≤ 10.15 or Safari ≤ 13 = Intel (Apple Silicon
+  // shipped with macOS 11); macOS 27+ = Apple Silicon (26 is the last for Intel); then the GPU
+  // hint; else Intel, which also runs on Apple Silicon through Rosetta.
+  function macArch() {
+    if (det.version && det.version[0] <= 10) return ["x86_64", true];
+    if (det.version && det.version[0] >= 27) return ["arm64", true];
+    if (safari && +safari[1] <= 13) return ["x86_64", true];
+    var a = gpuArch();
+    if (a !== null) return [a, false];
+    return ["x86_64", false];
+  }
+
+  function versionFromHints(h) {
+    signals.push("UA-CH: " + (h.platform || "?") + " " + (h.platformVersion || "?") + " · " + (h.architecture || "?") + " " + (h.bitness || ""));
+    var same = { macOS: "mac", Windows: "win", Linux: "linux", "Chrome OS": "linux" }[h.platform];
+    if (same && same !== det.os) return; // hints from another system (spoofed user agent): ignore
+    if (h.architecture === "arm") { det.arch = "arm64"; det.archSure = true; }
+    else if (h.architecture === "x86") { det.arch = "x86_64"; det.archSure = true; }
+    if (det.version) return; // already read from the user agent, and real
+    var pv = (h.platformVersion || "").split(".").map(Number);
+    if (det.os === "mac" && pv[0]) det.version = [pv[0], pv[1] || 0];
+    // Windows: 0.1/0.2/0.3 = 7/8/8.1, 1-10 = Windows 10, 13+ = Windows 11.
+    if (det.os === "win" && pv.length) det.version = pv[0] === 0 ? (pv[1] >= 3 ? [8, 1] : pv[1] === 2 ? [8, 0] : [7, 0]) : pv[0] >= 13 ? [11, 0] : [10, 0];
+  }
+
+  function verText(v) { return v[0] + (v[1] ? "." + v[1] : ""); }
+  function below(v, floor) { return !!v && (v[0] < floor[0] || (v[0] === floor[0] && v[1] < floor[1])); }
+
+  // -- state + render --------------------------------------------------------------------------
+  var release = null, files = {}, choice = null, older = [];
+  function file(ed, os, arch) { return files[ed + "/" + os + "/" + arch] || null; }
+  function archesFor(os) { return ARCHS.filter(function (a) { return EDITIONS.some(function (e) { return file(e, os, a); }); }); }
+  function mb(n) { var v = n / 1e6; return (v < 10 ? v.toFixed(1) : String(Math.round(v))).replace(".", L().dec) + L().mb; }
+  function archName(os, a) { return os === "mac" ? L().archMac[a] : L().arch[a]; }
+  function floorText(ed, os) { var f = FLOOR[ed][os]; return typeof f === "string" ? f : L().os[os] + " " + verText(f); }
+
+  // Why an edition cannot be offered for (os, arch), or "" when it can.
+  function unavailable(ed, os, arch) {
+    if (!file(ed, os, arch)) {
+      if (ed === "legacy" && arch === "arm64") return os === "mac" ? L().macArmLegacy : L().x86only;
+      if (ed === "native" && os === "linux" && arch === "arm64") return L().noNativeArm;
+      return L().none;
+    }
+    var f = FLOOR[ed][os];
+    if (os === det.os && typeof f !== "string" && below(det.version, f)) return L().tooOld;
+    return "";
+  }
+
+  function pickDefault() {
+    var os = det.os || "win";
+    var arch = det.arch;
+    var archSure = det.archSure;
+    if (os === "mac" && !arch) { var m = macArch(); arch = m[0]; archSure = m[1]; }
+    if (!arch || archesFor(os).indexOf(arch) < 0) arch = "x86_64";
+    // The browser edition, or the frozen one when the system is below the browser floor.
+    var ed = !unavailable("browser", os, arch) ? "browser" : !unavailable("legacy", os, "x86_64") ? "legacy" : "browser";
+    if (ed === "legacy") arch = "x86_64";
+    return { os: os, arch: arch, edition: ed, archSure: archSure, auto: true };
+  }
+
+  function seg(id, items, cur, label, pick) {
+    var el = document.getElementById(id); el.innerHTML = "";
+    items.forEach(function (k) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = label(k); b.setAttribute("aria-pressed", String(k === cur));
+      b.addEventListener("click", function () { pick(k); });
+      el.appendChild(b);
+    });
+  }
+
+  function render() {
+    if (!release) return;
+    var T = L(), c = choice;
+    var arches = archesFor(c.os);
+    if (arches.indexOf(c.arch) < 0) c.arch = arches[arches.length - 1];
+    if (!file(c.edition, c.os, c.arch)) c.edition = "browser";
+    var f = file(c.edition, c.os, c.arch);
+    var what = T.os[c.os] + (arches.length > 1 ? " · " + archName(c.os, c.arch) : "") + " (" + T.ed[c.edition] + (f ? ", " + mb(f.size) : "") + ")";
+    var go = document.getElementById("dl-go");
+    go.textContent = T.go(what);
+    if (f) go.href = f.url;
+    document.getElementById("dl-file").textContent = f ? f.name : "";
+    var why = document.getElementById("dl-why");
+    if (!det.os) why.textContent = T.unknown;
+    else if (c.auto) why.innerHTML = (c.archSure || arches.length < 2 ? T.sure : T.guess) + "<b>" + T.os[c.os] +
+      (arches.length > 1 ? " · " + archName(c.os, c.arch) : "") + (det.version ? " " + verText(det.version) : "") + "</b>" +
+      (c.archSure || arches.length < 2 ? "" : T.cpuGuess);
+    else why.textContent = "";
+
+    seg("dl-os", OSES, c.os, function (k) { return T.os[k]; }, function (k) { choice = { os: k, arch: c.arch, edition: c.edition }; render(); });
+    seg("dl-arch", arches, c.arch, function (k) { return archName(c.os, k); }, function (k) { choice = { os: c.os, arch: k, edition: c.edition }; render(); });
+    var eds = document.getElementById("dl-eds"); eds.innerHTML = "";
+    EDITIONS.forEach(function (ed) {
+      var no = unavailable(ed, c.os, c.arch), x = file(ed, c.os, c.arch);
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "ed"; b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(ed === c.edition)); b.disabled = !x;
+      b.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="n">' + T.ed[ed] +
+        (ed === "browser" ? '<span class="reco-tag">' + T.reco + "</span>" : "") + '</span><span class="sz">' + (x ? mb(x.size) : "") +
+        '</span><span class="d">' + T.edd[ed] + '</span><span class="f' + (no ? " no" : "") + '">' + (no || T.from + floorText(ed, c.os)) + "</span>";
+      b.addEventListener("click", function () { choice = { os: c.os, arch: c.arch, edition: ed }; render(); });
+      eds.appendChild(b);
+    });
+    document.getElementById("dl-signals").innerHTML = signals.map(function (x) {
+      return "<li>" + x.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</li>";
+    }).join("");
+
+    document.getElementById("dl-count").textContent = T.files(Object.keys(files).length);
+    var head = "<th scope=\"col\">" + T.sys + "</th>";
+    EDITIONS.forEach(function (ed) { head += "<th scope=\"col\">" + T.ed[ed] + "</th>"; });
+    document.getElementById("dl-thead").innerHTML = head;
+    var rows = "";
+    OSES.forEach(function (os) {
+      archesFor(os).forEach(function (a) {
+        rows += "<tr" + (os === c.os && a === c.arch ? " class=\"mine\"" : "") + "><th scope=\"row\">" + T.os[os] + " · " + archName(os, a) + "</th>";
+        EDITIONS.forEach(function (ed) {
+          var x = file(ed, os, a);
+          rows += "<td>" + (x ? "<a href=\"" + x.url + "\" title=\"" + x.name + "\">↓ " + mb(x.size) + "</a>" : "<span class=\"none\">—</span>") + "</td>";
         });
-        var a = null;
-        ARCH[os].some(function (re) { a = pool.find(function (x) { return re.test(x.name); }); return !!a; });
-        if (!a) a = pool[0];
-        if (a) {
-          var el = document.getElementById("dl-" + os);
-          if (el) el.href = a.browser_download_url;
-        }
+        rows += "</tr>";
       });
-      // The frozen build for the visitor's OS (macOS 10.12 / glibc 2.17 / Windows 8.1). Only
-      // x86_64 is published there, so no arch preference to express.
-      var legacy = osKey && assets.filter(function (x) {
-        return /legacy/i.test(x.name) && MATCH[osKey].test(x.name) && /\.zip$/i.test(x.name);
-      })[0];
-      if (legacy) document.getElementById("dl-legacy").href = legacy.browser_download_url;
-      if (rel.tag_name) {
-        var v = document.getElementById("ver");
-        var word = document.documentElement.lang === "en" ? "Latest version" : "Dernière version";
-        v.innerHTML = "<strong>" + word + " : " + rel.tag_name + "</strong> · ";
-      }
-    })
-    .catch(function () { /* keep fallback links */ });
+    });
+    document.getElementById("dl-tbody").innerHTML = rows;
+
+    var o = document.getElementById("dl-older");
+    o.innerHTML = older.length ? "<span>" + T.older + "</span>" + older.map(function (r) {
+      return "<a href=\"" + r.html_url + "\" target=\"_blank\" rel=\"noopener\">" + r.tag_name + "</a>";
+    }).join("") : "";
+    document.getElementById("ver").innerHTML = "<strong>" + T.latest + " : " + release.tag_name + "</strong> · ";
+  }
+  onLangChange = render;
+
+  document.getElementById("dl-toggle").addEventListener("click", function () {
+    var box = document.getElementById("dl-chooser");
+    box.hidden = !box.hidden;
+    this.setAttribute("aria-expanded", String(!box.hidden));
+  });
+
+  // Chromium gives the real processor and OS version; Safari and Firefox do not.
+  var hints = navigator.userAgentData && navigator.userAgentData.getHighEntropyValues
+    ? navigator.userAgentData.getHighEntropyValues(["architecture", "bitness", "platformVersion"]).then(versionFromHints, function () {})
+    : Promise.resolve();
+  // Every published release: the newest stable one is offered, the others are listed. Any error
+  // keeps the fallback link to /releases/latest.
+  var list = fetch("https://api.github.com/repos/" + REPO + "/releases?per_page=30", { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  Promise.all([list, hints]).then(function (res) {
+    var stable = res[0].filter(function (r) { return !r.draft && !r.prerelease; });
+    if (!stable.length) return;
+    release = stable[0];
+    older = stable.slice(1);
+    (release.assets || []).forEach(function (a) {
+      var k = classify(a.name);
+      if (k) files[k.edition + "/" + k.os + "/" + k.arch] = { name: a.name, size: a.size, url: a.browser_download_url };
+    });
+    choice = pickDefault();
+    render();
+  }).catch(function () { /* keep the fallback link */ });
 })();
 </script>
 </body>

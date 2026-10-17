@@ -69,9 +69,10 @@ Conséquence, **dérivée** sans code supplémentaire :
    [`dfu/constants.py`](../../src/nwupdater/dfu/constants.py).
 4. **Vérifier** que capacités, device virtuel et layout se comportent bien — sans les éditer.
    `virtual_calculator("n0xxx")` fonctionne dès que le modèle est au registre.
-5. **Piste firmware distincte** seulement (cas N0200) : ajouter
-   `catalog/data/firmwares-<modèle>.json` (même forme `[{version, patch_level}]`) et brancher
-   `_catalog_for` dans [`server/_session_base.py`](../../src/nwupdater/server/_session_base.py).
+5. **Nouvelle famille à numérotation propre** seulement (cas Scientifique) : ajouter
+   `catalog/data/firmwares-<famille>.json` (même forme `[{version, patch_level}]`) et une ligne
+   dans `FAMILY_SNAPSHOTS` de [`catalog/firmware.py`](../../src/nwupdater/catalog/firmware.py).
+   Rien d'autre : toutes les interfaces passent par `FirmwareCatalog.for_family`.
 6. **Nouveau format firmware** seulement : écrire une spec sous `docs/01-specs/` et, si la version
    vit dans une nouvelle structure, étendre `formats/platform_info.py` / `dfu/identity.py`.
 7. **Tester** (voir plus bas).

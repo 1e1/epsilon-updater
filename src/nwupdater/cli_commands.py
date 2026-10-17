@@ -38,27 +38,26 @@ def _cmd_identify(args) -> int:
 def _cmd_catalog(args) -> int:
     from .catalog.firmware import FirmwareCatalog
 
-    if args.fetch:
-        try:
-            catalog = FirmwareCatalog.fetch()
-            src = "live (my.numworks.com)"
-        except Exception as exc:  # network issues -> fall back to snapshot
-            print(
-                f"live fetch failed ({exc}); falling back to the bundled snapshot", file=sys.stderr
-            )
-            catalog = FirmwareCatalog.bundled()
-            src = "bundled snapshot"
-    elif args.catalog_file:
+    # identity first (virtual by default so it runs without USB): the track depends on the family
+    opened = _open_device(args)
+    ident = read_identity(opened.client, opened.bcd)
+
+    if args.catalog_file:
         catalog = FirmwareCatalog.load(args.catalog_file)
         src = args.catalog_file
     else:
-        catalog = FirmwareCatalog.bundled()
+        public = None
         src = "bundled snapshot"
-
-    # identity (virtual by default so it runs without USB)
-    opened = _open_device(args)
-    client, bcd = opened.client, opened.bcd
-    ident = read_identity(client, bcd)
+        if args.fetch:
+            try:
+                public = FirmwareCatalog.fetch()
+                src = "live (my.numworks.com)"
+            except Exception as exc:  # network issues -> fall back to snapshot
+                print(
+                    f"live fetch failed ({exc}); falling back to the bundled snapshot",
+                    file=sys.stderr,
+                )
+        catalog = FirmwareCatalog.for_family(ident.family, public=public)
 
     latest = catalog.latest()
     print(f"catalog   : {len(catalog)} versions (source: {src}) — latest {latest}")
@@ -140,6 +139,8 @@ def _require_auth():
 
 
 def _cmd_install(args) -> int:
+    from .dfu import constants as C
+    from .dfu.protocol import DfuClient
     from .install.image import FirmwareImage
     from .install.installer import Installer
     from .models import MODELS
@@ -215,11 +216,22 @@ def _cmd_install(args) -> int:
         pct = 100 * done // max(total, 1)
         print(f"\r  {phase:6s} {pct:3d}% ({done}/{total} o)", end="", flush=True)
 
-    inst = Installer(client, model, progress=progress)
+    def reconnect():
+        # The installer rebooted the calculator into its updater: open it again (same serial).
+        if args.virtual:
+            fresh = DfuClient(client.dev, sleep=lambda *_: None)
+        else:
+            from .dfu import usbio
+
+            usbio.release(client.dev)
+            od = usbio.reopen_after_reset(ident.serial_number)
+            fresh = DfuClient(od.dev, interface=od.interface)
+        fresh.make_idle()
+        return fresh
+
+    inst = Installer(client, model, progress=progress, reconnect=reconnect)
     try:
-        plan = inst.install(
-            image, active_slot=args.active_slot, verify=not args.no_verify, boot=args.boot
-        )
+        plan = inst.install(image, active_slot=args.active_slot, verify=not args.no_verify)
     except Exception as exc:
         print(f"\ninstall failed: {exc}", file=sys.stderr)
         return 1
@@ -237,7 +249,12 @@ def _cmd_install(args) -> int:
     else:
         print(f"verify    : installed version read back = {installed}")
     if args.boot:
-        print(f"boot      : jump requested to 0x{plan.boot_address:08x} (device detached)")
+        # After the read-back above: the leave drops the calculator off the bus.
+        inst.client.leave(C.BOOTLOADER_RESET_ADDRESS)
+        print(
+            f"boot      : reboot through the bootloader (0x{C.BOOTLOADER_RESET_ADDRESS:08x}), "
+            "device detached"
+        )
     return 0
 
 

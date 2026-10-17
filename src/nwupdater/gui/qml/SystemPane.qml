@@ -91,7 +91,8 @@ Flickable {
                         Layout.fillWidth: true
                         Text {
                             text: ({ download: i18n.t("fw_downloading"), erase: i18n.t("erasing"),
-                                     write: i18n.t("writing"), verify: i18n.t("verifying")
+                                     write: i18n.t("writing"), verify: i18n.t("verifying"),
+                                     restart: i18n.t("restarting")
                                    })[backend.progressLabel] || i18n.t("writing")
                             color: Theme.muted
                             font.pixelSize: 12

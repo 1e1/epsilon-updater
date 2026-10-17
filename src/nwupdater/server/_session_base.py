@@ -38,8 +38,9 @@ class SessionBase:
         self._cache: FirmwareCache | None = None
         self._flashed = False  # a verified flash happened on this attach: "boot now" allowed
         self.channel = "stable"
-        self.catalog = FirmwareCatalog.bundled()  # Graphing N01xx (2x.x)
-        self.sci_catalog = FirmwareCatalog.bundled("firmwares-n0200")  # Scientific N0200 (3.x)
+        # The public firmware list, every family mixed: None = the bundled snapshot, replaced
+        # once by the live list in live mode (see _public_catalog).
+        self._public: FirmwareCatalog | None = None
         self.store = AppStore.bundled()
         # Generic, self-hosted user sources: local .nwa files + a _urls.txt list under the user
         # apps dir, merged into the catalogue so "Available" shows real apps the user provides.
@@ -54,7 +55,7 @@ class SessionBase:
         # `ui` server turns it on. Bundled snapshots stay the offline/anonymous fallback.
         self._live_catalog = live_catalog
         self._manifest_cache: dict = {}
-        self._public_fetched = False  # the public Graphing catalogue is re-read once per session
+        self._public_fetched = False  # the public catalogue is re-read once per session
         self._auth_override = None  # tests inject an Auth here; production reads the stored token
         self._transport = None  # tests inject a fake transport here
         # Device state. The shipped app starts DISCONNECTED and either attaches a real
@@ -203,13 +204,16 @@ class SessionBase:
 
     @staticmethod
     def _demo_os_for(model_name: str, default: str) -> str:
-        """A believable 'installed' OS for a demo device — one line behind the family latest so
-        an update shows. Scientific (N0200) is on the 3.x track, Graphing on 2x.x."""
+        """A believable 'installed' OS for a demo device: one release behind its family's latest,
+        so an update shows. ``default`` when the family track has no older release."""
         model = next((m for m in MODELS.values() if m.name == model_name), None)
-        return "2.9.0" if (model and model.family == "scientifique") else default
+        if model is None:
+            return default
+        releases = FirmwareCatalog.for_family(model.family).releases
+        return releases[1].version if len(releases) > 1 else default
 
     def _catalog_for(self, family: str, channel: str = "stable") -> FirmwareCatalog:
-        base = self.sci_catalog if family == "scientifique" else self._graphing_catalog()
+        base = FirmwareCatalog.for_family(family, public=self._public_catalog())
         if channel != "beta":
             return base
         # Illustrative beta line for the offline/demo fallback: a pre-release one minor ahead of
@@ -224,19 +228,29 @@ class SessionBase:
         beta_v = f"{p[0]}.{(int(p[1]) + 1) if len(p) > 1 and p[1].isdigit() else 0}.0"
         return FirmwareCatalog([FirmwareRelease(beta_v, "beta")] + list(base.releases))
 
-    def _graphing_catalog(self) -> FirmwareCatalog:
-        """The Graphing catalogue. In live mode the PUBLIC ``firmwares.json`` (no sign-in) replaces
-        the bundled snapshot on first use, so an anonymous user still sees the real latest; any
-        network error keeps the snapshot. Read once per session so a render never re-hits it."""
+    def _public_catalog(self) -> FirmwareCatalog | None:
+        """The public ``firmwares.json``. In live mode the live list (no sign-in) replaces the
+        bundled snapshot on first use, so an anonymous user still sees the real latest; any
+        network error keeps the snapshot (None). Read once per session so a render never
+        re-hits it."""
         if self._live_catalog and not self._public_fetched:
             self._public_fetched = True
             try:
                 live = FirmwareCatalog.fetch(transport=self._transport)
                 if len(live):
-                    self.catalog = live
+                    self._public = live
             except Exception:  # offline / HTTP / parse error → the bundled snapshot stays
                 pass
-        return self.catalog
+        return self._public
+
+    def _latest_version(self, model: Model, channel: str) -> str | None:
+        """The firmware a model should run: the official manifest's version when signed in, else
+        its family track's latest. One answer for the System pane, the cache and the class."""
+        man = self._live_latest(model.name, channel)
+        if man is not None:
+            return man.version
+        latest = self._catalog_for(model.family, channel).latest()
+        return latest.version if latest else None
 
     def _live_latest(self, model: str, channel: str):
         """Real per-model latest from the official manifest (needs sign-in). Returns None when

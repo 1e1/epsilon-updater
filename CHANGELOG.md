@@ -6,6 +6,56 @@ Toutes les modifications notables de ce projet sont documentées ici. Le format 
 
 ## [Non publié]
 
+## [3.0.2] - 2026-10-17
+
+### Corrigé
+
+- **N0200 : la mise à jour du firmware échouait.** La calculatrice refusait l'image dès le
+  premier bloc (`errTARGET`) et gardait son ancienne version. Une N0200 en marche n'annonce en
+  effet qu'une petite zone en lecture seule. Le site officiel la redémarre d'abord dans son
+  programme de mise à jour, où la zone firmware devient accessible en écriture. L'outil fait
+  désormais de même : si la calculatrice n'annonce pas en écriture la zone visée, il la redémarre
+  (`leave` vers `0x08000000`), attend qu'elle revienne avec le même numéro de série, écrit, puis
+  la redémarre sur le nouveau firmware. Rien n'est propre à un modèle : c'est la carte mémoire
+  annoncée par la calculatrice qui décide. Validé sur une N0200 réelle, de 3.0.0 à 4.1.0, en 8,5 s
+  d'écriture comme le site officiel. L'application de bureau affiche cette étape
+  (« Redémarrage en mode mise à jour »).
+- **Les zones en écriture seule ne sont plus relues.** L'analyseur de carte mémoire ne
+  connaissait que trois des sept types DfuSe (`a`, `e`, `g`) : celle de la N0200 en mise à jour
+  (`@EncryptedFlash/…/01*256Kd`) passait pour absente. Il lit maintenant les droits de chaque
+  zone. La vérification relit seulement les zones lisibles, ce qui exclut la zone `d` (écriture
+  seule) de la N0200.
+- **CLI `install --boot`** : la version installée est relue avant le redémarrage, plus après (la
+  calculatrice avait déjà quitté le bus). Sur N0200, le message de fin ne plante plus faute
+  d'adresse de boot.
+- **Les tests effaçaient le jeton my.numworks.com du développeur.** Un test du serveur appelait
+  `/api/auth/logout` sans isoler le dossier de configuration. Toute la suite pointe désormais ses
+  dossiers utilisateur vers un répertoire temporaire.
+- **N0200 : la dernière version firmware est 4.1.0 partout.** Le catalogue embarqué de la N0200
+  contenait des versions fictives et s'arrêtait à 3.0.0 : hors connexion, une N0200 en 3.0.0 se
+  disait à jour. Il reprend les vraies versions de la liste publique (2.1.0, 3.0.0, 4.1.0).
+  `nwupdater catalog` comparait une N0200 aux versions de la calculatrice graphique (« dernière
+  26.4.0 ») : il suit désormais la famille de la calculatrice branchée.
+- **Mode classe : même version cible que le panneau Système.** Connecté, le préchargement du
+  cache visait la version du catalogue embarqué mais téléchargeait celle du manifeste officiel :
+  les deux ne coïncidaient jamais, d'où un nouveau téléchargement à chaque passage. Le lot et
+  l'état « à jour » de la liste de classe avaient le même décalage. Les trois suivent maintenant
+  le manifeste officiel quand on est connecté, sinon le catalogue de la famille.
+
+### Modifié
+
+- **Page de téléchargement : un seul bouton, le bon fichier.** Chaque release publie 12 zips
+  (navigateur, fenêtre native, ancien poste ; macOS, Windows, Linux ; Intel ou ARM). La page
+  détecte le système, sa version et le processeur, y compris sur Mac sous Safari ou Firefox
+  (d'après le GPU), et propose le fichier qui convient. Un sélecteur permet de corriger le choix et
+  explique chaque combinaison absente. Suivent le tableau de tous les fichiers et les versions
+  précédentes, lus en direct sur GitHub. La barre du haut ne déborde plus sur mobile.
+- **Un seul catalogue par famille, quel que soit le modèle.** La liste publique de
+  my.numworks.com mélange les familles. Une table de données associe à une famille sa propre
+  piste, les autres lisent la liste publique sans les versions revendiquées ailleurs. La CLI,
+  l'interface web, l'application de bureau et le mode classe passent tous par ce même point.
+  `firmwares-n0200.json` devient `firmwares-scientifique.json`.
+
 ## [3.0.1] - 2026-10-12
 
 ### Ajouté

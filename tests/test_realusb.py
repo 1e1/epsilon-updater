@@ -298,3 +298,41 @@ def test_real_install_with_yes_flashes_virtual_device(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "25.2.0" in out  # synthetic image flashed to the inactive slot and read back
+
+
+def test_real_install_reboots_a_running_n0200_into_its_updater(monkeypatch, capsys):
+    from nwupdater import cli
+    from nwupdater.testing.virtual_dfu import virtual_calculator
+
+    vdev = virtual_calculator("n0200", os_version="3.0.0")
+    _install_fake_usb(monkeypatch, _VirtualUsbAdapter(vdev))
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    rc = cli.main(["install", "--yes", "--boot", "--to-version", "4.1.0"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "reboot through the bootloader" in out
+    assert vdev.in_updater is False  # leave → updater, write, leave → firmware
+
+
+def test_reopen_after_reset_waits_for_the_same_calculator():
+    calls = []
+
+    class _Dev:
+        iSerialNumber = 0  # no serial string: accepted
+
+    def opener():
+        calls.append(1)
+        if len(calls) < 3:
+            raise usbio.NoCalculatorFound("not back yet")
+        return usbio.OpenDevice(_Dev(), 0x0200, 0, 0, 0xA51A)
+
+    od = usbio.reopen_after_reset("SER", sleep=lambda *_: None, opener=opener)
+    assert len(calls) == 3 and od.bcd_device == 0x0200
+
+
+def test_reopen_after_reset_gives_up_after_its_timeout():
+    def opener():
+        raise usbio.NoCalculatorFound("gone")
+
+    with pytest.raises(usbio.NoCalculatorFound, match="did not come back"):
+        usbio.reopen_after_reset(None, timeout=0, sleep=lambda *_: None, opener=opener)

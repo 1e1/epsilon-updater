@@ -43,9 +43,9 @@ class FirmwareMixin(SessionBase):
         EXTENDED from now — no re-download. Only a genuinely newer (or missing) version is fetched."""
         refreshed = downloaded = 0
         for m in MODELS.values():
-            cat = self._catalog_for(m.family, self.channel)
-            latest = cat.latest()
-            target = latest.version if latest else None
+            # The version _fetch_or_synth will cache: the official manifest's when signed in.
+            # Comparing against the family snapshot instead re-downloaded it on every run.
+            target = self._latest_version(m, self.channel)
             cur = self.cache.entry_for_model(m.name)
             if (
                 cur is not None
@@ -193,7 +193,13 @@ class FirmwareMixin(SessionBase):
                 "only the official firmware can be flashed onto a real calculator: sign in to "
                 "download it (a cache filled while signed out holds a demo image)"
             )
-        inst = Installer(self._conn()[0], self.model, progress=progress)
+        serial = self._identity().serial_number
+        inst = Installer(
+            self._conn()[0],
+            self.model,
+            progress=progress,
+            reconnect=lambda: self._reopen_after_reset(serial),
+        )
         # Detect the running slot so the installer flashes the INACTIVE one (the active slot is
         # hardware-protected; writing it errTARGETs and wedges the DFU session on real hardware).
         plan = inst.install(image, active_slot=self._active_slot(), verify=True, boot=False)
@@ -216,6 +222,23 @@ class FirmwareMixin(SessionBase):
             "bytes": plan.total_bytes,
             "sha256": sha256,
         }
+
+    def _reopen_after_reset(self, serial: str | None):
+        """Re-open the calculator after the installer rebooted it into its updater and hand the
+        installer the new client. A virtual device switches mode in place."""
+        from ..dfu.protocol import DfuClient
+
+        if self.virtual:
+            self.client = DfuClient(self._conn()[0].dev, sleep=lambda *_: None)
+        else:
+            from ..dfu import usbio
+
+            self._release_usb()
+            od = usbio.reopen_after_reset(serial)
+            self.device, self.bcd = od.dev, od.bcd_device
+            self.client = DfuClient(self.device, interface=od.interface)
+        self.client.make_idle()
+        return self.client
 
     def boot(self) -> dict:
         """Reboot through the bootloader so the calculator runs the freshly-flashed firmware.
