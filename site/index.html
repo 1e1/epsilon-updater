@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nwupdater — mise à jour NumWorks, sans Chrome ni WebUSB</title>
-<meta name="description" content="Outil indépendant et non officiel pour mettre à jour les calculatrices NumWorks (N01xx & N02xx) et y installer des applications, sans Chrome ni WebUSB. Fenêtre native ou page locale, au choix. macOS, Windows, Linux. Open source (MIT).">
+<meta name="description" content="Application open source pour mettre à jour les calculatrices NumWorks (Graphique et Scientifique), installer des applications et gérer les scripts Python, sans Chrome ni WebUSB. Firmware officiel, mode classe hors ligne. macOS, Windows, Linux.">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <style>
   :root {
@@ -70,6 +70,13 @@
     background:var(--accent-soft); color:var(--accent-ink); border:1px solid transparent; }
   .pill.b { background:var(--blue-soft); color:var(--blue-ink); }
 
+  /* Key facts under the call to action */
+  .facts { list-style:none; margin:30px 0 0; padding:0; display:grid; gap:14px;
+    grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
+  .facts li { display:grid; gap:2px; border-left:3px solid var(--accent); padding:2px 0 2px 14px; min-width:0; }
+  .facts strong { font-size:1rem; }
+  .facts span { color:var(--muted); font-size:.93rem; }
+
   /* Disclaimer */
   .disclaimer { border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-ink);
     border-radius:var(--radius); padding:14px 18px; margin:18px 0; font-size:.95rem; }
@@ -132,17 +139,17 @@
   .dl-note { margin-top:16px; color:var(--muted); font-size:.9rem; }
 
   /* Features */
-  .feat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:16px; }
+  .feat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; }
   .feat { border:1px solid var(--line); background:var(--panel); border-radius:var(--radius); padding:20px; }
-  .feat h3 { margin:0 0 .35em; font-size:1.08rem; display:flex; align-items:center; gap:9px; }
-  .feat h3 .ic { font-size:1.2rem; }
+  .feat h3 { margin:0 0 .35em; font-size:1.08rem; }
   .feat p { margin:0; color:var(--muted); font-size:.95rem; }
 
   /* Shots */
   .shots { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:20px; align-items:start; }
   figure { margin:0; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card); box-shadow:var(--shadow); }
   figure img { display:block; width:100%; height:auto; }
-  figcaption { padding:12px 16px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--line); }
+  figcaption { padding:12px 16px; color:var(--muted); line-height:1.5; font-size:.9rem; border-top:1px solid var(--line); }
+  figcaption strong { color:var(--ink); }
 
   /* Footer */
   footer { border-top:1px solid var(--line); padding:34px 0 60px; color:var(--muted); font-size:.92rem; }
@@ -172,17 +179,20 @@
   <div class="hero">
     <div class="badges">
       <span class="pill" data-i18n="p1">macOS · Windows · Linux</span>
-      <span class="pill b" data-i18n="p2">Sans WebUSB</span>
-      <span class="pill b" data-i18n="p3">Hors-ligne / mode classe</span>
-      <span class="pill b" data-i18n="p5">Fenêtre native ou navigateur</span>
+      <span class="pill b" data-i18n="p2">Graphique et Scientifique</span>
       <span class="pill" data-i18n="p4">Open source · MIT</span>
     </div>
-    <h1 data-i18n="h1">Mettez à jour vos calculatrices NumWorks, sans Chrome ni WebUSB.</h1>
-    <p class="lead" data-i18n="lead">Un outil indépendant pour mettre à jour les NumWorks (Graphique N01xx et Scientifique N02xx) et y installer des applications tierces — via un cœur natif qui parle USB/DFU, piloté au choix par une <strong>fenêtre native</strong> ou une page web ouverte dans votre navigateur système. Fonctionne là où l'updater web officiel ne passe pas.</p>
+    <h1 data-i18n="h1">Mettez à jour vos NumWorks depuis n'importe quel ordinateur.</h1>
+    <p class="lead" data-i18n="lead">Une application open source pour mettre à jour les calculatrices NumWorks, y installer des applications et gérer leurs scripts Python. Elle parle directement à la calculatrice en USB : pas besoin de Chrome ni de WebUSB, au choix dans une fenêtre native ou dans votre navigateur habituel.</p>
     <div class="ctrls">
       <a class="btn primary" href="#download" data-i18n="cta">↓ Télécharger</a>
-      <a class="btn" href="https://github.com/1e1/epsilon-updater#readme" target="_blank" rel="noopener" data-i18n="cta2">Comment ça marche</a>
+      <a class="btn" href="#preview" data-i18n="cta2">Voir l'interface</a>
     </div>
+    <ul class="facts">
+      <li><strong data-i18n="k1_t">Firmware officiel</strong><span data-i18n="k1_b">Téléchargé chez NumWorks avec votre compte. La calculatrice reste officielle pour les examens.</span></li>
+      <li><strong data-i18n="k2_t">Une classe entière</strong><span data-i18n="k2_b">Une version téléchargée une fois, puis installée hors ligne sur tout le parc.</span></li>
+      <li><strong data-i18n="k3_t">Même les vieux postes</strong><span data-i18n="k3_b">Jusqu'à macOS 10.12, Windows 8.1 et Ubuntu 14.04.</span></li>
+    </ul>
 
     <div class="disclaimer">
       <strong data-i18n="disc_t">Projet indépendant et non officiel.</strong>
@@ -190,9 +200,37 @@
     </div>
   </div>
 
+  <section id="preview">
+    <h2 data-i18n="s_h">L'interface</h2>
+    <p class="sub" data-i18n="s_s">Elle s'adapte à la calculatrice branchée : Système, Applications et Scripts sur une Graphique, mise à jour seule sur une Scientifique. Captures réalisées avec des données d'exemple.</p>
+    <div class="shots">
+      <figure>
+        <img src="assets/nwupdater-n0120-individual.png" alt="nwupdater — N0120 (Graphique), mode individuel, onglet Applications" loading="lazy">
+        <figcaption data-i18n="s1"><strong>Mode individuel.</strong> À gauche, ce que contient la calculatrice ; à droite, ce que vous pouvez ajouter. Seule la partie de mémoire qui change est réécrite.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/nwupdater-n0200-classroom.png" alt="nwupdater — mode classe, onglet Parc" loading="lazy">
+        <figcaption data-i18n="s2"><strong>Mode classe.</strong> Vos classes et leurs calculatrices, avec le firmware de chacune et la date du dernier passage. Consultable sans calculatrice branchée.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="why">
+    <h2 data-i18n="f_h">Pourquoi nwupdater</h2>
+    <p class="sub" data-i18n="f_s">L'outil officiel de NumWorks fonctionne dans Chrome, grâce à WebUSB. nwupdater prend le relais là où ce n'est pas possible, et ajoute ce qui manque pour équiper une salle.</p>
+    <div class="feat-grid">
+      <div class="feat"><h3 data-i18n="f1_t">Sans Chrome ni WebUSB</h3><p data-i18n="f1_b">Fonctionne avec Firefox, Safari ou un navigateur verrouillé, sur les ordinateurs d'établissement comme à la maison.</p></div>
+      <div class="feat"><h3 data-i18n="f3_t">Reste officielle</h3><p data-i18n="f3_b">Le firmware vient des serveurs NumWorks, avec votre compte. Après la mise à jour, la calculatrice redémarre seule et sa signature est revérifiée : mode examen compris. Votre mot de passe n'est jamais conservé.</p></div>
+      <div class="feat"><h3 data-i18n="f2_t">Pensé pour la classe</h3><p data-i18n="f2_b">Préparez une version une fois, puis mettez à jour chaque calculatrice sans retélécharger. Chacune est reconnue et rangée dans sa classe.</p></div>
+      <div class="feat"><h3 data-i18n="f4_t">Applications et scripts</h3><p data-i18n="f4_b">Sur les modèles Graphique : installez, retirez et réordonnez des applications (.nwa) et des scripts Python, depuis vos fichiers ou des sources publiques.</p></div>
+      <div class="feat"><h3 data-i18n="f5_t">Vieux ordinateurs inclus</h3><p data-i18n="f5_b">Une édition figée garde les machines de salle anciennes dans le jeu : macOS 10.12, Windows 8.1, Ubuntu 14.04 ou CentOS 7.</p></div>
+      <div class="feat"><h3 data-i18n="f6_t">Ouvert</h3><p data-i18n="f6_b">Code source sous licence MIT : relisez-le, compilez-le vous-même, contribuez. Prolonger la vie d'un parc existant, c'est aussi le but.</p></div>
+    </div>
+  </section>
+
   <section id="download">
     <h2 data-i18n="dl_h">Télécharger</h2>
-    <p class="sub" data-i18n="dl_s">Le bon fichier pour cet ordinateur est choisi automatiquement. Vous pouvez le changer.</p>
+    <p class="sub" data-i18n="dl_s">Le fichier qui convient à cet ordinateur est déjà choisi ; vous pouvez le changer.</p>
     <div class="dl-main">
       <a class="btn primary" id="dl-go" href="https://github.com/1e1/epsilon-updater/releases/latest" target="_blank" rel="noopener" data-i18n="dl_btn">Télécharger</a>
       <span class="dl-file" id="dl-file"></span>
@@ -215,33 +253,6 @@
       <span data-i18n="dl_unsigned">Binaires non signés (pas de compte de signature payant) : au premier lancement, votre système peut afficher un avertissement « développeur non identifié ».</span>
       <a href="https://github.com/1e1/epsilon-updater/blob/HEAD/docs/05-packaging-ui/desktop-app.md" target="_blank" rel="noopener" data-i18n="dl_help">Comment l'ouvrir →</a>
     </p>
-  </section>
-
-  <section>
-    <h2 data-i18n="f_h">Pourquoi nwupdater</h2>
-    <p class="sub" data-i18n="f_s">Un complément à l'outil officiel, pour les cas qu'il ne couvre pas aujourd'hui.</p>
-    <div class="feat-grid">
-      <div class="feat"><h3><span class="ic">🧩</span> <span data-i18n="f1_t">Sans WebUSB</span></h3><p data-i18n="f1_b">Fonctionne sur les navigateurs et postes sans WebUSB : Chromebooks, machines scolaires verrouillées, navigateurs bridés, réseaux filtrés.</p></div>
-      <div class="feat"><h3><span class="ic">🎓</span> <span data-i18n="f2_t">Mode classe</span></h3><p data-i18n="f2_b">Pré-téléchargez une version une seule fois, puis flashez tout un parc sans re-télécharger. Une version par modèle.</p></div>
-      <div class="feat"><h3><span class="ic">🔒</span> <span data-i18n="f3_t">Canaux officiels</span></h3><p data-i18n="f3_b">Le firmware vient du serveur NumWorks, sous votre propre compte (modèle « apportez votre jeton »). On ne conserve jamais votre mot de passe.</p></div>
-      <div class="feat"><h3><span class="ic">🧮</span> <span data-i18n="f4_t">Apps & scripts</span></h3><p data-i18n="f4_b">Installez des applications tierces (.nwa) et des scripts Python. Le plan d'écriture ne réécrit que la portion de mémoire qui change.</p></div>
-      <div class="feat"><h3><span class="ic">♻️</span> <span data-i18n="f6_t">Ouvert & durable</span></h3><p data-i18n="f6_b">Code source ouvert (MIT). Prolonge la vie d'un parc existant — anti-obsolescence et droit à la réparation.</p></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 data-i18n="s_h">Aperçu de l'interface</h2>
-    <p class="sub" data-i18n="s_s">Page web servie en local — données d'exemple. L'interface s'adapte au modèle détecté.</p>
-    <div class="shots">
-      <figure>
-        <img src="assets/nwupdater-n0120-individual.png" alt="nwupdater — N0120 (Graphique), mode individuel, onglet Applications" loading="lazy">
-        <figcaption data-i18n="s1">N0120 (Graphique) — mode individuel : onglets Système / Applications / Scripts ; l'atelier Applications montre le contenu de la calculatrice face aux éléments disponibles.</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/nwupdater-n0200-classroom.png" alt="nwupdater — mode classe, onglet Parc" loading="lazy">
-        <figcaption data-i18n="s2">Mode classe — l'onglet « Parc » : le parc local, classes et calculatrices (nom, firmware connu, dernier scan) — utilisable sans calculatrice connectée.</figcaption>
-      </figure>
-    </div>
   </section>
 </main>
 
@@ -267,26 +278,30 @@
   // ---- i18n -------------------------------------------------------------------
   var EN = {
     brandsub: "· NumWorks updater",
-    p1: "macOS · Windows · Linux", p2: "No WebUSB", p3: "Offline / classroom", p4: "Open source · MIT", p5: "Native window or browser",
-    h1: "Update your NumWorks calculators, without Chrome or WebUSB.",
-    lead: "An independent tool to update NumWorks calculators (Graphing N01xx and Scientific N02xx) and install third-party apps — through a native core that speaks USB/DFU, driven either by a <strong>native window</strong> or by a web page opened in your system browser. Works where the official web updater can't.",
-    cta: "↓ Download", cta2: "How it works",
+    p1: "macOS · Windows · Linux", p2: "Graphing and Scientific", p4: "Open source · MIT",
+    h1: "Update your NumWorks calculators from any computer.",
+    lead: "An open-source app to update NumWorks calculators, install apps on them and manage their Python scripts. It talks to the calculator directly over USB: no Chrome or WebUSB needed, in a native window or in the browser you already use.",
+    cta: "↓ Download", cta2: "See the interface",
+    k1_t: "Official firmware", k1_b: "Downloaded from NumWorks with your account. The calculator stays official for exams.",
+    k2_t: "A whole classroom", k2_b: "Download a version once, then install it offline on every calculator.",
+    k3_t: "Old machines too", k3_b: "Down to macOS 10.12, Windows 8.1 and Ubuntu 14.04.",
     disc_t: "Independent, unofficial project.",
     disc_b: " Not affiliated with NumWorks SAS. Provided with no warranty: updating or flashing a calculator can damage it, erase data or brick it. Use entirely at your own risk. Firmware comes from NumWorks' official channels, under your own account.",
-    dl_h: "Download", dl_s: "The right file for this computer is picked automatically. You can change it.",
+    s_h: "The interface", s_s: "It adapts to the calculator you plug in: System, Apps and Scripts on a Graphing model, updates only on a Scientific one. Screenshots taken with sample data.",
+    s1: "<strong>Individual mode.</strong> On the left, what the calculator holds; on the right, what you can add. Only the part of memory that changes is rewritten.",
+    s2: "<strong>Classroom mode.</strong> Your classes and their calculators, with each one's firmware and when it was last seen. Works without a calculator plugged in.",
+    f_h: "Why nwupdater", f_s: "NumWorks' official tool runs in Chrome, through WebUSB. nwupdater takes over where that is not possible, and adds what a classroom needs.",
+    f1_t: "No Chrome, no WebUSB", f1_b: "Works with Firefox, Safari or a locked-down browser, on school computers as well as at home.",
+    f3_t: "Stays official", f3_b: "Firmware comes from NumWorks' servers, with your account. After the update the calculator restarts on its own and its signature is checked again: exam mode included. Your password is never stored.",
+    f2_t: "Built for the classroom", f2_b: "Prepare a version once, then update each calculator without downloading again. Each one is recognised and filed under its class.",
+    f4_t: "Apps and scripts", f4_b: "On Graphing models: install, remove and reorder apps (.nwa) and Python scripts, from your own files or public sources.",
+    f5_t: "Old computers included", f5_b: "A frozen edition keeps older classroom machines in the game: macOS 10.12, Windows 8.1, Ubuntu 14.04 or CentOS 7.",
+    f6_t: "Open", f6_b: "Source code under the MIT licence: read it, build it yourself, contribute. Extending the life of an existing fleet is part of the point.",
+    dl_h: "Download", dl_s: "The file that suits this computer is already selected; you can change it.",
     dl_btn: "Download", dl_choose: "Not the right file? Choose…", dl_os: "System", dl_arch: "Processor",
     dl_ed: "App edition", dl_sig: "What your browser reveals", dl_all_t: "All files in this release",
     dl_unsigned: "Unsigned binaries (no paid signing account): on first launch your system may show an “unidentified developer” warning.",
     dl_help: "How to open it →",
-    f_h: "Why nwupdater", f_s: "A complement to the official tool, for the cases it doesn't cover today.",
-    f1_t: "No WebUSB", f1_b: "Works on browsers and machines without WebUSB: Chromebooks, locked-down school computers, restricted browsers, filtered networks.",
-    f2_t: "Classroom mode", f2_b: "Preload a version once, then flash a whole fleet without re-downloading. One version per model.",
-    f3_t: "Official channels", f3_b: "Firmware comes from the NumWorks server, under your own account (bring-your-own-token model). Your password is never stored.",
-    f4_t: "Apps & scripts", f4_b: "Install third-party apps (.nwa) and Python scripts. The write plan only rewrites the part of memory that changes.",
-    f6_t: "Open & durable", f6_b: "Open source (MIT). Extends the life of an existing fleet — anti-obsolescence and right-to-repair.",
-    s_h: "Interface preview", s_s: "Web page served locally — sample data. The interface adapts to the detected model.",
-    s1: "N0120 (Graphing) — individual mode: tabbed System / Apps / Scripts; the Apps workshop shows the calculator’s contents next to the available items.",
-    s2: "Classroom mode — the local-fleet “Parc” tab: classes and calculators (name, known firmware, last scan), usable without a connected calculator.",
     fl1: "Source code", fl2: "Documentation", fl3: "Releases", fl4: "Disclaimer", fl5: "Security",
     foot: "Independent project, not affiliated with NumWorks SAS. “NumWorks” is a trademark of its owner, used descriptively. Licensed under MIT — with no warranty."
   };
