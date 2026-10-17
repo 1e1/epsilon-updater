@@ -6,7 +6,9 @@ string of the form::
     @Flash/0x90000000/08*004Kg,01*032Kg,63*064Kg/0x90430000/61*064Kg
 
 ``@Name`` followed by repeating ``/0xADDR/seg,seg,…`` groups; each segment is
-``<count>*<size><multiplier><access>`` (multiplier ``K``/``M``/blank, access ``a``/``e``/``g``).
+``<count>*<size><multiplier><access>`` (multiplier ``K``/``M``/blank). The access letter
+``a``..``g`` is a bit field minus ``a - 1``: readable 1, erasable 2, writable 4 (``a`` read-only,
+``d`` write-only, ``g`` read/erase/write).
 This is the same format read by the reference host tools (``get_memory_layout`` /
 ``parseMemoryDescriptor``). See docs/01-specs/usb-dfu-protocol.md §6.4.
 
@@ -22,7 +24,7 @@ import re
 from dataclasses import dataclass
 
 # <count>*<size><multiplier><access>, e.g. "08*004Kg". Multiplier optional (blank/space = bytes).
-_SEG_RE = re.compile(r"^(\d+)\*(\d+)([KkMmBb ]?)([aeg])$")
+_SEG_RE = re.compile(r"^(\d+)\*(\d+)([KkMmBb ]?)([a-g])$")
 _MULT = {"": 1, " ": 1, "b": 1, "k": 1024, "m": 1024 * 1024}
 
 
@@ -33,10 +35,22 @@ class Region:
     base: int
     sector_size: int
     count: int
+    access: str = "g"  # DfuSe access letter, see the module docstring
 
     @property
     def end(self) -> int:
         return self.base + self.sector_size * self.count
+
+    def _can(self, bit: int) -> bool:
+        return bool((ord(self.access) - ord("a") + 1) & bit)
+
+    @property
+    def readable(self) -> bool:
+        return self._can(1)
+
+    @property
+    def writable(self) -> bool:
+        return self._can(4)
 
 
 class MemoryLayout:
@@ -46,6 +60,10 @@ class MemoryLayout:
     def __repr__(self) -> str:
         segs = ", ".join(f"0x{r.base:08x}:{r.count}x{r.sector_size}" for r in self.regions)
         return f"MemoryLayout({segs})"
+
+    def region_of(self, address: int) -> Region | None:
+        """The advertised region containing ``address``, or None if unmapped."""
+        return next((r for r in self.regions if r.base <= address < r.end), None)
 
     def sector_of(self, address: int) -> tuple[int, int] | None:
         """``(base, size)`` of the sector containing ``address``, or None if unmapped."""
@@ -100,6 +118,6 @@ def parse_memory_layout(descriptor: str | None) -> MemoryLayout | None:
                 raise ValueError(f"bad layout segment {seg!r} in {descriptor!r}")
             count = int(m.group(1))
             size = int(m.group(2)) * _MULT[m.group(3).lower()]
-            regions.append(Region(cursor, size, count))
+            regions.append(Region(cursor, size, count, m.group(4)))
             cursor += size * count
     return MemoryLayout(regions) if regions else None

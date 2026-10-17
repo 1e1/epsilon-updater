@@ -135,8 +135,12 @@ ce qui confirme que notre approche « slot inactif seul » est correcte. **Chron
 d'écriture, ~37 s connexion→fin** (à parité avec notre outil : 26,3 s).
 
 ### N0200 (scientifique)
-Mode `0x0483:0xA51A` (pas de bascule de PID, pas de mode flasher séparé ; le layout RO annoncé
-`@FirmwareHeader/0x080040C0/64Ba` est trompeur — il accepte les écritures DfuSe). Écrit un
+Mode `0x0483:0xA51A`, pas de bascule de PID. **Correction (2026-10-17)** : il y a bien un
+changement de mode. Le site commence par un `leave 0x08000000` qui redémarre la calculatrice dans
+son programme de mise à jour (`@EncryptedFlash/0x98000000/01*256Kd`, écriture seule), puis la
+rouvre par numéro de série. En marche, le layout `@FirmwareHeader/0x080040C0/64Ba` (lecture seule)
+**refuse** les écritures (`errTARGET`). Voir
+[../01-specs/n02xx-firmware-format.md](../01-specs/n02xx-firmware-format.md). Écrit un
 **élément unique à `0x98000000`** (~237 Kio), **sans ERASE**, `SET_ADDRESS` par bloc + `DNLOAD`.
 `.dfu` = DfuSe standard (1 cible / 1 élément `0x98000000`, suffixe 16 o pid `0xA51A`, **aucune
 signature ajoutée** après le suffixe). **Chrono : ~8,4 s d'écriture, ~13 s connexion→fin.**

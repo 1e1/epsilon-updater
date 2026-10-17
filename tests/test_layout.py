@@ -74,3 +74,17 @@ def test_megabyte_multiplier_and_access_variants():
 def test_malformed_segment_raises():
     with pytest.raises(ValueError):
         parse_memory_layout("@Flash/0x08000000/not-a-segment")
+
+
+def test_access_letters_a_to_g_carry_read_and_write_rights():
+    # Observed on a real N0200: a read-only identity window while running, a write-only
+    # firmware window once rebooted into its updater.
+    header = parse_memory_layout("@FirmwareHeader/0x080040C0/01*64Ba").regions[0]
+    updater = parse_memory_layout("@EncryptedFlash/0x98000000/01*256Kd").regions[0]
+    flash = parse_memory_layout(SLOT_B).regions[0]
+    assert (header.readable, header.writable) == (True, False)
+    assert (updater.readable, updater.writable) == (False, True)
+    assert (updater.base, updater.end) == (0x98000000, 0x98040000)
+    assert (flash.readable, flash.writable) == (True, True)
+    assert parse_memory_layout(SLOT_B).region_of(0x90430000).base == 0x90430000
+    assert parse_memory_layout(SLOT_B).region_of(0x90400000) is None

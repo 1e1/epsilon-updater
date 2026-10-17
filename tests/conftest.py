@@ -30,3 +30,22 @@ def _no_real_usb(monkeypatch):
         return real(core, util, **kw)
 
     monkeypatch.setattr(usbio, "open_calculator", guarded)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_user_dirs(tmp_path_factory, monkeypatch):
+    """Suite-wide guard: the tests never touch the developer's own files.
+
+    A test that forgets its own isolation (a server fixture calling ``/api/auth/logout``) used to
+    delete the real ``~/.config/nwupdater/credentials.json``. Every user directory the package
+    reads points into a per-test temporary one; a test still sets its own on top when it needs to.
+    """
+    home = tmp_path_factory.mktemp("user")
+    for var, sub in (
+        ("NWUPDATER_CONFIG_DIR", "config/nwupdater"),
+        ("NWUPDATER_APPS_DIR", "config/nwupdater/apps"),
+        ("NWUPDATER_SCRIPTS_DIR", "config/nwupdater/scripts"),
+        ("XDG_CONFIG_HOME", "config"),
+        ("XDG_CACHE_HOME", "cache"),
+    ):
+        monkeypatch.setenv(var, str(home / sub))

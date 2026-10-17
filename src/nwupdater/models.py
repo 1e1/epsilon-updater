@@ -39,6 +39,10 @@ class Model:
     # in a real update capture — the bootloader accepts DNLOAD writes directly); graphique models
     # keep erase. See docs/01-specs/n02xx-firmware-format.md.
     flash_erase: bool = True
+    # DfuSe memory maps observed on hardware whose running firmware does not take its own image:
+    # ``(running, updater)``. A leave to the bootloader switches from one to the other. Real
+    # hardware advertises them itself — only the virtual device replays them.
+    dfu_modes: tuple[str, str] | None = None
 
     @property
     def marketing_family(self) -> str:
@@ -109,6 +113,7 @@ MODELS: dict[int, Model] = {
         confirmed=False,
         opaque_firmware=True,
         flash_erase=False,
+        dfu_modes=("@FirmwareHeader/0x080040C0/01*64Ba", "@EncryptedFlash/0x98000000/01*256Kd"),
     ),
 }
 

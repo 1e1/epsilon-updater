@@ -221,6 +221,36 @@ def release(dev, util=None) -> None:
         pass
 
 
+def reopen_after_reset(
+    serial: str | None, *, timeout: float = 30.0, sleep=None, opener=None
+) -> OpenDevice:
+    """Open the calculator again once a leave has rebooted it (into its updater, or onto a new
+    firmware). Polls until it is back on the bus; refuses another calculator than ``serial``.
+    Raises :class:`NoCalculatorFound` after ``timeout`` seconds."""
+    import time
+
+    sleep = sleep or time.sleep
+    opener = opener or open_calculator
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            od = opener()
+            break
+        except UsbError:
+            if time.monotonic() >= deadline:
+                raise NoCalculatorFound(
+                    "the calculator did not come back after its reboot "
+                    "(unplug and replug it, then retry)"
+                ) from None
+            sleep(0.5)
+    if serial:
+        back = read_string_descriptor(od.dev, getattr(od.dev, "iSerialNumber", 0) or 0)
+        if back and back != serial:
+            release(od.dev)
+            raise UsbError(f"another calculator answered ({back}) — plug only {serial}")
+    return od
+
+
 def open_calculator(core=None, util=None, *, backend=None) -> OpenDevice:
     """Import pyusb (unless ``core``/``util`` are injected) then find/configure/claim a calculator.
 

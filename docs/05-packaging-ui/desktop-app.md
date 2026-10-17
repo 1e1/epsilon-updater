@@ -33,6 +33,29 @@ Le canal **figé** livre le **même code** que les autres — ce n'est pas une v
 l'app, c'est la version courante compilée avec un outillage volontairement ancien. Détail des
 épingles et de la politique de gel : [`legacy-channel.md`](legacy-channel.md).
 
+#### La page de téléchargement choisit pour le visiteur
+
+La page publique ([`site/index.html`](../../site/index.html)) lit les releases en direct sur
+l'API GitHub. Elle classe chaque zip par son nom (édition, système, processeur), donc un nouveau
+fichier apparaît sans retoucher la page. Elle propose un seul bouton, choisi ainsi :
+
+- **Système** : l'identification du navigateur (`userAgent`), sinon `navigator.platform`.
+- **Version du système** : réelle dès qu'elle diffère de la valeur figée par les navigateurs
+  (macOS 10.15, Windows NT 10.0). Sinon, Chrome et Edge la donnent via `platformVersion`.
+  En dessous du plancher de l'édition navigateur, la page passe sur l'édition figée. En dessous
+  de celui de l'édition native, elle grise l'édition native.
+- **Processeur** : Chrome et Edge le donnent (`architecture`). Pour un Mac, macOS 10.15 ou moins
+  (ou Safari 13 ou moins) implique Intel, et macOS 27 ou plus implique Apple Silicon. Sinon la
+  page lit le GPU : Firefox le nomme (« Apple M1 » ou un GPU Intel/AMD), Safari masque son nom
+  mais seul Apple Silicon décode les textures ASTC. À défaut, Intel, qui tourne aussi sur Apple
+  Silicon via Rosetta. Une supposition est affichée comme telle.
+- **Édition** : navigateur par défaut. C'est une préférence, que la page ne devine pas.
+
+« Pas le bon fichier ? Choisir… » déplie un sélecteur système / processeur / édition, avec la
+raison de chaque combinaison absente. « Ce que votre navigateur révèle » liste les indices lus,
+utile pour un signalement. Le tableau « Tous les fichiers » et les versions précédentes suivent.
+La version de Linux (glibc) n'est jamais détectable : l'édition figée y reste un choix manuel.
+
 ### 2. Compiler en local (une commande) — nécessite Python + PyInstaller
 ```bash
 pip install pyinstaller pillow .

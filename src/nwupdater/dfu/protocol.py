@@ -190,6 +190,38 @@ class DfuClient:
                 return alt
         return None
 
+    def _advertised(self) -> list:
+        """Every memory map the device advertises (one per alt), or ``[]`` when it advertises
+        none (test doubles) — in which case it is taken at its word."""
+        alts = [layout for _, layout in self._alt_map() or [] if layout is not None]
+        if alts:
+            return alts
+        layout = self._memory_layout()
+        return [layout] if layout is not None else []
+
+    def writable(self, address: int, length: int) -> bool:
+        """Whether the device, in its current mode, advertises ``[address, address+length)`` as
+        writable. A NumWorks firmware may only expose a read-only window while running, and the
+        writable one once rebooted into its updater (N0200: ``@FirmwareHeader`` → ``@EncryptedFlash``)."""
+        layouts = self._advertised()
+        if not layouts:
+            return True
+        last = address + max(length, 1) - 1
+        return any(
+            all((r := lay.region_of(a)) is not None and r.writable for a in (address, last))
+            for lay in layouts
+        )
+
+    def readable(self, address: int) -> bool:
+        """Whether an UPLOAD at ``address`` can read back what was written: False only for a
+        region the device advertises without read access (a write-only window). An address no
+        alt advertises stays readable (the running slot's headers on a real N0120)."""
+        for lay in self._advertised():
+            r = lay.region_of(address)
+            if r is not None:
+                return r.readable
+        return True
+
     def select_alt(self, alt: int) -> None:
         """Switch DFU alt-setting (its memory map governs where a DNLOAD lands), then return the
         state machine to dfuIDLE. No-op if the device cannot switch (virtual device / tests)."""

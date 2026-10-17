@@ -157,11 +157,17 @@ def test_session_attach_demo_enrols_under_classroom_policy(tmp_path, monkeypatch
 def test_roster_up_to_date_helper(tmp_path, monkeypatch):
     monkeypatch.setenv("NWUPDATER_CONFIG_DIR", str(tmp_path))
     s = Session(model_name="n0110")
-    # Unknown firmware/family → the "up to date" state is unknown (None).
-    assert s._roster_up_to_date(None, None) is None
-    assert s._roster_up_to_date("graphique", None) is None
+    # Unknown firmware/model+family → the "up to date" state is unknown (None).
+    assert s._roster_up_to_date(None, None, None) is None
+    assert s._roster_up_to_date(None, None, "1.0.0") is None
+    assert s._roster_up_to_date("n0110", "graphique", None) is None
     # A very old firmware is behind the bundled latest.
-    assert s._roster_up_to_date("graphique", "1.0.0") is False
+    assert s._roster_up_to_date("n0110", "graphique", "1.0.0") is False
+    assert s._roster_up_to_date(None, "graphique", "1.0.0") is False  # family alone suffices
+    # Each model is judged on its own family's track: 4.1.0 is the Scientific latest, not a
+    # Graphing release.
+    assert s._roster_up_to_date("n0200", "scientifique", "4.1.0") is True
+    assert s._roster_up_to_date("n0200", "scientifique", "3.0.0") is False
 
 
 # -- server API: GET /api/roster -----------------------------------------------------------

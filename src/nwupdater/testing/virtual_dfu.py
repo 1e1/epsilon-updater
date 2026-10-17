@@ -200,6 +200,12 @@ class VirtualDfuDevice:
                 (mem.external_flash_origin, mem.external_flash_origin + mem.external_flash_size)
             )
         self.memory = _SparseMemory(writable, self.memory_layout)
+        # A model whose running firmware does not take its own image starts in that mode and
+        # switches to its updater (and back) on each leave, advertising each mode's real map.
+        self._modes = model.dfu_modes
+        self.in_updater = False
+        if self._modes:
+            self._set_mode(updater=False)
         if alt_settings:
             flash_ranges = [
                 (mem.internal_flash_origin, mem.internal_flash_origin + mem.internal_flash_size)
@@ -335,6 +341,18 @@ class VirtualDfuDevice:
             lo <= addr and end <= hi for lo, hi in self._alt_ranges.get(self.current_alt, [])
         )
 
+    def _set_mode(self, *, updater: bool) -> None:
+        assert self._modes is not None
+        self.in_updater = updater
+        self._layout_string = self._modes[1 if updater else 0]
+        self._strings[C.LAYOUT_STRING_INDEX] = self._layout_string
+        self.memory_layout = parse_memory_layout(self._layout_string)
+
+    def _advertised(self, addr: int, *, write: bool) -> bool:
+        """Whether the current mode's map grants this access at ``addr`` (moded models only)."""
+        r = self.memory_layout.region_of(addr) if self.memory_layout else None
+        return r is not None and (r.writable if write else r.readable)
+
     def _read_allowed(self, addr: int) -> bool:
         """Whether an UPLOAD at ``addr`` answers. Alt-gated: an address owned by ANOTHER alt's
         region does not (it times out on real hardware); one no alt advertises (the running
@@ -420,6 +438,8 @@ class VirtualDfuDevice:
             if wValue < C.DNLOAD_BLOCK_BASE:
                 raise UsbStall("upload block < 2")
             addr = (wValue - C.DNLOAD_BLOCK_BASE) * C.TRANSFER_SIZE + self.address_pointer
+            if self._modes and not self._advertised(addr, write=False):
+                raise UsbStall(f"upload 0x{addr:08x}: not readable in this mode")
             if not self._read_allowed(addr):
                 # Real hardware (N0120): an UPLOAD of another alt's region times out.
                 raise UsbStall(f"upload 0x{addr:08x} outside alt {self.current_alt}'s region")
@@ -460,7 +480,9 @@ class VirtualDfuDevice:
             self.memory = _SparseMemory(self.memory._writable, self.memory_layout)
         elif kind == "write":
             _, addr, data = action
-            if self._write_allowed(addr, len(data)):
+            if self._modes and not self._advertised(addr, write=True):
+                self.status = C.STATUS_errTARGET  # a real N0200 refuses its image while running
+            elif self._write_allowed(addr, len(data)):
                 self.memory.write(addr, data)
             elif not self._alt_gated:
                 self.status = C.STATUS_errTARGET
@@ -468,6 +490,8 @@ class VirtualDfuDevice:
             # hardware does with a DNLOAD outside the current alt's region.
         elif kind == "manifest":
             self.left = True
+            if self._modes:
+                self._set_mode(updater=not self.in_updater)
             self.jump_address = self.address_pointer + C.USERLAND_HEADER_SIZE
 
 

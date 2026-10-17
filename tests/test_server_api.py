@@ -262,26 +262,32 @@ def test_export_script_saves_to_local_library_and_flags_it(tmp_path, monkeypatch
 
 
 def test_scientific_bundled_snapshot():
-    cat = FirmwareCatalog.bundled("firmwares-n0200")
-    assert cat.latest().version == "3.0.0"
-    assert cat.is_up_to_date("2.9.0") is False
-    assert cat.is_up_to_date("3.0.0") is True
+    cat = FirmwareCatalog.for_family("scientifique")
+    assert cat.latest().version == "4.1.0"
+    assert cat.is_up_to_date("3.0.0") is False
+    assert cat.is_up_to_date("4.1.0") is True
+
+
+def test_family_tracks_split_the_mixed_public_list():
+    # The public list mixes the families; the Scientific releases it carries never reach the
+    # Graphing track, which keeps the rest of the public list.
+    public = {r.version for r in FirmwareCatalog.bundled().releases}
+    sci = {r.version for r in FirmwareCatalog.for_family("scientifique").releases}
+    graphing = {r.version for r in FirmwareCatalog.for_family("graphique").releases}
+    assert sci <= public
+    assert graphing == public - sci
 
 
 def test_catalog_is_family_aware():
-    # A demo picker attach (no explicit os) puts the device on its own family's version line.
-    g = Session(connect=False)
-    g.attach_demo("n0110")
-    assert g.catalog_updates()["latest"] == "26.4.0"
-
-    s = Session(connect=False)
-    s.attach_demo("n0200")
-    cs = s.catalog_updates()
-    assert cs["current"] == "2.9.0"
-    assert cs["latest"] == "3.0.0"
-    assert cs["up_to_date"] is False
-    assert cs["updates"][0]["version"] == "3.0.0"
-    assert cs["source"] == "sample"
+    # A demo picker attach (no explicit os) puts the device one release behind its own family's
+    # latest, whatever the family.
+    for model, latest, behind in (("n0110", "26.4.0", "26.3.0"), ("n0200", "4.1.0", "3.0.0")):
+        s = Session(connect=False)
+        s.attach_demo(model)
+        c = s.catalog_updates()
+        assert (c["current"], c["latest"], c["up_to_date"]) == (behind, latest, False)
+        assert c["updates"][0]["version"] == latest
+        assert c["source"] == "sample"
 
 
 def _make_token(exp="2099-01-01T00:00:00Z"):

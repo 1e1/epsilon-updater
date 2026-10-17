@@ -21,7 +21,12 @@ le device virtuel — **aucun USB réel**.
     pour le slot A) vers le **slot inactif** ; l'adresse de boot = userland header de ce slot.
   - `check_compatibility(image)` — refuse un bcdDevice différent ou un segment hors flash.
   - `flash(plan, verify=True)` — écrit chaque segment (erase+dnload) puis **relit pour
-    vérifier** (read-back).
+    vérifier** (read-back), seulement là où la carte mémoire annoncée permet la lecture (pas la
+    zone `d`, écriture seule, de la N0200 en mise à jour).
+  - Avant d'écrire, si la calculatrice n'annonce pas la zone visée en écriture, `install` la
+    redémarre dans son programme de mise à jour (`leave 0x08000000`) et la rouvre via le rappel
+    `reconnect` (session : `_reopen_after_reset`, CLI : `usbio.reopen_after_reset`). C'est le cas
+    de la N0200 en marche ; la N0120 écrit directement son slot inactif.
   - `install(image, active_slot, verify, boot)` — enchaîne compat → plan → flash → (boot).
   - `read_installed_version(plan)` — relit le userland header flashé pour confirmer la version.
 
